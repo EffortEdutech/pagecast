@@ -18,7 +18,7 @@ export function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Server Component — safe to ignore
+            // Server Component -- safe to ignore
           }
         },
       },

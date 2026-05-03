@@ -7,6 +7,7 @@ import {
 import { clsx } from 'clsx'
 import type { StoryBlock, Character, DialogueBlock, NarrationBlock, ThoughtBlock, QuoteBlock, PauseBlock, SfxBlock } from '@/types'
 import { AudioUploadRow } from './AudioUploadRow'
+import { SfxLibrary } from './SfxLibrary'
 
 const BLOCK_META = {
   narration:  { icon: AlignLeft,      label: 'Narration',  color: 'text-text-secondary', bg: 'bg-bg-elevated' },
@@ -195,18 +196,25 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
                 value={(block as SfxBlock).label ?? ''}
                 onChange={e => onUpdate({ label: e.target.value } as any)}
               />
-              <input
-                className="input text-sm font-mono"
-                placeholder="sfx-filename.mp3"
-                value={(block as SfxBlock).sfxFile}
-                onChange={e => onUpdate({ sfxFile: e.target.value } as any)}
+              <SfxLibrary
+                currentLabel={(block as SfxBlock).label ?? ''}
+                onSelect={label => onUpdate({ label, sfxFile: label.toLowerCase().replace(/\s+/g, '-') + '.mp3' } as any)}
               />
             </>
           )}
 
           {/* Audio upload row — all block types except pause */}
           {block.type !== 'pause' && (
-            <AudioUploadRow block={block} bookId={bookId} onUpdate={onUpdate} />
+            <AudioUploadRow
+              block={block}
+              bookId={bookId}
+              onUpdate={onUpdate}
+              voiceId={
+                block.type === 'dialogue' || block.type === 'thought'
+                  ? characters.find(c => c.id === (block as any).characterId)?.voiceId
+                  : characters.find(c => c.role === 'narrator')?.voiceId ?? 'ai_female_soft'
+              }
+            />
           )}
         </div>
       )}

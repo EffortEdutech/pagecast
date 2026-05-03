@@ -216,10 +216,4 @@ export async function deleteBlock(blockId: string): Promise<boolean> {
 export async function reorderBlocks(blocks: { id: string; sort_order: number }[]): Promise<boolean> {
   const supabase = createClient()
 
-  const updates = blocks.map(({ id, sort_order }) =>
-    supabase.from('blocks').update({ sort_order }).eq('id', id)
-  )
-
-  const results = await Promise.all(updates)
-  return results.every(r => !r.error)
-}
+  const updates = blocks.map(({ id, so

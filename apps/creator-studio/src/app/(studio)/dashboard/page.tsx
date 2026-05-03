@@ -261,45 +261,4 @@ export default function DashboardPage() {
 
           {booksLoading ? (
             <div className="flex items-center justify-center py-16 gap-3 text-text-secondary">
-              <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm">Loading your stories…</span>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-16 space-y-3">
-              <BookOpen size={40} className="text-text-muted mx-auto" />
-              <p className="text-text-secondary">No stories here yet.</p>
-              <button className="btn-primary mx-auto" onClick={() => setShowModal(true)}>
-                <Plus size={15} /> Create your first story
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filtered.map(story => (
-                <StoryCard
-                  key={story.id}
-                  story={story}
-                  onEdit={() => handleEdit(story)}
-                  onDelete={() => deleteBook(story.id)}
-                  onDuplicate={() => handleDuplicate(story)}
-                  onPublish={() => handlePublish(story)}
-                />
-              ))}
-              {/* Add new card */}
-              <button
-                onClick={() => setShowModal(true)}
-                className="card border-dashed border-bg-border hover:border-accent/50 hover:bg-accent/5 transition-all duration-200 h-full min-h-[220px] flex flex-col items-center justify-center gap-3 text-text-muted hover:text-accent group"
-              >
-                <div className="w-12 h-12 rounded-xl border-2 border-dashed border-current flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Plus size={20} />
-                </div>
-                <span className="text-sm font-medium">New Story</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {showModal && <NewStoryModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
-    </>
-  )
-}
+              <div className="w-5 h-5 border-2 border

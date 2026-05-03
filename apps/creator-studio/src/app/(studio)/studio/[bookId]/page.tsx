@@ -5,20 +5,18 @@ import { useStudioStore } from '@/store/studioStore'
 import { useEditor } from '@/hooks/useEditor'
 import { BlockItem } from '@/components/editor/BlockItem'
 import { AddBlockMenu } from '@/components/editor/AddBlockMenu'
+import { SceneAtmospherePanel } from '@/components/editor/SceneAtmospherePanel'
+import { TextImportModal } from '@/components/editor/TextImportModal'
 import { Header } from '@/components/layout/Header'
 import {
   Plus, ChevronRight, ChevronDown, Settings2, Eye,
-  BookOpen, Layers, Music, Image as ImageIcon, Save,
+  BookOpen, Layers, Save, FileText,
   ArrowLeft, Trash2, Edit3, Check, X, Film
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { v4 as uuid } from 'uuid'
 import type { StoryBlock, BlockType, Chapter, Scene } from '@/types'
-
-// ─── Scene Atmosphere Panel ───────────────────────────────────────────────────
-
-const AMBIENCE_OPTIONS = ['forest-night.mp3', 'rain-city.mp3', 'desert-wind.mp3', 'ocean-waves.mp3', 'market-crowd.mp3', 'none']
-const MUSIC_OPTIONS = ['mystery.mp3', 'adventure.mp3', 'calm-piano.mp3', 'dramatic.mp3', 'lullaby.mp3', 'none']
+import type { ParsedImport } from '@/lib/textParser'
 
 // ─── Inline editable title ────────────────────────────────────────────────────
 
@@ -62,6 +60,7 @@ export default function StudioPage() {
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
   const [rightPanel, setRightPanel] = useState<'scene' | 'block' | null>('scene')
   const [saved, setSaved] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     if (story?.chapters.length && !activeChapterId) {
@@ -127,6 +126,35 @@ export default function StudioPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const handleImport = async (parsed: ParsedImport) => {
+    let firstChapterId: string | null = null
+    let firstSceneId:   string | null = null
+
+    for (const parsedCh of parsed.chapters) {
+      const ch = await editor.addChapter(parsedCh.title)
+      if (!ch) continue
+      if (!firstChapterId) {
+        firstChapterId = ch.id
+        setExpandedChapters(prev => new Set([...Array.from(prev), ch.id]))
+      }
+
+      for (const parsedSc of parsedCh.scenes) {
+        const sc = await editor.addScene(ch.id, parsedSc.title)
+        if (!sc) continue
+        if (!firstSceneId) firstSceneId = sc.id
+
+        for (const block of parsedSc.blocks) {
+          await editor.addBlock(ch.id, sc.id, block)
+        }
+      }
+    }
+
+    // Navigate to the first imported chapter/scene
+    if (firstChapterId) setActiveChapterId(firstChapterId)
+    if (firstSceneId)   setActiveSceneId(firstSceneId)
+    setShowImport(false)
+  }
+
   const toggleChapter = (id: string) => {
     setExpandedChapters(prev => {
       const n = new Set(prev)
@@ -140,6 +168,13 @@ export default function StudioPage() {
       <Header title={story.title}>
         <button className="btn-ghost text-xs px-2 py-1.5" onClick={() => router.push('/dashboard')}>
           <ArrowLeft size={13} /> Dashboard
+        </button>
+        <button
+          className="btn-ghost text-xs px-2 py-1.5 border border-bg-border hover:border-accent/40"
+          onClick={() => setShowImport(true)}
+          title="Import text from .txt or .md file"
+        >
+          <FileText size={13} /> Import Text
         </button>
         <button
           className="btn-secondary text-xs"
@@ -334,66 +369,25 @@ export default function StudioPage() {
           )}
         </main>
 
-        {/* ── RIGHT: Scene Properties ── */}
-        {rightPanel && activeScene && (
-          <aside className="w-56 shrink-0 border-l border-bg-border bg-bg-secondary overflow-y-auto">
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-bg-border">
-              <span className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">Scene Atmosphere</span>
-              <button onClick={() => setRightPanel(null)} className="text-text-muted hover:text-text-secondary"><X size={13} /></button>
-            </div>
-
-            <div className="p-3 space-y-4">
-              {/* Ambience */}
-              <div>
-                <label className="label flex items-center gap-1"><Music size={10} /> Ambience</label>
-                <select
-                  className="input text-xs"
-                  value={activeScene.ambienceFile ?? 'none'}
-                  onChange={e => store.updateScene(story.id, activeChapterId!, activeSceneId!, { ambienceFile: e.target.value === 'none' ? undefined : e.target.value })}
-                >
-                  {AMBIENCE_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-
-              {/* Music */}
-              <div>
-                <label className="label flex items-center gap-1"><Music size={10} /> Background Music</label>
-                <select
-                  className="input text-xs"
-                  value={activeScene.musicFile ?? 'none'}
-                  onChange={e => store.updateScene(story.id, activeChapterId!, activeSceneId!, { musicFile: e.target.value === 'none' ? undefined : e.target.value })} // local only
-                >
-                  {MUSIC_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-
-              {/* Scene image */}
-              <div>
-                <label className="label flex items-center gap-1"><ImageIcon size={10} /> Scene Image</label>
-                <button className="btn-secondary w-full justify-center text-xs">
-                  <Plus size={11} /> Upload Image
-                </button>
-              </div>
-
-              {/* Beat summary */}
-              <div className="pt-2 border-t border-bg-border space-y-1.5">
-                <p className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">Beat Summary</p>
-                {(['narration', 'dialogue', 'thought', 'quote', 'pause', 'sfx'] as const).map(type => {
-                  const count = activeScene.blocks.filter(b => b.type === type).length
-                  if (!count) return null
-                  return (
-                    <div key={type} className="flex items-center justify-between text-xs">
-                      <span className="text-text-muted capitalize">{type}</span>
-                      <span className="text-text-secondary font-medium">{count}</span>
-                    </div>
-                  )
-                })}
-                {activeScene.blocks.length === 0 && <p className="text-text-muted text-xs">No beats yet</p>}
-              </div>
-            </div>
-          </aside>
+        {/* ── RIGHT: Scene Atmosphere Panel ── */}
+        {rightPanel === 'scene' && activeScene && activeChapterId && (
+          <SceneAtmospherePanel
+            scene={activeScene}
+            storyId={story.id}
+            chapterId={activeChapterId}
+            bookId={bookId}
+            onClose={() => setRightPanel(null)}
+          />
         )}
       </div>
+
+      {/* ── Import Text Modal ── */}
+      {showImport && (
+        <TextImportModal
+          onImport={handleImport}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </>
   )
 }

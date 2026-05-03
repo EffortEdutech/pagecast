@@ -147,16 +147,33 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | 4.3 | Character color picker | ✅ | |
 | 4.4 | Character role (narrator / character) | ✅ | |
 | 4.5 | Voice Studio page (audio management) | ✅ | UI shell built |
-| 4.6 | AI TTS voice generation (per block) | ⬜ | BYO API key model needed |
-| 4.7 | TTS provider integration (OpenAI / ElevenLabs) | ⬜ | |
-| 4.8 | Upload recorded audio per block | ⬜ | |
-| 4.9 | Audio preview player | ⬜ | |
-| 4.10 | Voice assignment (character → voice ID) | 🔧 | UI ready, no TTS backend |
-| 4.11 | Scene atmosphere designer (ambience + music) | 🔧 | Fields exist in schema, no asset browser |
-| 4.12 | SFX library browser | ⬜ | |
+| 4.6 | AI TTS voice generation (per block) | ✅ | Wand2 Generate button in AudioUploadRow; calls /api/tts/generate |
+| 4.7 | TTS provider integration (OpenAI / ElevenLabs) | ✅ | /api/tts/generate route; OPENAI_VOICE_MAP; ElevenLabs fallback |
+| 4.8 | Upload recorded audio per block | ✅ | AudioUploadRow upload + Supabase Storage |
+| 4.9 | Audio preview player | ✅ | Mini player in AudioUploadRow (play/pause/progress/time) |
+| 4.10 | Voice assignment (character → voice ID) | ✅ | BlockItem passes char voiceId → AudioUploadRow → TTS |
+| 4.11 | Scene atmosphere designer (ambience + music) | ✅ | SceneAtmospherePanel: upload, mini player, volume, Supabase persist; reader fade-in/out |
+| 4.12 | SFX library browser | ✅ | SfxLibrary component: 26 presets across 5 categories, click-to-assign in SFX block |
 | 4.13 | Asset manager (upload & manage files) | ⬜ | |
 | 4.14 | Cloudflare R2 upload integration | ⬜ | Blocked by R2 bucket setup |
 | 4.15 | Audio credits usage meter | ⬜ | Post-free-tier feature |
+
+---
+
+## SPRINT 4b — Text Import (Writer Workflow)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| T.1 | Text import modal (paste / file upload) | ✅ | TextImportModal: split-panel, .txt/.md/.fountain support |
+| T.2 | Auto-detect format (prose / script / markdown) | ✅ | detectFormat(): script tag density + markdown header heuristic |
+| T.3 | Smart paragraph splitter | ✅ | splitIntoParagraphs(): handles double-newline AND single-newline (PDF exports) |
+| T.4 | Chapter / scene header detection | ✅ | isChapterHeader / isSceneHeader / extractTitle helpers |
+| T.5 | Block type detection (narration / dialogue / thought / quote / sfx / pause) | ✅ | Full prose + script + markdown parsing |
+| T.6 | Inline dialogue extraction from prose paragraphs | ✅ | splitProseDialogue(): splits "Hello," said John. → dialogue + narration |
+| T.7 | Import preview (chapter/scene tree + first 5 blocks) | ✅ | ChapterPreview + BlockPreviewRow components |
+| T.8 | Import into book (creates chapters/scenes/blocks in editor) | ✅ | handleImport() in studio page |
+| T.9 | Dialogue placeholder (characterId: '' — assign after import) | ✅ | Note shown in preview panel |
+| T.10 | PDF text extraction | ⬜ | Currently: convert to .txt first; future: /api/pdf/extract route |
 
 ---
 
@@ -325,4 +342,4 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 
 ---
 
-*Last updated: 2026-05-03 — Sprints 1–3 complete*
+*Last updated: 2026-05-03 — Sprints 1–4 complete (TTS, scene atmosphere, text import)*

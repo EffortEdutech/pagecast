@@ -170,29 +170,4 @@ export default function LoginPage() {
 
           {/* Quick-fill for dev testing */}
           <div className="border-t border-bg-border pt-4">
-            <p className="text-text-muted text-xs text-center mb-3">Test accounts</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Creator 1', email: 'creator1@pagecast.test' },
-                { label: 'Creator 2', email: 'creator2@pagecast.test' },
-              ].map(({ label, email: testEmail }) => (
-                <button
-                  key={testEmail}
-                  type="button"
-                  onClick={() => { setEmail(testEmail); setPassword('test123') }}
-                  className="text-xs text-text-muted hover:text-text-secondary border border-bg-border hover:border-accent/30 rounded-lg px-3 py-2 transition-colors text-left"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-text-muted text-xs text-center">
-            PageCast Creator Studio — MVP Preview
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
+            <p className="text-text-muted text-xs text-cen

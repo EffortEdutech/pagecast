@@ -250,10 +250,12 @@ export default function ReaderPage() {
   const [cinemaMode,   setCinemaMode]   = useState(false)
 
   // ── Speech synthesis ──
-  const synthRef  = useRef<SpeechSynthesis | null>(null)
-  const utterRef  = useRef<SpeechSynthesisUtterance | null>(null)
-  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const audioRef  = useRef<HTMLAudioElement | null>(null)   // real audio playback
+  const synthRef     = useRef<SpeechSynthesis | null>(null)
+  const utterRef     = useRef<SpeechSynthesisUtterance | null>(null)
+  const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioRef     = useRef<HTMLAudioElement | null>(null)   // block voice audio
+  const ambienceRef  = useRef<HTMLAudioElement | null>(null)   // scene ambience loop
+  const musicRef     = useRef<HTMLAudioElement | null>(null)   // scene music loop
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
 
   useEffect(() => {
@@ -266,6 +268,8 @@ export default function ReaderPage() {
       window.speechSynthesis.removeEventListener('voiceschanged', load)
       window.speechSynthesis.cancel()
       audioRef.current?.pause()
+      ambienceRef.current?.pause()
+      musicRef.current?.pause()
     }
   }, [])
 
@@ -413,6 +417,61 @@ export default function ReaderPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, block, prefs.mode, prefs.playbackSpeed,
       prefs.narratorVolume, prefs.characterVolume, voices])
+
+  // ── Scene atmosphere: ambience + music loops ──────────────────────────────
+  useEffect(() => {
+    const fadeOut = (a: HTMLAudioElement, onDone: () => void) => {
+      const step = () => {
+        if (a.volume > 0.05) { a.volume = Math.max(0, a.volume - 0.05); setTimeout(step, 80) }
+        else { a.pause(); a.volume = 0; onDone() }
+      }
+      step()
+    }
+
+    const prev = { ambience: ambienceRef.current, music: musicRef.current }
+
+    // Fade out old layers
+    if (prev.ambience) fadeOut(prev.ambience, () => { ambienceRef.current = null })
+    if (prev.music)    fadeOut(prev.music,    () => { musicRef.current    = null })
+
+    if (!scene) return
+
+    // Start ambience
+    if (scene.ambienceUrl) {
+      const a = new Audio(scene.ambienceUrl)
+      const targetVol = (scene.ambienceVolume ?? 0.4) * prefs.musicVolume
+      a.loop   = true
+      a.volume = 0
+      a.play().catch(() => {})
+      // Fade in
+      const fadeIn = () => {
+        if (a.volume < targetVol - 0.03) { a.volume = Math.min(targetVol, a.volume + 0.03); setTimeout(fadeIn, 80) }
+        else { a.volume = targetVol }
+      }
+      fadeIn()
+      ambienceRef.current = a
+    }
+
+    // Start music
+    if (scene.musicUrl) {
+      const m = new Audio(scene.musicUrl)
+      const targetVol = (scene.musicVolume ?? 0.3) * prefs.musicVolume
+      m.loop   = true
+      m.volume = 0
+      m.play().catch(() => {})
+      const fadeIn = () => {
+        if (m.volume < targetVol - 0.03) { m.volume = Math.min(targetVol, m.volume + 0.03); setTimeout(fadeIn, 80) }
+        else { m.volume = targetVol }
+      }
+      fadeIn()
+      musicRef.current = m
+    }
+
+    return () => {
+      // Cleanup on scene change (fade handled by next run)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene?.id, prefs.musicVolume])
 
   // ── Sync currentBlockId ──
   useEffect(() => {

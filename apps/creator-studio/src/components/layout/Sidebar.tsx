@@ -102,12 +102,4 @@ export function Sidebar() {
         )}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors text-xs"
-        >
-          <LogOut size={13} />
-          Sign out
-        </button>
-      </div>
-    </aside>
-  )
-}
+          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg tex

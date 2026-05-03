@@ -81,8 +81,14 @@ export type StoryBlock =
 export interface Scene {
   id: string
   title: string
+  // Legacy filename fields (kept for backwards compat)
   ambienceFile?: string
   musicFile?: string
+  // Real Supabase Storage URLs
+  ambienceUrl?: string
+  musicUrl?: string
+  ambienceVolume?: number   // 0–1, default 0.4
+  musicVolume?: number      // 0–1, default 0.3
   sceneImage?: string
   blocks: StoryBlock[]
 }
@@ -137,13 +143,4 @@ export interface Asset {
   createdAt: string
 }
 
-// ─── Creator (Author) ─────────────────────────────────────────────────────────
-
-export interface Creator {
-  id: string
-  name: string
-  email: string
-  avatar?: string
-  ttsCreditsUsed: number
-  ttsCreditsLimit: number
-}
+// ─── Creator (Author) ────────────────────────────

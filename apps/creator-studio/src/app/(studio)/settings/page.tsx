@@ -4,6 +4,7 @@ import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
 import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle } from 'lucide-react'
+import { getTtsSettings, saveTtsSettings } from '@/lib/tts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
 const PREF_PRICE_KEY    = 'pagecast_default_price'
@@ -28,10 +29,14 @@ export default function SettingsPage() {
 
   // Load persisted prefs from localStorage
   useEffect(() => {
-    const lang  = localStorage.getItem(PREF_LANGUAGE_KEY)
-    const price = localStorage.getItem(PREF_PRICE_KEY)
-    if (lang)  setLanguage(lang)
-    if (price) setPrice(price)
+    const lang       = localStorage.getItem(PREF_LANGUAGE_KEY)
+    const savedPrice = localStorage.getItem(PREF_PRICE_KEY)
+    if (lang)       setLanguage(lang)
+    if (savedPrice) setPrice(savedPrice)
+
+    const tts = getTtsSettings()
+    if (tts.apiKey)   setTtsKey(tts.apiKey)
+    if (tts.provider) setProvider(tts.provider)
   }, [])
 
   const handleSave = async () => {
@@ -52,6 +57,9 @@ export default function SettingsPage() {
     // 2 — Persist language + price defaults locally
     localStorage.setItem(PREF_LANGUAGE_KEY, language)
     localStorage.setItem(PREF_PRICE_KEY, price)
+
+    // 3 — Persist TTS key + provider locally
+    saveTtsSettings(ttsKey.trim(), provider)
 
     setSaving(false)
     setSaved(true)
@@ -122,72 +130,4 @@ export default function SettingsPage() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <Sparkles size={14} className="text-accent shrink-0 mt-0.5" />
             <p className="text-text-secondary text-xs leading-relaxed">
-              Your API key is used directly from your browser. PageCast never sees or stores it on our servers. This is the BYO (Bring Your Own) voice model.
-            </p>
-          </div>
-        </section>
-
-        {/* Platform */}
-        <section className="card p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Globe size={15} className="text-info" />
-            <h2 className="text-text-primary font-semibold">Platform</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Default Language</label>
-              <select
-                className="input"
-                value={language}
-                onChange={e => setLanguage(e.target.value)}
-              >
-                <option value="en">English</option>
-                <option value="ms">Bahasa Melayu</option>
-                <option value="ar">Arabic</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Default Story Price ($)</label>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={e => setPrice(e.target.value)}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* About */}
-        <section className="card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <BookOpen size={15} className="text-text-muted" />
-            <h2 className="text-text-primary font-semibold">About</h2>
-          </div>
-          <div className="space-y-1 text-xs text-text-muted">
-            <div className="flex justify-between"><span>PageCast Creator Studio</span><span>v0.1.0 MVP</span></div>
-            <div className="flex justify-between"><span>Book Format</span><span>PBF v1.0</span></div>
-            <div className="flex justify-between"><span>Running on</span><span>localhost:3801</span></div>
-          </div>
-        </section>
-
-        <div className="flex justify-end pb-6">
-          <button
-            className={saved ? 'btn-secondary text-success' : 'btn-primary'}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <><div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Saving…</>
-            ) : saved ? (
-              <><Check size={15} /> Saved!</>
-            ) : 'Save Settings'}
-          </button>
-        </div>
-
-      </div>
-    </>
-  )
-}
+              Your API key is used directly from your bro

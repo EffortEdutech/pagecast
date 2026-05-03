@@ -77,28 +77,4 @@ export function useBooks() {
 
   // ── Publish / Unpublish ──
   const publishBook = useCallback(async (id: string, status: StoryStatus) => {
-    const ok = await BooksApi.publishBook(id, status as 'draft' | 'published')
-    if (!ok) { setError('Failed to update publish status.'); return }
-    store.updateStory(id, { status })
-  }, [store])
-
-  // ── Duplicate (deep copy) ──
-  const duplicateBook = useCallback(async (id: string): Promise<Story | null> => {
-    const copy = await BooksApi.duplicateBook(id)
-    if (!copy) { setError('Failed to duplicate book.'); return null }
-    useStudioStore.setState(state => ({ stories: [copy, ...state.stories] }))
-    return copy
-  }, [])
-
-  return {
-    stories: store.stories,
-    loading,
-    error,
-    createBook,
-    updateBook,
-    deleteBook,
-    publishBook,
-    duplicateBook,
-    refresh: () => setSynced(false),
-  }
-}
+    const ok = await Bo

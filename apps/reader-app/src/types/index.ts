@@ -24,6 +24,8 @@ export type StoryBlock = NarrationBlock | DialogueBlock | ThoughtBlock | QuoteBl
 export interface Scene {
   id: string; title: string
   ambienceFile?: string; musicFile?: string; sceneImage?: string
+  ambienceUrl?: string; musicUrl?: string
+  ambienceVolume?: number; musicVolume?: number
   blocks: StoryBlock[]
 }
 export interface Chapter { id: string; title: string; order: number; scenes: Scene[] }
