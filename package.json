@@ -1,0 +1,9 @@
+{
+  "name": "pagecast",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "creator-studio": "npm run dev --prefix apps/creator-studio",
+    "reader-app": "npm run dev --prefix apps/reader-app"
+  }
+}

@@ -1,0 +1,214 @@
+'use client'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useReaderStore } from '@/store/readerStore'
+import { Navbar } from '@/components/layout/Navbar'
+import { getStory } from '@/data/stories'
+import {
+  Play, Clock, Mic, Music, Volume2, BookOpen,
+  Headphones, Film, Check, ChevronRight, ArrowLeft, Lock
+} from 'lucide-react'
+import { clsx } from 'clsx'
+
+export default function BookPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { isOwned, addToLibrary } = useReaderStore()
+  const story = getStory(id)
+
+  if (!story) return (
+    <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+      <div className="text-center space-y-3">
+        <BookOpen size={40} className="text-text-muted mx-auto" />
+        <p className="text-text-secondary">Story not found.</p>
+        <Link href="/store" className="btn-primary inline-flex"><ArrowLeft size={14} /> Back to Store</Link>
+      </div>
+    </div>
+  )
+
+  const owned = isOwned(story.id)
+  const totalBlocks = story.chapters.reduce((acc, ch) =>
+    acc + ch.scenes.reduce((a, sc) => a + sc.blocks.length, 0), 0)
+  const totalScenes = story.chapters.reduce((acc, ch) => acc + ch.scenes.length, 0)
+
+  const handleBuy = () => {
+    addToLibrary(story.id)
+    router.push(`/reader/${story.id}`)
+  }
+
+  return (
+    <div className="min-h-screen bg-bg-primary">
+      <Navbar />
+
+      {/* Hero banner */}
+      <div className={clsx('relative overflow-hidden bg-gradient-to-br', story.coverGradient)}>
+        <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/60 to-transparent" />
+        <div className="max-w-5xl mx-auto px-6 py-16 relative z-10">
+          <Link href="/store" className="inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm mb-6 transition-colors">
+            <ArrowLeft size={14} /> Store
+          </Link>
+          <div className="flex flex-col sm:flex-row items-start gap-8">
+            {/* Cover tile */}
+            <div className={clsx('w-36 h-48 rounded-2xl bg-gradient-to-br shrink-0 flex items-center justify-center shadow-elevated border border-white/10', story.coverGradient)}>
+              <BookOpen size={40} className="text-white/30" />
+            </div>
+            {/* Meta */}
+            <div className="flex-1 min-w-0">
+              <div className="flex gap-2 mb-3 flex-wrap">
+                {story.genre && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.genre}</span>}
+                {story.ageRating && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.ageRating}</span>}
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">{story.title}</h1>
+              <p className="text-white/70 mt-3 max-w-lg leading-relaxed">{story.description}</p>
+
+              {/* Stats row */}
+              <div className="flex items-center gap-4 mt-4 text-white/60 text-sm flex-wrap">
+                {story.durationMinutes && <span className="flex items-center gap-1.5"><Clock size={13} /> {story.durationMinutes} min</span>}
+                <span className="flex items-center gap-1.5"><Mic size={13} /> {story.characters.length} cast members</span>
+                <span className="flex items-center gap-1.5"><Film size={13} /> {story.chapters.length} chapter{story.chapters.length !== 1 ? 's' : ''}</span>
+                {story.hasMusic && <span className="flex items-center gap-1.5"><Music size={13} /> Music</span>}
+                {story.hasSfx && <span className="flex items-center gap-1.5"><Volume2 size={13} /> Sound effects</span>}
+              </div>
+
+              {/* CTA */}
+              <div className="flex items-center gap-3 mt-6">
+                {owned ? (
+                  <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
+                    <Play size={18} className="fill-white" /> Continue Reading
+                  </Link>
+                ) : (
+                  <>
+                    <button onClick={handleBuy} className="btn-primary text-base px-6 py-3 shadow-accent">
+                      <Play size={18} className="fill-white" /> Get for ${story.price.toFixed(2)}
+                    </button>
+                    <span className="text-white/50 text-sm">(Demo: free access)</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <main className="max-w-5xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left: chapters + preview */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Preview excerpt */}
+          <section className="card p-5">
+            <h2 className="text-text-primary font-semibold mb-4 flex items-center gap-2">
+              <BookOpen size={15} className="text-accent" /> Story Preview
+            </h2>
+            {story.chapters[0]?.scenes[0]?.blocks.slice(0, 3).map(block => {
+              const char = story.characters.find(c =>
+                (block.type === 'dialogue' || block.type === 'thought') && c.id === (block as any).characterId
+              )
+              return (
+                <div key={block.id} className="mb-3 last:mb-0">
+                  {block.type === 'narration' && (
+                    <p className="text-text-secondary text-sm leading-relaxed italic">{(block as any).text}</p>
+                  )}
+                  {block.type === 'dialogue' && char && (
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 mt-0.5" style={{ backgroundColor: char.color + '25', color: char.color }}>
+                        {char.displayName}
+                      </span>
+                      <p className="text-text-primary text-sm leading-relaxed">"{(block as any).text}"</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            <div className={clsx('mt-4 p-3 rounded-lg text-center text-sm', owned ? 'bg-success/10 text-success' : 'bg-bg-elevated text-text-muted')}>
+              {owned
+                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> You own this story — read the full version</span>
+                : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Purchase to read the full story</span>
+              }
+            </div>
+          </section>
+
+          {/* Chapters */}
+          <section className="card p-5">
+            <h2 className="text-text-primary font-semibold mb-4 flex items-center gap-2">
+              <Film size={15} className="text-accent" /> Chapters ({story.chapters.length})
+            </h2>
+            <div className="space-y-2">
+              {story.chapters.map((ch, i) => (
+                <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg bg-bg-elevated hover:bg-bg-hover transition-colors">
+                  <div className="w-7 h-7 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-text-primary text-sm font-medium">{ch.title}</div>
+                    <div className="text-text-muted text-[10px]">{ch.scenes.length} scene{ch.scenes.length !== 1 ? 's' : ''}</div>
+                  </div>
+                  {!owned && i > 0 && <Lock size={12} className="text-text-muted" />}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* Right: sidebar */}
+        <div className="space-y-4">
+          {/* Cast */}
+          <div className="card p-4">
+            <h3 className="text-text-primary font-semibold text-sm mb-3 flex items-center gap-2">
+              <Mic size={13} className="text-accent" /> Cast
+            </h3>
+            <div className="space-y-2.5">
+              {story.characters.map(char => (
+                <div key={char.id} className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ backgroundColor: char.color + '25', color: char.color }}>
+                    {char.displayName.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="text-text-primary text-xs font-medium">{char.displayName}</div>
+                    <div className="text-text-muted text-[10px] capitalize">{char.role}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Reader features */}
+          <div className="card p-4">
+            <h3 className="text-text-primary font-semibold text-sm mb-3 flex items-center gap-2">
+              <Headphones size={13} className="text-accent" /> Reading Experience
+            </h3>
+            <div className="space-y-2 text-xs text-text-secondary">
+              {[
+                { icon: BookOpen,   label: 'Reading Mode — read at your pace' },
+                { icon: Headphones, label: 'Audiobook Mode — auto-scroll + highlight' },
+                { icon: Film,       label: 'Cinematic Mode — full immersion' },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <Icon size={12} className="text-accent shrink-0" />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Buy / read button (sidebar) */}
+          <div className="card p-4 text-center space-y-3">
+            <div className="text-2xl font-bold text-text-primary">
+              {owned ? <span className="text-success text-base flex items-center justify-center gap-2"><Check size={16}/> Owned</span> : `$${story.price.toFixed(2)}`}
+            </div>
+            {owned ? (
+              <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center py-2.5">
+                <Play size={15} className="fill-white" /> Open Reader
+              </Link>
+            ) : (
+              <button onClick={handleBuy} className="btn-primary w-full justify-center py-2.5">
+                <Play size={15} className="fill-white" /> Get Story
+              </button>
+            )}
+            <p className="text-text-muted text-[10px]">MVP demo — all stories are free</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
