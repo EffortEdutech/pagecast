@@ -1,19 +1,20 @@
 'use client'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useStudioStore } from '@/store/studioStore'
+import { useUser } from '@/hooks/useUser'
 
 export default function Home() {
   const router = useRouter()
-  const isAuthenticated = useStudioStore(s => s.isAuthenticated)
+  const { user, loading } = useUser()
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (loading) return
+    if (user) {
       router.replace('/dashboard')
     } else {
       router.replace('/login')
     }
-  }, [isAuthenticated, router])
+  }, [user, loading, router])
 
   return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">

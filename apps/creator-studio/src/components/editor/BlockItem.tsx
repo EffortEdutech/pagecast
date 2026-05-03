@@ -2,10 +2,11 @@
 import { useState } from 'react'
 import {
   AlignLeft, MessageSquare, Brain, Quote, Pause, Volume2,
-  Trash2, Upload, ChevronDown, ChevronUp, GripVertical, Mic
+  Trash2, ChevronDown, ChevronUp, GripVertical
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { StoryBlock, Character, DialogueBlock, NarrationBlock, ThoughtBlock, QuoteBlock, PauseBlock, SfxBlock } from '@/types'
+import { AudioUploadRow } from './AudioUploadRow'
 
 const BLOCK_META = {
   narration:  { icon: AlignLeft,      label: 'Narration',  color: 'text-text-secondary', bg: 'bg-bg-elevated' },
@@ -20,13 +21,14 @@ const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'scared', 'surprised', 'wo
 
 interface BlockItemProps {
   block: StoryBlock
+  bookId: string
   characters: Character[]
   onUpdate: (updates: Partial<StoryBlock>) => void
   onDelete: () => void
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
 }
 
-export function BlockItem({ block, characters, onUpdate, onDelete, dragHandleProps }: BlockItemProps) {
+export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragHandleProps }: BlockItemProps) {
   const [expanded, setExpanded] = useState(true)
   const meta = BLOCK_META[block.type]
   const Icon = meta.icon
@@ -54,13 +56,6 @@ export function BlockItem({ block, characters, onUpdate, onDelete, dragHandlePro
         {block.type === 'dialogue' && dialogueChar && (
           <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: dialogueChar.color + '25', color: dialogueChar.color }}>
             {dialogueChar.displayName}
-          </span>
-        )}
-
-        {/* Audio indicator */}
-        {block.audioFile && (
-          <span className="flex items-center gap-1 text-[10px] text-success ml-auto mr-1">
-            <Mic size={10} /> Audio
           </span>
         )}
 
@@ -209,20 +204,9 @@ export function BlockItem({ block, characters, onUpdate, onDelete, dragHandlePro
             </>
           )}
 
-          {/* Audio upload row (for blocks with audio) */}
-          {block.type !== 'pause' && block.type !== 'sfx' && (
-            <div className="flex items-center gap-2 pt-1">
-              <button className="btn-ghost text-xs px-2 py-1 border border-bg-border">
-                <Upload size={11} /> Upload audio
-              </button>
-              {block.audioFile ? (
-                <span className="text-success text-xs flex items-center gap-1">
-                  <Mic size={11} /> {block.audioFile}
-                </span>
-              ) : (
-                <span className="text-text-muted text-xs">No audio</span>
-              )}
-            </div>
+          {/* Audio upload row — all block types except pause */}
+          {block.type !== 'pause' && (
+            <AudioUploadRow block={block} bookId={bookId} onUpdate={onUpdate} />
           )}
         </div>
       )}

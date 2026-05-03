@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
 import { getStory } from '@/data/stories'
+import { fetchBook } from '@/lib/supabase/books'
 import type { Story, StoryBlock, Character, ReaderMode, ReaderTheme } from '@/types'
 import { clsx } from 'clsx'
 import {
@@ -22,6 +23,40 @@ function Waveform() {
         <span key={i} className="waveform-bar h-full" style={{ animationDelay: `${i * 0.07}s` }} />
       ))}
     </span>
+  )
+}
+
+// ─── Inline audio button for reading mode ─────────────────────────────
+function InlineAudioButton({ audioUrl }: { audioUrl: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [playing, setPlaying] = useState(false)
+
+  const toggle = () => {
+    if (!audioRef.current) {
+      const a = new Audio(audioUrl)
+      a.onended = () => setPlaying(false)
+      audioRef.current = a
+    }
+    if (playing) {
+      audioRef.current.pause()
+      setPlaying(false)
+    } else {
+      audioRef.current.play()
+      setPlaying(true)
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      className="inline-flex items-center gap-1 ml-2 opacity-40 hover:opacity-100 transition-opacity align-middle"
+      title={playing ? 'Pause audio' : 'Play audio'}
+    >
+      {playing
+        ? <Pause size={11} className="text-accent" />
+        : <Play  size={11} className="text-accent" />
+      }
+    </button>
   )
 }
 
@@ -76,6 +111,7 @@ function BlockView({
       )}>
         <p className={clsx('text-text-secondary italic', fontClass)}>
           {(block as any).text}
+          {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
           {active && <span className="ml-2 inline-block align-middle"><Waveform /></span>}
         </p>
       </div>
@@ -98,6 +134,7 @@ function BlockView({
         <p className={clsx('text-text-secondary italic pl-3 border-l-2', fontClass)}
           style={{ borderColor: (char?.color ?? '#5C5A6A') + '50' }}>
           {(block as any).text}
+          {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
         </p>
       </div>
     )
@@ -124,6 +161,7 @@ function BlockView({
         )}
         <p className={clsx('text-text-primary pl-2', fontClass)}>
           "{(block as any).text}"
+          {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
         </p>
       </div>
     )
@@ -146,6 +184,11 @@ function BlockView({
         )}
         {b.attribution && (
           <p className="text-text-muted text-xs mt-3 text-right">— {b.attribution}</p>
+        )}
+        {block.audioUrl && (
+          <div className="mt-2 flex justify-end">
+            <InlineAudioButton audioUrl={block.audioUrl} />
+          </div>
         )}
       </div>
     )
@@ -171,7 +214,15 @@ export default function ReaderPage() {
     saveProgress, getProgress
   } = useReaderStore()
 
-  const story = getStory(id)
+  const [story, setStory] = useState<Story | null | undefined>(undefined)
+
+  // Load story: Supabase first, demo fallback
+  useEffect(() => {
+    if (!id) return
+    fetchBook(id).then(book => {
+      setStory(book ?? getStory(id) ?? null)
+    }).catch(() => setStory(getStory(id) ?? null))
+  }, [id])
 
   // Gate: must own
   useEffect(() => {
@@ -202,6 +253,7 @@ export default function ReaderPage() {
   const synthRef  = useRef<SpeechSynthesis | null>(null)
   const utterRef  = useRef<SpeechSynthesisUtterance | null>(null)
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioRef  = useRef<HTMLAudioElement | null>(null)   // real audio playback
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
 
   useEffect(() => {
@@ -213,6 +265,7 @@ export default function ReaderPage() {
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', load)
       window.speechSynthesis.cancel()
+      audioRef.current?.pause()
     }
   }, [])
 
@@ -279,29 +332,50 @@ export default function ReaderPage() {
     }
   }, [story, chapterIdx, sceneIdx, blockIdx, blocks, setCurrentBlock, persistProgress])
 
-  // ── Speech synthesis auto-play (audiobook / cinematic) ──
+  // ── Auto-play (audiobook / cinematic) — real audio first, TTS fallback ──
   useEffect(() => {
     const synth = synthRef.current
     if (timerRef.current) clearTimeout(timerRef.current)
-    if (!synth) return
 
-    // Stop speech whenever not playing or in reading mode
-    if (!isPlaying || prefs.mode === 'reading') {
-      synth.cancel()
-      return
+    // Always stop previous audio/speech first
+    synth?.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current = null
     }
+
+    if (!isPlaying || prefs.mode === 'reading') return
     if (!block || !story) return
 
-    synth.cancel()
-
-    // Non-speakable blocks: skip via timer
+    // ── Pause / SFX blocks: skip after duration ──
     if (block.type === 'pause' || block.type === 'sfx') {
       const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
       timerRef.current = setTimeout(advance, ms)
       return () => { if (timerRef.current) clearTimeout(timerRef.current) }
     }
 
-    // Get text to speak
+    // ── Real audio file available → use it ──
+    if (block.audioUrl) {
+      const audio = new Audio(block.audioUrl)
+      audio.playbackRate = Math.min(2, Math.max(0.5, prefs.playbackSpeed))
+      audio.volume = block.type === 'narration'
+        ? prefs.narratorVolume
+        : prefs.characterVolume
+      audio.onended = () => advance()
+      audio.onerror = () => advance()   // fallback if file missing
+      audioRef.current = audio
+      audio.play().catch(() => advance())
+      return () => {
+        audio.pause()
+        audio.onended = null
+        audio.onerror = null
+      }
+    }
+
+    // ── No audio file → fall back to Web Speech API ──
+    if (!synth) return
     const speakText: string =
       block.type === 'narration' ? (block as any).text :
       block.type === 'dialogue'  ? (block as any).text :
@@ -316,27 +390,22 @@ export default function ReaderPage() {
       ? prefs.narratorVolume
       : prefs.characterVolume
 
-    // Assign voice: characters get voices by index, narrator gets a separate one
     if (voices.length > 0) {
       const speakable = voices.filter(v => v.lang.startsWith('en'))
       const pool = speakable.length > 0 ? speakable : voices
-
       if (block.type === 'dialogue' || block.type === 'thought') {
         const charList = story.characters.filter(c => c.role === 'character')
         const charPos  = charList.findIndex(c => c.id === (block as any).characterId)
-        // Characters use voices starting from index 1 (leave index 0 for narrator)
         utter.voice = pool[(1 + charPos) % pool.length]
-        // Vary pitch slightly per character
         utter.pitch = 0.8 + (charPos % 4) * 0.15
       } else {
-        // Narrator / quote: use first voice, slightly deeper
         utter.voice = pool[0]
         utter.pitch = 0.85
       }
     }
 
     utter.onend   = () => advance()
-    utter.onerror = () => advance()   // keep rolling on any TTS error
+    utter.onerror = () => advance()
     utterRef.current = utter
     synth.speak(utter)
 
@@ -358,6 +427,12 @@ export default function ReaderPage() {
     setShowTOC(false)
     persistProgress(ci, si, 0)
   }
+
+  if (story === undefined) return (
+    <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   if (!story) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">

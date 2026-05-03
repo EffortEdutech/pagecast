@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStudioStore } from '@/store/studioStore'
+import { useEditor } from '@/hooks/useEditor'
 import { BlockItem } from '@/components/editor/BlockItem'
 import { AddBlockMenu } from '@/components/editor/AddBlockMenu'
 import { Header } from '@/components/layout/Header'
@@ -53,7 +54,8 @@ export default function StudioPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const router = useRouter()
   const store = useStudioStore()
-  const story = store.stories.find(s => s.id === bookId)
+  const editor = useEditor(bookId)
+  const story = editor.story ?? store.stories.find(s => s.id === bookId)
 
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null)
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null)
@@ -91,31 +93,33 @@ export default function StudioPage() {
 
   // ── Handlers ──
 
-  const handleAddChapter = () => {
-    const ch = store.addChapter(story.id, `Scene ${story.chapters.length + 1}`)
+  const handleAddChapter = async () => {
+    const ch = await editor.addChapter(`Chapter ${story.chapters.length + 1}`)
+    if (!ch) return
     setActiveChapterId(ch.id)
     setExpandedChapters(prev => new Set(Array.from(prev).concat(ch.id)))
   }
 
-  const handleAddScene = (chapterId: string) => {
+  const handleAddScene = async (chapterId: string) => {
     const chapter = story.chapters.find(c => c.id === chapterId)
-    const sc = store.addScene(story.id, chapterId, `Beat ${(chapter?.scenes.length ?? 0) + 1}`)
-    setActiveSceneId(sc.id)
+    const sc = await editor.addScene(chapterId, `Beat ${(chapter?.scenes.length ?? 0) + 1}`)
+    if (sc) setActiveSceneId(sc.id)
   }
 
-  const handleAddBlock = (type: BlockType) => {
+  const handleAddBlock = async (type: BlockType) => {
     if (!activeChapterId || !activeSceneId) return
+    const id = uuid()
     const defaultChar = story.characters.find(c => c.role === 'character')?.id ?? story.characters[0]?.id ?? ''
     let block: StoryBlock
     switch (type) {
-      case 'narration': block = { id: uuid(), type: 'narration', text: '' }; break
-      case 'dialogue': block = { id: uuid(), type: 'dialogue', characterId: defaultChar, text: '', emotion: 'neutral' }; break
-      case 'thought': block = { id: uuid(), type: 'thought', characterId: defaultChar, text: '' }; break
-      case 'quote': block = { id: uuid(), type: 'quote', text: '', style: 'default' }; break
-      case 'pause': block = { id: uuid(), type: 'pause', duration: 2 }; break
-      case 'sfx': block = { id: uuid(), type: 'sfx', sfxFile: '', label: '' }; break
+      case 'narration': block = { id, type: 'narration', text: '' }; break
+      case 'dialogue': block = { id, type: 'dialogue', characterId: defaultChar, text: '', emotion: 'neutral' }; break
+      case 'thought':  block = { id, type: 'thought',  characterId: defaultChar, text: '' }; break
+      case 'quote':    block = { id, type: 'quote',    text: '', style: 'default' }; break
+      case 'pause':    block = { id, type: 'pause',    duration: 2 }; break
+      case 'sfx':      block = { id, type: 'sfx',      sfxFile: '', label: '' }; break
     }
-    store.addBlock(story.id, activeChapterId, activeSceneId, block)
+    await editor.addBlock(activeChapterId, activeSceneId, block)
   }
 
   const handleSave = () => {
@@ -137,8 +141,25 @@ export default function StudioPage() {
         <button className="btn-ghost text-xs px-2 py-1.5" onClick={() => router.push('/dashboard')}>
           <ArrowLeft size={13} /> Dashboard
         </button>
-        <button className="btn-secondary text-xs" onClick={() => {}}>
+        <button
+          className="btn-secondary text-xs"
+          onClick={() => window.open(`${process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800'}/reader/${bookId}`, '_blank')}
+        >
           <Eye size={13} /> Preview
+        </button>
+        <button
+          className={clsx('text-xs', story.status === 'published' ? 'btn-secondary text-success' : 'btn-secondary')}
+          onClick={async () => {
+            const newStatus = story.status === 'published' ? 'draft' : 'published'
+            await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus as 'draft' | 'published'))
+            useStudioStore.setState(state => ({
+              stories: state.stories.map(s =>
+                s.id === bookId ? { ...s, status: newStatus as 'draft' | 'published' } : s
+              )
+            }))
+          }}
+        >
+          {story.status === 'published' ? <><Film size={13} /> Unpublish</> : <><Film size={13} /> Publish</>}
         </button>
         <button className={clsx('text-xs', saved ? 'btn-secondary text-success' : 'btn-primary')} onClick={handleSave}>
           {saved ? <><Check size={13} /> Saved</> : <><Save size={13} /> Save</>}
@@ -182,12 +203,12 @@ export default function StudioPage() {
                     <BookOpen size={11} className="shrink-0 text-text-muted" />
                     <InlineEdit
                       value={chapter.title}
-                      onSave={v => store.updateChapter(story.id, chapter.id, { title: v })}
+                      onSave={v => editor.renameChapter(chapter.id, v)}
                       className="text-xs flex-1 min-w-0 truncate"
                     />
                     <button
                       className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
-                      onClick={e => { e.stopPropagation(); store.deleteChapter(story.id, chapter.id) }}
+                      onClick={e => { e.stopPropagation(); editor.removeChapter(chapter.id) }}
                     >
                       <Trash2 size={10} />
                     </button>
@@ -210,7 +231,7 @@ export default function StudioPage() {
                           <Film size={10} className="shrink-0" />
                           <InlineEdit
                             value={scene.title}
-                            onSave={v => store.updateScene(story.id, chapter.id, scene.id, { title: v })}
+                            onSave={v => editor.renameScene(chapter.id, scene.id, v)}
                             className="flex-1 min-w-0 truncate"
                           />
                           <span className="opacity-0 group-hover:opacity-100 text-[10px] text-text-muted">
@@ -218,7 +239,7 @@ export default function StudioPage() {
                           </span>
                           <button
                             className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
-                            onClick={e => { e.stopPropagation(); store.deleteScene(story.id, chapter.id, scene.id) }}
+                            onClick={e => { e.stopPropagation(); editor.removeScene(chapter.id, scene.id) }}
                           >
                             <Trash2 size={9} />
                           </button>
@@ -276,9 +297,10 @@ export default function StudioPage() {
                     <BlockItem
                       key={block.id}
                       block={block}
+                      bookId={bookId}
                       characters={story.characters}
-                      onUpdate={updates => store.updateBlock(story.id, activeChapterId!, activeSceneId!, block.id, updates)}
-                      onDelete={() => store.deleteBlock(story.id, activeChapterId!, activeSceneId!, block.id)}
+                      onUpdate={updates => editor.editBlock(activeChapterId!, activeSceneId!, block.id, updates)}
+                      onDelete={() => editor.removeBlock(activeChapterId!, activeSceneId!, block.id)}
                       dragHandleProps={{}}
                     />
                   ))
@@ -339,7 +361,7 @@ export default function StudioPage() {
                 <select
                   className="input text-xs"
                   value={activeScene.musicFile ?? 'none'}
-                  onChange={e => store.updateScene(story.id, activeChapterId!, activeSceneId!, { musicFile: e.target.value === 'none' ? undefined : e.target.value })}
+                  onChange={e => store.updateScene(story.id, activeChapterId!, activeSceneId!, { musicFile: e.target.value === 'none' ? undefined : e.target.value })} // local only
                 >
                   {MUSIC_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>

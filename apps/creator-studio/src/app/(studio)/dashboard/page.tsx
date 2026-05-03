@@ -2,10 +2,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useStudioStore } from '@/store/studioStore'
+import { useUser } from '@/hooks/useUser'
+import { useBooks } from '@/hooks/useBooks'
 import { Header } from '@/components/layout/Header'
 import {
   Plus, BookOpen, Clock, Music, Mic, MoreVertical,
-  Edit3, Trash2, Eye, Copy, TrendingUp, Users, DollarSign
+  Edit3, Trash2, Eye, Copy, TrendingUp, Users, DollarSign,
+  Globe, FileText, Loader2
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
@@ -25,16 +28,26 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: any, label: 
   )
 }
 
-function StoryCard({ story, onEdit, onDelete, onDuplicate }: {
+function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
   story: Story
   onEdit: () => void
   onDelete: () => void
   onDuplicate: () => void
+  onPublish: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
 
   const coverColors = ['from-accent/30 to-accent/10', 'from-gold/30 to-gold/10', 'from-info/30 to-info/10', 'from-success/30 to-success/10']
   const colorIdx = story.id.charCodeAt(story.id.length - 1) % coverColors.length
+  const isPublished = story.status === 'published'
+
+  const handleDuplicate = async () => {
+    setMenuOpen(false)
+    setDuplicating(true)
+    await onDuplicate()
+    setDuplicating(false)
+  }
 
   return (
     <div className="card hover:border-accent/30 transition-all duration-200 overflow-hidden group">
@@ -43,7 +56,7 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate }: {
         <BookOpen size={36} className="text-white/20" />
         <div className="absolute top-2 right-2 flex items-center gap-1.5">
           <span className={clsx(
-            story.status === 'published' ? 'badge-published' :
+            isPublished ? 'badge-published' :
             story.status === 'draft' ? 'badge-draft' : 'badge-archived'
           )}>
             {story.status}
@@ -54,8 +67,11 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate }: {
           <button onClick={onEdit} className="btn-primary text-xs px-3 py-1.5">
             <Edit3 size={13} /> Edit
           </button>
-          <button className="btn-secondary text-xs px-3 py-1.5">
-            <Eye size={13} /> Preview
+          <button
+            onClick={() => { onPublish(); }}
+            className={clsx('text-xs px-3 py-1.5', isPublished ? 'btn-secondary' : 'btn-secondary')}
+          >
+            {isPublished ? <><FileText size={13} /> Unpublish</> : <><Globe size={13} /> Publish</>}
           </button>
         </div>
       </div>
@@ -75,12 +91,16 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate }: {
               <MoreVertical size={14} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-7 z-20 card-elevated w-36 py-1 text-xs animate-fade-in">
+              <div className="absolute right-0 top-7 z-20 card-elevated w-44 py-1 text-xs animate-fade-in">
                 <button onClick={() => { onEdit(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors">
                   <Edit3 size={12} /> Continue editing
                 </button>
-                <button onClick={() => { onDuplicate(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors">
-                  <Copy size={12} /> Duplicate
+                <button onClick={handleDuplicate} disabled={duplicating} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50">
+                  {duplicating ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
+                  {duplicating ? 'Duplicating…' : 'Duplicate'}
+                </button>
+                <button onClick={() => { onPublish(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors">
+                  {isPublished ? <><FileText size={12} /> Unpublish</> : <><Globe size={12} /> Publish</>}
                 </button>
                 <div className="my-1 border-t border-bg-border" />
                 <button onClick={() => { onDelete(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-danger/10 text-text-muted hover:text-danger transition-colors">
@@ -150,17 +170,20 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { stories, createStory, deleteStory, updateStory, setActiveStory, creator } = useStudioStore()
+  const { setActiveStory } = useStudioStore()
+  const { stories, loading: booksLoading, error: booksError, createBook, deleteBook, publishBook, duplicateBook } = useBooks()
+  const { displayName } = useUser()
   const [showModal, setShowModal] = useState(false)
   const [filter, setFilter] = useState<'all' | 'draft' | 'published'>('all')
 
   const filtered = stories.filter(s => filter === 'all' || s.status === filter)
 
-  const handleCreate = (title: string, desc: string) => {
-    const story = createStory(title, desc)
+  const handleCreate = async (title: string, desc: string) => {
+    const book = await createBook(title, desc)
+    if (!book) return
     setShowModal(false)
-    setActiveStory(story.id)
-    router.push(`/studio/${story.id}`)
+    setActiveStory(book.id)
+    router.push(`/studio/${book.id}`)
   }
 
   const handleEdit = (story: Story) => {
@@ -168,8 +191,13 @@ export default function DashboardPage() {
     router.push(`/studio/${story.id}`)
   }
 
-  const handleDuplicate = (story: Story) => {
-    createStory(`${story.title} (copy)`, story.description)
+  const handleDuplicate = async (story: Story) => {
+    await duplicateBook(story.id)
+  }
+
+  const handlePublish = async (story: Story) => {
+    const newStatus = story.status === 'published' ? 'draft' : 'published'
+    await publishBook(story.id, newStatus as 'draft' | 'published')
   }
 
   return (
@@ -181,10 +209,17 @@ export default function DashboardPage() {
       </Header>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* DB error banner */}
+        {booksError && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
+            {booksError}
+          </div>
+        )}
+
         {/* Welcome */}
         <div>
           <h2 className="text-text-primary font-bold text-xl">
-            Welcome back, {creator?.name ?? 'Creator'} 👋
+            Welcome back, {displayName} 👋
           </h2>
           <p className="text-text-secondary text-sm mt-1">
             {stories.length === 0
@@ -224,7 +259,12 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {filtered.length === 0 ? (
+          {booksLoading ? (
+            <div className="flex items-center justify-center py-16 gap-3 text-text-secondary">
+              <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm">Loading your stories…</span>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-16 space-y-3">
               <BookOpen size={40} className="text-text-muted mx-auto" />
               <p className="text-text-secondary">No stories here yet.</p>
@@ -239,8 +279,9 @@ export default function DashboardPage() {
                   key={story.id}
                   story={story}
                   onEdit={() => handleEdit(story)}
-                  onDelete={() => deleteStory(story.id)}
+                  onDelete={() => deleteBook(story.id)}
                   onDuplicate={() => handleDuplicate(story)}
+                  onPublish={() => handlePublish(story)}
                 />
               ))}
               {/* Add new card */}

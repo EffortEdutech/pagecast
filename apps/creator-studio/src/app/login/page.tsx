@@ -1,13 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useStudioStore } from '@/store/studioStore'
+import { createClient } from '@/lib/supabase/client'
 import { BookOpen, Mic, Music, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const login = useStudioStore(s => s.login)
-  const [email, setEmail] = useState('myeffort.studio@gmail.com')
+  const supabase = createClient()
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -17,14 +17,20 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 600))
-    const ok = login(email, password)
-    if (ok) {
-      router.push('/dashboard')
-    } else {
-      setError('Please enter your email and password.')
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+      return
     }
-    setLoading(false)
+
+    router.push('/dashboard')
+    router.refresh()
   }
 
   return (
@@ -86,7 +92,7 @@ export default function LoginPage() {
             <p className="text-text-secondary text-xs italic">The night was silent. Too silent.</p>
             <div className="flex items-start gap-2">
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent/20 text-accent-hover shrink-0">Aisha</span>
-              <p className="text-text-primary text-xs">"Did you hear that?"</p>
+              <p className="text-text-primary text-xs">&quot;Did you hear that?&quot;</p>
             </div>
           </div>
         </div>
@@ -116,7 +122,7 @@ export default function LoginPage() {
                 className="input"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="creator@example.com"
                 autoComplete="email"
                 required
               />
@@ -161,6 +167,26 @@ export default function LoginPage() {
               }
             </button>
           </form>
+
+          {/* Quick-fill for dev testing */}
+          <div className="border-t border-bg-border pt-4">
+            <p className="text-text-muted text-xs text-center mb-3">Test accounts</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Creator 1', email: 'creator1@pagecast.test' },
+                { label: 'Creator 2', email: 'creator2@pagecast.test' },
+              ].map(({ label, email: testEmail }) => (
+                <button
+                  key={testEmail}
+                  type="button"
+                  onClick={() => { setEmail(testEmail); setPassword('test123') }}
+                  className="text-xs text-text-muted hover:text-text-secondary border border-bg-border hover:border-accent/30 rounded-lg px-3 py-2 transition-colors text-left"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <p className="text-text-muted text-xs text-center">
             PageCast Creator Studio — MVP Preview

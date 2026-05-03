@@ -1,21 +1,42 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
 import { Navbar } from '@/components/layout/Navbar'
 import { getStory } from '@/data/stories'
+import { fetchBook } from '@/lib/supabase/books'
 import {
   Play, Clock, Mic, Music, Volume2, BookOpen,
   Headphones, Film, Check, ChevronRight, ArrowLeft, Lock
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import type { Story } from '@/types'
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { isOwned, addToLibrary } = useReaderStore()
-  const story = getStory(id)
+  const [story, setStory] = useState<Story | null | undefined>(undefined) // undefined = loading
 
+  useEffect(() => {
+    if (!id) return
+    // Try Supabase first; fall back to demo data
+    fetchBook(id).then(book => {
+      setStory(book ?? getStory(id) ?? null)
+    }).catch(() => {
+      setStory(getStory(id) ?? null)
+    })
+  }, [id])
+
+  // Still loading
+  if (story === undefined) return (
+    <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
+  // Not found
   if (!story) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="text-center space-y-3">

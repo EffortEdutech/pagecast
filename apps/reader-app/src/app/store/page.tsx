@@ -1,18 +1,19 @@
 'use client'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
+import { usePublishedBooks } from '@/hooks/usePublishedBooks'
 import { Navbar } from '@/components/layout/Navbar'
-import { DEMO_STORIES } from '@/data/stories'
 import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check } from 'lucide-react'
 import { clsx } from 'clsx'
+import type { Story } from '@/types'
 
-function StoryCard({ story }: { story: typeof DEMO_STORIES[0] }) {
+function StoryCard({ story }: { story: Story }) {
   const isOwned = useReaderStore(s => s.isOwned(story.id))
 
   return (
     <Link href={`/book/${story.id}`} className="card hover:border-accent/40 transition-all duration-200 overflow-hidden group flex flex-col">
       {/* Cover */}
-      <div className={clsx('h-44 bg-gradient-to-br flex flex-col justify-end p-4 relative', story.coverGradient)}>
+      <div className={clsx('h-44 bg-gradient-to-br flex flex-col justify-end p-4 relative', story.coverGradient ?? 'from-accent/30 to-accent/10')}>
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="relative z-10">
           <div className="flex gap-2 mb-2 flex-wrap">
@@ -40,7 +41,7 @@ function StoryCard({ story }: { story: typeof DEMO_STORIES[0] }) {
           {story.hasMusic && <span className="flex items-center gap-1"><Music size={10} /> Music</span>}
           <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
           <span className="ml-auto font-semibold text-text-primary text-xs">
-            {isOwned ? <span className="text-success">Owned</span> : `$${story.price.toFixed(2)}`}
+            {isOwned ? <span className="text-success">Owned</span> : story.price === 0 ? 'Free' : `$${story.price.toFixed(2)}`}
           </span>
         </div>
       </div>
@@ -48,7 +49,22 @@ function StoryCard({ story }: { story: typeof DEMO_STORIES[0] }) {
   )
 }
 
+function SkeletonCard() {
+  return (
+    <div className="card overflow-hidden animate-pulse">
+      <div className="h-44 bg-bg-elevated" />
+      <div className="p-4 space-y-2">
+        <div className="h-3 bg-bg-elevated rounded w-3/4" />
+        <div className="h-3 bg-bg-elevated rounded w-full" />
+        <div className="h-3 bg-bg-elevated rounded w-2/3" />
+      </div>
+    </div>
+  )
+}
+
 export default function StorePage() {
+  const { stories, loading, usingDemo } = usePublishedBooks()
+
   return (
     <div className="min-h-screen bg-bg-primary">
       <Navbar />
@@ -69,13 +85,11 @@ export default function StorePage() {
           <p className="text-text-secondary text-lg mt-4 max-w-xl leading-relaxed">
             PageCast combines reading, listening, and cinematic atmosphere — all in your browser. No app. No download.
           </p>
-
-          {/* Feature pills */}
           <div className="flex gap-3 mt-6 flex-wrap">
             {[
-              { icon: BookOpen,    label: 'Text + Audio sync' },
-              { icon: Headphones,  label: 'Character voices' },
-              { icon: Music,       label: 'Cinematic sound design' },
+              { icon: BookOpen,   label: 'Text + Audio sync' },
+              { icon: Headphones, label: 'Character voices' },
+              { icon: Music,      label: 'Cinematic sound design' },
             ].map(({ icon: Icon, label }) => (
               <div key={label} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-bg-elevated border border-bg-border text-text-secondary text-sm">
                 <Icon size={13} className="text-accent" />
@@ -91,14 +105,29 @@ export default function StorePage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-text-primary font-bold text-xl">All Stories</h2>
-            <p className="text-text-secondary text-sm mt-0.5">{DEMO_STORIES.length} stories available</p>
+            <p className="text-text-secondary text-sm mt-0.5">
+              {loading
+                ? 'Loading stories…'
+                : usingDemo
+                  ? `${stories.length} demo stories · Publish a story in Creator Studio to see it here`
+                  : `${stories.length} ${stories.length === 1 ? 'story' : 'stories'} available`
+              }
+            </p>
           </div>
         </div>
 
+        {usingDemo && !loading && (
+          <div className="mb-5 px-4 py-3 rounded-lg bg-gold/10 border border-gold/20 text-gold text-xs flex items-center gap-2">
+            <Sparkles size={13} />
+            Showing demo stories. Once you publish a book in Creator Studio, it will appear here instead.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {DEMO_STORIES.map(story => (
-            <StoryCard key={story.id} story={story} />
-          ))}
+          {loading
+            ? Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+            : stories.map(story => <StoryCard key={story.id} story={story} />)
+          }
         </div>
       </main>
     </div>

@@ -61,3 +61,11 @@ coverage/
 *.pbf
 *.swp
 *.swo
+
+external_services.txt
+pageCast info.xlsx
+
+# ─── Office temp/lock files ──────────────────────────────────
+~$*
+*.tmp
+

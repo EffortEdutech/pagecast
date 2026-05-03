@@ -16,7 +16,9 @@
     "zustand": "^4.5.4",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.4.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "@supabase/supabase-js": "^2.44.4",
+    "@supabase/ssr": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^20",

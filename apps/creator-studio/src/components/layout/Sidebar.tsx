@@ -1,10 +1,12 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useStudioStore } from '@/store/studioStore'
+import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 import {
-  BookOpen, LayoutDashboard, Mic, Music, Image, Settings,
-  LogOut, ChevronRight, Sparkles, Upload
+  BookOpen, LayoutDashboard, Mic, Music, Settings,
+  LogOut, ChevronRight, Sparkles
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -18,14 +20,24 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { creator, logout, stories } = useStudioStore()
+  const supabase = createClient()
+  const [user, setUser] = useState<User | null>(null)
 
-  const handleLogout = () => {
-    logout()
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     router.push('/login')
+    router.refresh()
   }
 
-  const isStudio = pathname.startsWith('/studio/')
+  const displayName = user?.user_metadata?.display_name
+    ?? user?.email?.split('@')[0]
+    ?? 'Creator'
+  const displayEmail = user?.email ?? ''
+  const initials = displayName.charAt(0).toUpperCase()
 
   return (
     <aside className="w-56 shrink-0 bg-bg-secondary border-r border-bg-border flex flex-col h-screen">
@@ -62,36 +74,29 @@ export function Sidebar() {
           )
         })}
 
-        {/* TTS Credits */}
-        {creator && (
-          <div className="mt-4 mx-1 p-3 rounded-lg bg-bg-card border border-bg-border">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles size={12} className="text-gold" />
-              <span className="text-text-secondary text-xs font-medium">Voice Credits</span>
-            </div>
-            <div className="w-full bg-bg-border rounded-full h-1.5 mb-1.5">
-              <div
-                className="bg-accent rounded-full h-1.5 transition-all"
-                style={{ width: `${(creator.ttsCreditsUsed / creator.ttsCreditsLimit) * 100}%` }}
-              />
-            </div>
-            <p className="text-text-muted text-[10px]">
-              {creator.ttsCreditsUsed} / {creator.ttsCreditsLimit} min used
-            </p>
+        {/* TTS Credits placeholder */}
+        <div className="mt-4 mx-1 p-3 rounded-lg bg-bg-card border border-bg-border">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles size={12} className="text-gold" />
+            <span className="text-text-secondary text-xs font-medium">Voice Credits</span>
           </div>
-        )}
+          <div className="w-full bg-bg-border rounded-full h-1.5 mb-1.5">
+            <div className="bg-accent rounded-full h-1.5 w-0 transition-all" />
+          </div>
+          <p className="text-text-muted text-[10px]">0 / 60 min used</p>
+        </div>
       </nav>
 
       {/* User */}
       <div className="border-t border-bg-border p-3 space-y-1 shrink-0">
-        {creator && (
+        {user && (
           <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg">
             <div className="w-7 h-7 rounded-full bg-accent/30 flex items-center justify-center text-accent text-xs font-bold shrink-0">
-              {creator.name.charAt(0).toUpperCase()}
+              {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-text-primary text-xs font-medium truncate">{creator.name}</div>
-              <div className="text-text-muted text-[10px] truncate">{creator.email}</div>
+              <div className="text-text-primary text-xs font-medium truncate">{displayName}</div>
+              <div className="text-text-muted text-[10px] truncate">{displayEmail}</div>
             </div>
           </div>
         )}

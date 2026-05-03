@@ -1,20 +1,14 @@
-'use client'
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useStudioStore } from '@/store/studioStore'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
 
-export default function StudioLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
-  const isAuthenticated = useStudioStore(s => s.isAuthenticated)
+export default async function StudioLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/login')
-    }
-  }, [isAuthenticated, router])
-
-  if (!isAuthenticated) return null
+  if (!user) {
+    redirect('/login')
+  }
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
