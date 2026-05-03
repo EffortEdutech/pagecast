@@ -4,22 +4,19 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import {
-  BookOpen, LayoutDashboard, Mic, Music, Settings,
-  LogOut, ChevronRight, Sparkles
-} from 'lucide-react'
+import { BookOpen, LayoutDashboard, Mic, Music, Settings, LogOut, ChevronRight, Sparkles } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/voices', icon: Mic, label: 'Voices' },
-  { href: '/assets', icon: Music, label: 'Assets' },
-  { href: '/settings', icon: Settings, label: 'Settings' },
+  { href: '/voices',    icon: Mic,             label: 'Characters & Voices' },
+  { href: '/assets',    icon: Music,           label: 'Assets' },
+  { href: '/settings',  icon: Settings,        label: 'Settings' },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
+  const router   = useRouter()
   const supabase = createClient()
   const [user, setUser] = useState<User | null>(null)
 
@@ -33,11 +30,9 @@ export function Sidebar() {
     router.refresh()
   }
 
-  const displayName = user?.user_metadata?.display_name
-    ?? user?.email?.split('@')[0]
-    ?? 'Creator'
+  const displayName  = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? 'Creator'
   const displayEmail = user?.email ?? ''
-  const initials = displayName.charAt(0).toUpperCase()
+  const initials     = displayName.charAt(0).toUpperCase()
 
   return (
     <aside className="w-56 shrink-0 bg-bg-secondary border-r border-bg-border flex flex-col h-screen">
@@ -57,9 +52,7 @@ export function Sidebar() {
         {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
           return (
-            <Link
-              key={href}
-              href={href}
+            <Link key={href} href={href}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group',
                 active
@@ -74,7 +67,7 @@ export function Sidebar() {
           )
         })}
 
-        {/* TTS Credits placeholder */}
+        {/* Voice credits placeholder */}
         <div className="mt-4 mx-1 p-3 rounded-lg bg-bg-card border border-bg-border">
           <div className="flex items-center gap-1.5 mb-2">
             <Sparkles size={12} className="text-gold" />
@@ -102,4 +95,12 @@ export function Sidebar() {
         )}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg tex
+          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors text-sm"
+        >
+          <LogOut size={15} />
+          Sign out
+        </button>
+      </div>
+    </aside>
+  )
+}

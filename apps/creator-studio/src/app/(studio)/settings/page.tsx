@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
-import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle } from 'lucide-react'
+import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
 import { getTtsSettings, saveTtsSettings } from '@/lib/tts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
@@ -13,27 +13,22 @@ export default function SettingsPage() {
   const { displayName, email } = useUser()
   const supabase = createClient()
 
-  const [name, setName]         = useState('')
+  const [name,     setName]     = useState('')
   const [language, setLanguage] = useState('en')
-  const [price, setPrice]       = useState('4.99')
-  const [ttsKey, setTtsKey]     = useState('')
+  const [price,    setPrice]    = useState('4.99')
+  const [ttsKey,   setTtsKey]   = useState('')
   const [provider, setProvider] = useState('openai')
-  const [saving, setSaving]     = useState(false)
-  const [saved, setSaved]       = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [saving,   setSaving]   = useState(false)
+  const [saved,    setSaved]    = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
 
-  // Seed state once displayName is available
-  useEffect(() => {
-    if (displayName) setName(displayName)
-  }, [displayName])
+  useEffect(() => { if (displayName) setName(displayName) }, [displayName])
 
-  // Load persisted prefs from localStorage
   useEffect(() => {
     const lang       = localStorage.getItem(PREF_LANGUAGE_KEY)
     const savedPrice = localStorage.getItem(PREF_PRICE_KEY)
     if (lang)       setLanguage(lang)
     if (savedPrice) setPrice(savedPrice)
-
     const tts = getTtsSettings()
     if (tts.apiKey)   setTtsKey(tts.apiKey)
     if (tts.provider) setProvider(tts.provider)
@@ -43,22 +38,13 @@ export default function SettingsPage() {
     setSaving(true)
     setError(null)
 
-    // 1 — Update display name in Supabase auth metadata
     const { error: authErr } = await supabase.auth.updateUser({
       data: { display_name: name.trim() || displayName },
     })
+    if (authErr) { setError('Failed to save display name: ' + authErr.message); setSaving(false); return }
 
-    if (authErr) {
-      setError('Failed to save display name: ' + authErr.message)
-      setSaving(false)
-      return
-    }
-
-    // 2 — Persist language + price defaults locally
     localStorage.setItem(PREF_LANGUAGE_KEY, language)
     localStorage.setItem(PREF_PRICE_KEY, price)
-
-    // 3 — Persist TTS key + provider locally
     saveTtsSettings(ttsKey.trim(), provider)
 
     setSaving(false)
@@ -86,12 +72,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Display Name</label>
-              <input
-                className="input"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your display name"
-              />
+              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your display name" />
             </div>
             <div>
               <label className="label">Email</label>
@@ -100,21 +81,20 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* TTS API Keys */}
+        {/* TTS */}
         <section className="card p-5 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <Key size={15} className="text-gold" />
             <h2 className="text-text-primary font-semibold">AI Voice (TTS) Provider</h2>
           </div>
           <p className="text-text-secondary text-sm">
-            Connect your own TTS API key. PageCast supports OpenAI, ElevenLabs, and Google TTS. Your key is stored locally.
+            Connect your own TTS API key. PageCast supports OpenAI and ElevenLabs. Your key is stored locally in your browser only.
           </p>
           <div>
             <label className="label">Provider</label>
             <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value)}>
               <option value="openai">OpenAI TTS</option>
               <option value="elevenlabs">ElevenLabs</option>
-              <option value="google">Google TTS</option>
             </select>
           </div>
           <div>
@@ -122,7 +102,7 @@ export default function SettingsPage() {
             <input
               className="input max-w-md font-mono text-sm"
               type="password"
-              placeholder={`Your ${provider === 'openai' ? 'OpenAI' : provider === 'elevenlabs' ? 'ElevenLabs' : 'Google'} API key`}
+              placeholder={provider === 'openai' ? 'sk-...' : 'Your ElevenLabs API key'}
               value={ttsKey}
               onChange={e => setTtsKey(e.target.value)}
             />
@@ -130,4 +110,59 @@ export default function SettingsPage() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <Sparkles size={14} className="text-accent shrink-0 mt-0.5" />
             <p className="text-text-secondary text-xs leading-relaxed">
-              Your API key is used directly from your bro
+              Your API key is sent directly from your browser to the TTS provider via a server-side proxy route. It is never stored in the database.
+            </p>
+          </div>
+        </section>
+
+        {/* Book defaults */}
+        <section className="card p-5 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <BookOpen size={15} className="text-info" />
+            <h2 className="text-text-primary font-semibold">Book Defaults</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Default Language</label>
+              <select className="input" value={language} onChange={e => setLanguage(e.target.value)}>
+                <option value="en">English</option>
+                <option value="id">Indonesian</option>
+                <option value="ms">Malay</option>
+                <option value="ar">Arabic</option>
+                <option value="fr">French</option>
+                <option value="es">Spanish</option>
+                <option value="de">German</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Default Price (USD)</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="4.99"
+                value={price}
+                onChange={e => setPrice(e.target.value)}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Save */}
+        <div className="flex items-center gap-3">
+          <button
+            className="btn-primary min-w-32 justify-center"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving  ? <><Loader2 size={14} className="animate-spin" /> Saving…</> :
+             saved   ? <><Check   size={14} /> Saved!</>                            :
+             'Save Settings'}
+          </button>
+          {saved && <p className="text-success text-sm">Changes saved successfully.</p>}
+        </div>
+      </div>
+    </>
+  )
+}

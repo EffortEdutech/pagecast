@@ -1,12 +1,12 @@
 /**
- * Supabase data layer — Books & Characters
+ * Supabase data layer -- Books & Characters
  * Sprint 2: books + characters CRUD
- * Sprint 3 will add chapters, scenes, blocks
+ * Sprint 3: chapters, scenes, blocks handled in blocks.ts
  */
 import { createClient } from './client'
 import type { Story, Character } from '@/types'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface DbBook {
   id: string
@@ -33,6 +33,7 @@ export interface DbCharacter {
   name: string
   role: string | null
   color: string
+  voice_id: string | null      // added in migration 005
   voice_label: string | null
   voice_pitch: number
   voice_rate: number
@@ -41,9 +42,8 @@ export interface DbCharacter {
   created_at: string
 }
 
-// ─── Converters ───────────────────────────────────────────────────────────────
+// Converters
 
-/** Map DB book row → studio Story shape (without chapters — added separately) */
 export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Story {
   return {
     id: book.id,
@@ -56,14 +56,14 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     hasMusic: false,
     hasSfx: false,
     characters: characters.map(c => ({
-      id: c.id,
-      name: c.name,
-      role: (c.role ?? 'character') as 'narrator' | 'character',
-      displayName: c.name,
-      color: c.color,
-      voiceSource: 'ai' as const,
-      voiceId: '',
-      voiceLabel: c.voice_label ?? '',
+      id:            c.id,
+      name:          c.name,
+      role:          (c.role ?? 'character') as 'narrator' | 'character',
+      displayName:   c.name,
+      color:         c.color,
+      voiceSource:   'ai' as const,
+      voiceId:       c.voice_id ?? 'ai_female_soft',
+      voiceLabel:    c.voice_label ?? '',
       defaultVolume: 1,
     })),
     chapters: [],
@@ -73,7 +73,6 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
   }
 }
 
-/** Map studio Story → DB book insert shape */
 function storyToDbInsert(story: Partial<Story>, authorId: string): Partial<DbBook> {
   return {
     author_id: authorId,
@@ -87,9 +86,8 @@ function storyToDbInsert(story: Partial<Story>, authorId: string): Partial<DbBoo
   }
 }
 
-// ─── Books API ────────────────────────────────────────────────────────────────
+// Books API
 
-/** List all books for the current user */
 export async function fetchBooks(): Promise<Story[]> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -103,7 +101,6 @@ export async function fetchBooks(): Promise<Story[]> {
 
   if (error || !books) return []
 
-  // Fetch all characters for these books in one query
   const bookIds = books.map(b => b.id)
   const { data: allChars } = await supabase
     .from('characters')
@@ -120,7 +117,6 @@ export async function fetchBooks(): Promise<Story[]> {
   return books.map(b => dbBookToStory(b, charsByBook[b.id] ?? []))
 }
 
-/** Create a new book with a default Narrator character */
 export async function createBook(title: string, description: string): Promise<Story | null> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -132,21 +128,19 @@ export async function createBook(title: string, description: string): Promise<St
     .select()
     .single()
 
-  if (error || !book) {
-    console.error('createBook error:', error)
-    return null
-  }
+  if (error || !book) { console.error('createBook error:', error); return null }
 
-  // Seed a default Narrator character
+  // Seed default Narrator with voice_id
   const { data: narrator } = await supabase
     .from('characters')
     .insert({
-      book_id: book.id,
-      name: 'Narrator',
-      role: 'narrator',
-      color: '#9896A8',
-      voice_label: 'Female Soft',
-      sort_order: 0,
+      book_id:     book.id,
+      name:        'Narrator',
+      role:        'narrator',
+      color:       '#9896A8',
+      voice_id:    'ai_female_soft',
+      voice_label: 'Aria -- Female Soft',
+      sort_order:  0,
     })
     .select()
     .single()
@@ -154,74 +148,54 @@ export async function createBook(title: string, description: string): Promise<St
   return dbBookToStory(book, narrator ? [narrator] : [])
 }
 
-/** Update book metadata */
 export async function updateBook(bookId: string, updates: Partial<Story>): Promise<boolean> {
   const supabase = createClient()
-
   const dbUpdates: Partial<DbBook> = {
-    ...(updates.title !== undefined && { title: updates.title }),
+    ...(updates.title       !== undefined && { title: updates.title }),
     ...(updates.description !== undefined && { description: updates.description }),
-    ...(updates.status !== undefined && { status: updates.status }),
-    ...(updates.price !== undefined && { price: updates.price, is_free: updates.price === 0 }),
-    ...(updates.coverImage !== undefined && { cover_emoji: updates.coverImage }),
+    ...(updates.status      !== undefined && { status: updates.status }),
+    ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
+    ...(updates.coverImage  !== undefined && { cover_emoji: updates.coverImage }),
   }
-
-  const { error } = await supabase
-    .from('books')
-    .update(dbUpdates)
-    .eq('id', bookId)
-
+  const { error } = await supabase.from('books').update(dbUpdates).eq('id', bookId)
   return !error
 }
 
-/** Delete a book (cascades to characters, chapters, scenes, blocks) */
 export async function deleteBook(bookId: string): Promise<boolean> {
   const supabase = createClient()
   const { error } = await supabase.from('books').delete().eq('id', bookId)
   return !error
 }
 
-/** Toggle publish status of a book */
 export async function publishBook(bookId: string, status: 'draft' | 'published'): Promise<boolean> {
   const supabase = createClient()
-  const { error } = await supabase
-    .from('books')
-    .update({ status })
-    .eq('id', bookId)
+  const { error } = await supabase.from('books').update({ status }).eq('id', bookId)
   return !error
 }
 
-/**
- * Deep-duplicate a book — copies book row, characters, chapters, scenes, and blocks.
- * Returns the new Story or null on failure.
- */
 export async function duplicateBook(sourceBookId: string): Promise<Story | null> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  // ── 1. Load source book ──
-  const { data: srcBook } = await supabase
-    .from('books')
-    .select('*')
-    .eq('id', sourceBookId)
-    .single()
+  // 1. Load source book
+  const { data: srcBook } = await supabase.from('books').select('*').eq('id', sourceBookId).single()
   if (!srcBook) return null
 
-  // ── 2. Create new book ──
+  // 2. Create new book
   const { data: newBook, error: bookErr } = await supabase
     .from('books')
     .insert({
-      author_id: user.id,
-      title: `${srcBook.title} (copy)`,
-      description: srcBook.description,
+      author_id:      user.id,
+      title:          `${srcBook.title} (copy)`,
+      description:    srcBook.description,
       cover_gradient: srcBook.cover_gradient,
-      cover_emoji: srcBook.cover_emoji,
-      genre: srcBook.genre,
-      age_rating: srcBook.age_rating,
-      status: 'draft',
-      price: srcBook.price,
-      is_free: srcBook.is_free,
+      cover_emoji:    srcBook.cover_emoji,
+      genre:          srcBook.genre,
+      age_rating:     srcBook.age_rating,
+      status:         'draft',
+      price:          srcBook.price,
+      is_free:        srcBook.is_free,
     })
     .select()
     .single()
@@ -229,7 +203,7 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
 
   const newBookId = newBook.id
 
-  // ── 3. Copy characters ──
+  // 3. Copy characters (with voice_id)
   const { data: srcChars } = await supabase
     .from('characters')
     .select('*')
@@ -239,12 +213,79 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
   if (srcChars?.length) {
     await supabase.from('characters').insert(
       srcChars.map(c => ({
-        book_id: newBookId,
-        name: c.name,
-        role: c.role,
-        color: c.color,
+        book_id:     newBookId,
+        name:        c.name,
+        role:        c.role,
+        color:       c.color,
+        voice_id:    c.voice_id,
         voice_label: c.voice_label,
         voice_pitch: c.voice_pitch,
-        voice_rate: c.voice_rate,
-        avatar_emoji: c.avatar_emoji,
-        sort_order: c.so
+        voice_rate:  c.voice_rate,
+        sort_order:  c.sort_order,
+      }))
+    )
+  }
+
+  // 4. Copy chapters
+  const { data: srcChapters } = await supabase
+    .from('chapters')
+    .select('*')
+    .eq('book_id', sourceBookId)
+    .order('sort_order')
+
+  for (const ch of srcChapters ?? []) {
+    const { data: newCh } = await supabase
+      .from('chapters')
+      .insert({ book_id: newBookId, title: ch.title, sort_order: ch.sort_order })
+      .select()
+      .single()
+    if (!newCh) continue
+
+    // 5. Copy scenes
+    const { data: srcScenes } = await supabase
+      .from('scenes')
+      .select('*')
+      .eq('chapter_id', ch.id)
+      .order('sort_order')
+
+    for (const sc of srcScenes ?? []) {
+      const { data: newSc } = await supabase
+        .from('scenes')
+        .insert({
+          book_id:        newBookId,
+          chapter_id:     newCh.id,
+          title:          sc.title,
+          sort_order:     sc.sort_order,
+          ambience_url:   sc.ambience_url,
+          music_url:      sc.music_url,
+          ambience_volume: sc.ambience_volume,
+          music_volume:   sc.music_volume,
+        })
+        .select()
+        .single()
+      if (!newSc) continue
+
+      // 6. Copy blocks
+      const { data: srcBlocks } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('scene_id', sc.id)
+        .order('sort_order')
+
+      if (srcBlocks?.length) {
+        await supabase.from('blocks').insert(
+          srcBlocks.map(b => ({
+            book_id:    newBookId,
+            scene_id:   newSc.id,
+            type:       b.type,
+            data:       b.data,
+            audio_url:  b.audio_url,
+            sort_order: b.sort_order,
+          }))
+        )
+      }
+    }
+  }
+
+  return dbBookToStory(newBook, srcChars?.map(c => ({ ...c, book_id: newBookId })) ?? [])
+}

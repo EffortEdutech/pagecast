@@ -1,11 +1,11 @@
 /**
- * Supabase data layer — Chapters, Scenes, Blocks
+ * Supabase data layer -- Chapters, Scenes, Blocks
  * Sprint 3: full story content CRUD
  */
 import { createClient } from './client'
 import type { Chapter, Scene, StoryBlock, BlockType, DialogueBlock, QuoteBlock } from '@/types'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export interface DbChapter {
   id: string
@@ -37,12 +37,11 @@ export interface DbBlock {
   updated_at: string
 }
 
-// ─── Converters ───────────────────────────────────────────────────────────────
+// Converters
 
 function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
   const c = b.content
   const base = { id: b.id, type: b.type as BlockType }
-
   switch (b.type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(c.text ?? '') }
@@ -101,36 +100,27 @@ function dbChapterToChapter(chapter: DbChapter, scenes: DbScene[], blocks: DbBlo
   }
 }
 
-// ─── Book Content API ─────────────────────────────────────────────────────────
+// Book Content API
 
-/** Load all chapters, scenes, blocks for a book */
 export async function fetchBookContent(bookId: string): Promise<Chapter[]> {
   const supabase = createClient()
-
   const [{ data: chapters }, { data: scenes }, { data: blocks }] = await Promise.all([
     supabase.from('chapters').select('*').eq('book_id', bookId).order('sort_order'),
     supabase.from('scenes').select('*').eq('book_id', bookId).order('sort_order'),
     supabase.from('blocks').select('*').eq('book_id', bookId).order('sort_order'),
   ])
-
   if (!chapters) return []
-
-  return chapters.map(ch =>
-    dbChapterToChapter(ch, scenes ?? [], blocks ?? [])
-  )
+  return chapters.map(ch => dbChapterToChapter(ch, scenes ?? [], blocks ?? []))
 }
 
-// ─── Chapters ────────────────────────────────────────────────────────────────
+// Chapters
 
 export async function createChapter(bookId: string, title: string, sortOrder: number): Promise<Chapter | null> {
   const supabase = createClient()
-
   const { data, error } = await supabase
     .from('chapters')
     .insert({ book_id: bookId, title, sort_order: sortOrder })
-    .select()
-    .single()
-
+    .select().single()
   if (error || !data) return null
   return dbChapterToChapter(data, [], [])
 }
@@ -147,17 +137,14 @@ export async function deleteChapter(chapterId: string): Promise<boolean> {
   return !error
 }
 
-// ─── Scenes ──────────────────────────────────────────────────────────────────
+// Scenes
 
 export async function createScene(bookId: string, chapterId: string, title: string, sortOrder: number): Promise<Scene | null> {
   const supabase = createClient()
-
   const { data, error } = await supabase
     .from('scenes')
     .insert({ book_id: bookId, chapter_id: chapterId, title, sort_order: sortOrder })
-    .select()
-    .single()
-
+    .select().single()
   if (error || !data) return null
   return dbSceneToScene(data, [])
 }
@@ -174,34 +161,29 @@ export async function deleteScene(sceneId: string): Promise<boolean> {
   return !error
 }
 
-// ─── Blocks ──────────────────────────────────────────────────────────────────
+// Blocks
 
 export async function createBlock(bookId: string, sceneId: string, block: StoryBlock, sortOrder: number): Promise<StoryBlock | null> {
   const supabase = createClient()
-
   const { data, error } = await supabase
     .from('blocks')
     .insert({
-      book_id: bookId,
-      scene_id: sceneId,
-      type: block.type,
-      content: storyBlockToDbContent(block),
+      book_id:    bookId,
+      scene_id:   sceneId,
+      type:       block.type,
+      content:    storyBlockToDbContent(block),
       sort_order: sortOrder,
     })
-    .select()
-    .single()
-
+    .select().single()
   if (error || !data) return null
   return dbBlockToStoryBlock(data)
 }
 
 export async function updateBlock(blockId: string, block: Partial<StoryBlock>): Promise<boolean> {
   const supabase = createClient()
-
   const updates: Record<string, unknown> = {}
   if (block.type !== undefined) updates.type = block.type
   if (block !== undefined) updates.content = storyBlockToDbContent(block as StoryBlock)
-
   const { error } = await supabase.from('blocks').update(updates).eq('id', blockId)
   return !error
 }
@@ -212,8 +194,13 @@ export async function deleteBlock(blockId: string): Promise<boolean> {
   return !error
 }
 
-/** Reorder blocks — update sort_order for each block in the list */
 export async function reorderBlocks(blocks: { id: string; sort_order: number }[]): Promise<boolean> {
   const supabase = createClient()
-
-  const updates = blocks.map(({ id, so
+  // Supabase doesn't support bulk update natively -- run as sequential updates
+  const results = await Promise.all(
+    blocks.map(({ id, sort_order }) =>
+      supabase.from('blocks').update({ sort_order }).eq('id', id)
+    )
+  )
+  return results.every(r => !r.error)
+}

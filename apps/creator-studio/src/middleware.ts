@@ -13,9 +13,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -25,15 +23,11 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — IMPORTANT: do not remove this call
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Refresh session -- do not remove this call
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-
-  // Everything except /login is protected in creator studio
-  const isPublic = pathname === '/login'
+  const isPublic = pathname === '/login' || pathname.startsWith('/auth/')
 
   if (!isPublic && !user) {
     const loginUrl = request.nextUrl.clone()
@@ -53,4 +47,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/s
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
