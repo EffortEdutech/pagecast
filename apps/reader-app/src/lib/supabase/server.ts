@@ -18,7 +18,8 @@ export function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Server Component — set called from a read-only context, safe to ignore
+            // Called from a Server Component — cookie writes are not possible,
+            // but this is safe to ignore for read-only server components.
           }
         },
       },

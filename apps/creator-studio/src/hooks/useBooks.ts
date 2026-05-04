@@ -58,7 +58,7 @@ export function useBooks() {
   }, [store])
 
   const publishBook = useCallback(async (id: string, status: StoryStatus) => {
-    const ok = await BooksApi.publishBook(id, status)
+    const ok = await BooksApi.publishBook(id, status as 'draft' | 'published')
     if (!ok) { setError('Failed to update publish status.'); return }
     store.updateStory(id, { status })
   }, [store])

@@ -170,13 +170,13 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { setActiveStory } = useStudioStore()
-  const { stories, loading: booksLoading, error: booksError, createBook, deleteBook, publishBook, duplicateBook } = useBooks()
+  const { setActiveStory, stories } = useStudioStore()
+  const { loading: booksLoading, error: booksError, createBook, deleteBook, publishBook, duplicateBook } = useBooks()
   const { displayName } = useUser()
   const [showModal, setShowModal] = useState(false)
   const [filter, setFilter] = useState<'all' | 'draft' | 'published'>('all')
 
-  const filtered = stories.filter(s => filter === 'all' || s.status === filter)
+  const filtered = stories.filter((s: Story) => filter === 'all' || s.status === filter)
 
   const handleCreate = async (title: string, desc: string) => {
     const book = await createBook(title, desc)
@@ -232,7 +232,7 @@ export default function DashboardPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={BookOpen} label="Total Stories" value={String(stories.length)} color="bg-accent/20 text-accent" />
-          <StatCard icon={TrendingUp} label="Published" value={String(stories.filter(s => s.status === 'published').length)} color="bg-success/20 text-success" />
+          <StatCard icon={TrendingUp} label="Published" value={String(stories.filter((s: Story) => s.status === 'published').length)} color="bg-success/20 text-success" />
           <StatCard icon={Users} label="Est. Readers" value="—" sub="Awaiting launch" color="bg-info/20 text-info" />
           <StatCard icon={DollarSign} label="Revenue" value="—" sub="Awaiting launch" color="bg-gold/20 text-gold" />
         </div>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
               >
                 {f}
                 <span className="ml-1.5 text-[10px] text-text-muted">
-                  {f === 'all' ? stories.length : stories.filter(s => s.status === f).length}
+                  {f === 'all' ? stories.length : stories.filter((s: Story) => s.status === f).length}
                 </span>
               </button>
             ))}
@@ -261,4 +261,52 @@ export default function DashboardPage() {
 
           {booksLoading ? (
             <div className="flex items-center justify-center py-16 gap-3 text-text-secondary">
-              <div className="w-5 h-5 border-2 border
+              <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              <span className="text-text-secondary text-sm">Loading your stories…</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-bg-elevated flex items-center justify-center mb-4">
+                <BookOpen size={28} className="text-text-muted" />
+              </div>
+              <p className="text-text-primary font-semibold">
+                {filter === 'all' ? 'No stories yet' : `No ${filter} stories`}
+              </p>
+              <p className="text-text-secondary text-sm mt-1 max-w-xs">
+                {filter === 'all'
+                  ? 'Create your first story to get started.'
+                  : `Switch the filter or create a new story.`}
+              </p>
+              {filter === 'all' && (
+                <button className="btn-primary mt-5" onClick={() => setShowModal(true)}>
+                  <Plus size={15} /> New Story
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((story: Story) => (
+                <StoryCard
+                  key={story.id}
+                  story={story}
+                  onEdit={() => handleEdit(story)}
+                  onDelete={() => deleteBook(story.id)}
+                  onDuplicate={() => handleDuplicate(story)}
+                  onPublish={() => handlePublish(story)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* New story modal */}
+      {showModal && (
+        <NewStoryModal
+          onClose={() => setShowModal(false)}
+          onCreate={handleCreate}
+        />
+      )}
+    </>
+  )
+}

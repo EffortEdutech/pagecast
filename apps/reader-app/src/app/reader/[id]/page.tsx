@@ -764,157 +764,146 @@ export default function ReaderPage() {
                     </div>
                   )
                 })()}
+  
                 {block.type === 'quote' && (
-                  <div className="border border-white/20 rounded-xl p-8">
-                    <p className="text-white font-serif italic text-xl leading-loose">{(block as any).text}</p>
+                  <div className="text-center">
+                    <p className={clsx('text-white/90 font-serif italic text-xl leading-relaxed', `font-${prefs.fontSize}`, 'reader-text')}>
+                      "{(block as any).text}"
+                    </p>
                     {(block as any).attribution && (
                       <p className="text-white/40 text-sm mt-4">— {(block as any).attribution}</p>
                     )}
                   </div>
                 )}
+
+                {/* Cinematic nav */}
+                <div className="flex items-center justify-center gap-6 mt-12">
+                  <button onClick={retreat}
+                    className="text-white/40 hover:text-white transition-colors">
+                    <ChevronLeft size={28} />
+                  </button>
+                  <button
+                    onClick={() => setPlaying(!isPlaying)}
+                    className="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all">
+                    {isPlaying
+                      ? <Pause size={22} className="text-white" />
+                      : <Play  size={22} className="text-white fill-white" />
+                    }
+                  </button>
+                  <button onClick={advance}
+                    className="text-white/40 hover:text-white transition-colors">
+                    <ChevronRight size={28} />
+                  </button>
+                </div>
               </div>
             )}
-            {/* Cinematic controls */}
-            <div className="absolute bottom-10 inset-x-0 flex items-center justify-center gap-6">
-              <button onClick={retreat} disabled={blockIdx === 0 && sceneIdx === 0 && chapterIdx === 0}
-                className="text-white/40 hover:text-white disabled:opacity-20 transition-colors">
-                <Rewind size={22} />
-              </button>
-              <button onClick={() => setPlaying(!isPlaying)}
-                className="w-14 h-14 rounded-full bg-accent flex items-center justify-center shadow-accent hover:bg-accent-hover transition-colors">
-                {isPlaying ? <Pause size={20} className="text-white" /> : <Play size={20} className="text-white fill-white" />}
-              </button>
-              <button onClick={advance} disabled={isLastBlock}
-                className="text-white/40 hover:text-white disabled:opacity-20 transition-colors">
-                <FastForward size={22} />
-              </button>
-            </div>
           </div>
         ) : (
           // ── Reading / Audiobook mode ──
-          <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8">
-            {/* Chapter/scene header */}
-            <div className="mb-8 pb-5 border-b border-bg-border">
-              <p className="text-accent text-xs font-semibold uppercase tracking-widest mb-1">
+          <div className="max-w-2xl mx-auto px-6 py-10">
+            {/* Scene header */}
+            <div className="mb-8 pb-6 border-b border-bg-border">
+              <p className="text-text-muted text-xs uppercase tracking-widest mb-1">
                 Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
               </p>
-              <h2 className="text-text-primary font-bold text-xl">{chapter?.title}</h2>
-              <p className="text-text-secondary text-sm mt-1">{scene?.title}</p>
+              <h2 className="text-text-primary font-bold text-xl">{scene?.title}</h2>
             </div>
 
             {/* Blocks */}
-            <div>
+            <div className="space-y-1">
               {blocks.map((b, i) => (
-                <BlockView
-                  key={b.id}
-                  block={b}
-                  chars={story.characters}
-                  active={currentBlockId === b.id && isPlaying}
-                  past={i < blockIdx && prefs.mode !== 'reading'}
-                  fontSize={prefs.fontSize}
-                  dyslexia={prefs.dyslexiaFont}
-                />
+                <div key={b.id} onClick={() => {
+                  setBlockIdx(i)
+                  setCurrentBlock(b.id)
+                  persistProgress(chapterIdx, sceneIdx, i)
+                }}>
+                  <BlockView
+                    block={b}
+                    chars={story.characters}
+                    active={i === blockIdx && !!currentBlockId}
+                    past={i < blockIdx}
+                    fontSize={prefs.fontSize}
+                    dyslexia={prefs.dyslexiaFont}
+                  />
+                </div>
               ))}
             </div>
 
-            {/* Scene nav */}
-            <div className="flex items-center justify-between mt-10 pt-5 border-t border-bg-border">
+            {/* Scene navigation */}
+            <div className="flex items-center justify-between mt-12 pt-6 border-t border-bg-border">
+              <button
+                onClick={() => { if (sceneIdx > 0) jumpTo(chapterIdx, sceneIdx - 1) }}
+                disabled={sceneIdx === 0 && chapterIdx === 0}
+                className="btn-ghost flex items-center gap-2 disabled:opacity-30">
+                <ChevronLeft size={15} /> Previous scene
+              </button>
               <button
                 onClick={() => {
-                  if (sceneIdx > 0) jumpTo(chapterIdx, sceneIdx - 1)
-                  else if (chapterIdx > 0) {
-                    const nc = chapterIdx - 1
-                    jumpTo(nc, story.chapters[nc].scenes.length - 1)
+                  if (!story) return
+                  const ch = story.chapters[chapterIdx]
+                  if (sceneIdx < (ch?.scenes.length ?? 1) - 1) {
+                    jumpTo(chapterIdx, sceneIdx + 1)
+                  } else if (chapterIdx < story.chapters.length - 1) {
+                    jumpTo(chapterIdx + 1, 0)
                   }
                 }}
-                disabled={sceneIdx === 0 && chapterIdx === 0}
-                className="btn-ghost text-xs disabled:opacity-30">
-                <ChevronLeft size={13} /> Previous scene
-              </button>
-              <span className="text-text-muted text-[10px]">
-                {sceneIdx + 1} / {chapter?.scenes.length ?? 1}
-              </span>
-              <button
-                onClick={() => {
-                  if (!chapter) return
-                  if (sceneIdx < chapter.scenes.length - 1) jumpTo(chapterIdx, sceneIdx + 1)
-                  else if (chapterIdx < story.chapters.length - 1) jumpTo(chapterIdx + 1, 0)
-                }}
-                disabled={isLastBlock && blockIdx === 0}
-                className="btn-ghost text-xs disabled:opacity-30">
-                Next scene <ChevronRight size={13} />
+                disabled={isLastBlock}
+                className="btn-ghost flex items-center gap-2 disabled:opacity-30">
+                Next scene <ChevronRight size={15} />
               </button>
             </div>
           </div>
         )}
       </main>
 
-      {/* ── Playback bar (reading + audiobook mode) ── */}
+      {/* ── Bottom player bar ── */}
       {!cinemaMode && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-bg-secondary/95 backdrop-blur-md border-t border-bg-border">
-          {/* Mini progress */}
-          <div className="h-0.5 bg-bg-elevated">
-            <div className="h-full bg-accent/70 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+        <footer className="fixed bottom-0 left-0 right-0 z-40 bg-bg-secondary/95 backdrop-blur-md border-t border-bg-border">
+          {/* Progress bar */}
+          <div className="h-0.5 bg-bg-border">
+            <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progressPct}%` }} />
           </div>
 
           <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-4">
-            {/* Story info */}
+            {/* Block info */}
             <div className="flex-1 min-w-0">
-              <p className="text-text-primary text-xs font-semibold truncate">{story.title}</p>
-              <p className="text-text-muted text-[10px] truncate">{chapter?.title} · {scene?.title}</p>
+              <p className="text-text-muted text-[10px] truncate">
+                {scene?.title} · {blockIdx + 1} / {blocks.length}
+              </p>
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-2">
-              <button onClick={retreat}
-                disabled={blockIdx === 0 && sceneIdx === 0 && chapterIdx === 0}
-                className="text-text-muted hover:text-text-primary disabled:opacity-30 p-1.5 rounded-lg hover:bg-bg-elevated transition-all">
-                <SkipBack size={16} />
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={retreat} className="btn-ghost p-1.5 text-text-muted hover:text-text-primary">
+                <Rewind size={16} />
               </button>
-
-              {prefs.mode !== 'reading' ? (
-                <button onClick={() => setPlaying(!isPlaying)}
-                  className="w-10 h-10 rounded-full bg-accent flex items-center justify-center hover:bg-accent-hover shadow-accent transition-all">
-                  {isPlaying
-                    ? <Pause size={16} className="text-white" />
-                    : <Play size={16} className="text-white fill-white" />}
-                </button>
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-bg-elevated flex items-center justify-center">
-                  <BookOpen size={14} className="text-text-muted" />
-                </div>
-              )}
-
-              <button onClick={advance} disabled={isLastBlock}
-                className="text-text-muted hover:text-text-primary disabled:opacity-30 p-1.5 rounded-lg hover:bg-bg-elevated transition-all">
-                <SkipForward size={16} />
+              <button
+                onClick={() => setPlaying(!isPlaying)}
+                className="w-9 h-9 rounded-full bg-accent hover:bg-accent/80 flex items-center justify-center shadow-accent transition-all">
+                {isPlaying
+                  ? <Pause size={15} className="text-white" />
+                  : <Play  size={15} className="text-white fill-white" />
+                }
+              </button>
+              <button onClick={advance} className="btn-ghost p-1.5 text-text-muted hover:text-text-primary">
+                <FastForward size={16} />
               </button>
             </div>
 
-            {/* Speed & volume */}
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() => {
-                  const speeds = [0.75, 1, 1.25, 1.5, 2]
-                  const idx = speeds.indexOf(prefs.playbackSpeed)
-                  setPref('playbackSpeed', speeds[(idx + 1) % speeds.length])
-                }}
-                className="text-text-muted hover:text-text-primary text-xs px-2 py-1 rounded bg-bg-elevated hover:bg-bg-hover transition-all font-mono">
-                {prefs.playbackSpeed}x
+            {/* Speed */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setPref('playbackSpeed', Math.max(0.5, prefs.playbackSpeed - 0.25))}
+                className="btn-ghost p-1 text-text-muted text-xs">
+                <Minus size={11} />
               </button>
-              <button
-                onClick={() => setPref('narratorVolume', prefs.narratorVolume > 0 ? 0 : 1)}
-                className="text-text-muted hover:text-text-primary p-1.5 rounded-lg hover:bg-bg-elevated transition-all">
-                {prefs.narratorVolume > 0 ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              <span className="text-text-secondary text-xs w-8 text-center">{prefs.playbackSpeed}x</span>
+              <button onClick={() => setPref('playbackSpeed', Math.min(2, prefs.playbackSpeed + 0.25))}
+                className="btn-ghost p-1 text-text-muted text-xs">
+                <Plus size={11} />
               </button>
             </div>
-
-            {/* Progress % */}
-            <span className="text-text-muted text-[10px] hidden sm:block w-9 text-right">
-              {Math.round(progressPct)}%
-            </span>
           </div>
-        </div>
+        </footer>
       )}
     </div>
   )

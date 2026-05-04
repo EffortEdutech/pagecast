@@ -170,4 +170,25 @@ export default function LoginPage() {
 
           {/* Quick-fill for dev testing */}
           <div className="border-t border-bg-border pt-4">
-            <p className="text-text-muted text-xs text-cen
+            <p className="text-text-muted text-xs text-center mb-3">Dev quick-fill</p>
+            <button
+              type="button"
+              onClick={() => { setEmail('test@pagecast.dev'); setPassword('pagecast123') }}
+              className="w-full text-xs text-text-secondary hover:text-accent border border-bg-border hover:border-accent/40 rounded-lg py-2 transition-colors"
+            >
+              Fill test credentials
+            </button>
+          </div>
+
+          {/* Sign up link */}
+          <p className="text-text-muted text-sm text-center">
+            Don&apos;t have an account?{' '}
+            <a href="/signup" className="text-accent hover:underline font-medium">
+              Sign up for free
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

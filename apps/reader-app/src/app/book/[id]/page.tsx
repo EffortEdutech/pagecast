@@ -215,18 +215,24 @@ export default function BookPage() {
           {/* Buy / read button (sidebar) */}
           <div className="card p-4 text-center space-y-3">
             <div className="text-2xl font-bold text-text-primary">
-              {owned ? <span className="text-success text-base flex items-center justify-center gap-2"><Check size={16}/> Owned</span> : `$${story.price.toFixed(2)}`}
+              {owned
+                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> In your library</span>
+                : story.price === 0 ? 'Free' : `$${story.price.toFixed(2)}`
+              }
             </div>
             {owned ? (
-              <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center py-2.5">
-                <Play size={15} className="fill-white" /> Open Reader
+              <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center">
+                <Play size={14} className="fill-white" /> Open Reader
               </Link>
             ) : (
-              <button onClick={handleBuy} className="btn-primary w-full justify-center py-2.5">
-                <Play size={15} className="fill-white" /> Get Story
+              <button onClick={handleBuy} className="btn-primary w-full justify-center">
+                <Play size={14} className="fill-white" />
+                {story.price === 0 ? 'Read Free' : `Get for $${story.price.toFixed(2)}`}
               </button>
             )}
-            <p className="text-text-muted text-[10px]">MVP demo — all stories are free</p>
+            {!owned && (
+              <p className="text-text-muted text-[10px]">Instant access · No app required</p>
+            )}
           </div>
         </div>
       </main>

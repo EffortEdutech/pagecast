@@ -144,3 +144,14 @@ export interface Asset {
 }
 
 // ─── Creator (Author) ────────────────────────────
+export interface Creator {
+  id: string
+  email: string
+  displayName?: string
+  name?: string
+  avatarUrl?: string
+  bio?: string
+  createdAt?: string
+  ttsCreditsUsed?: number
+  ttsCreditsLimit?: number
+}

@@ -51,4 +51,5 @@ export interface ReadingProgress {
   storyId: string
   chapterIdx: number; sceneIdx: number; blockIdx: number
   timestamp: number
+  lastReadAt?: string   // ISO date string, optional for backwards compat
 }

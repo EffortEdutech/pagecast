@@ -420,7 +420,7 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
   const clean = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
 
   const detected   = format === 'auto' ? detectFormat(clean) : format
-  const usedFormat = detected === 'auto' ? 'prose' : detected
+  const usedFormat = detected
 
   let chapters: ParsedChapter[]
   if      (usedFormat === 'script')   chapters = parseScript(clean)

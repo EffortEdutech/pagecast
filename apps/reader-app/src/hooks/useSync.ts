@@ -55,6 +55,7 @@ export function useSync() {
                 chapterIdx: p.chapterIdx,
                 sceneIdx: p.sceneIdx,
                 blockIdx: p.blockIdx,
+                timestamp: Date.now(),
                 lastReadAt: new Date().toISOString(),
               }
             }
