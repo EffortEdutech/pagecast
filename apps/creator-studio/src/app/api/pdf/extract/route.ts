@@ -1,18 +1,18 @@
 /**
  * POST /api/pdf/extract
- * ─────────────────────────────────────────────────────────────────────────────
- * Accepts a multipart/form-data upload with a single `file` field (PDF).
- * Returns the extracted plain text as JSON: { text: string, pages: number }
+ * Accepts multipart/form-data with a `file` field (PDF).
+ * Returns extracted plain text: { text: string, pages: number }
  *
- * Used by TextImportModal to let writers import PDF manuscripts directly.
- * The text is then handed to the same textParser.ts engine as .txt files.
+ * Uses pdf-parse v2 (PDFParse class API).
+ * @napi-rs/canvas is externalized in next.config.js so native bindings
+ * are not bundled at build time.
  */
 import { NextRequest, NextResponse } from 'next/server'
-// @ts-ignore — pdf-parse has no default export type declaration
-import pdfParse from 'pdf-parse'
+import { PDFParse } from 'pdf-parse'
 
-export const runtime = 'nodejs' // pdf-parse needs Node.js runtime (not edge)
-export const maxDuration = 30   // allow up to 30s for large PDFs
+export const runtime    = 'nodejs' // pdf-parse needs Node.js runtime (not edge)
+export const dynamic    = 'force-dynamic'
+export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,12 +30,15 @@ export async function POST(req: NextRequest) {
 
     // Convert File → Buffer
     const arrayBuffer = await typedFile.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer      = Buffer.from(arrayBuffer)
 
-    // Extract text
-    const data = await pdfParse(buffer)
-    const rawText: string = data.text ?? ''
-    const pages: number  = data.numpages ?? 0
+    // pdf-parse v2: PDFParse class, pass data buffer as LoadParameters
+    const parser = new PDFParse({ data: buffer })
+    const result = await parser.getText()
+    await parser.destroy()
+
+    const rawText: string = result.text ?? ''
+    const pages: number   = result.pages?.length ?? 0
 
     if (!rawText.trim()) {
       return NextResponse.json(
@@ -44,21 +47,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Clean up common PDF artifacts:
-    //   • Multiple spaces → single space
-    //   • Preserve paragraph breaks (double newlines)
-    //   • Remove form feed characters
+    // Clean up common PDF artifacts
     const cleaned = rawText
-      .replace(/\f/g, '\n\n')           // form feeds → paragraph breaks
-      .replace(/[ \t]{2,}/g, ' ')       // multiple spaces → single space
-      .replace(/\n{3,}/g, '\n\n')       // 3+ newlines → double newline
+      .replace(/\f/g, '\n\n')        // form feeds → paragraph breaks
+      .replace(/[ \t]{2,}/g, ' ')     // multiple spaces → single space
+      .replace(/\n{3,}/g, '\n\n')    // 3+ newlines → double newline
       .trim()
 
     return NextResponse.json({ text: cleaned, pages })
   } catch (err: any) {
     console.error('[pdf/extract]', err)
     return NextResponse.json(
-      { error: 'PDF extraction failed: ' + (err.message ?? 'unknown error') },
+      { error: 'PDF extraction failed: ' + (err?.message ?? 'unknown error') },
       { status: 500 }
     )
   }

@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-})
+export const dynamic = 'force-dynamic'
+
+// Lazy init — avoids build-time crash when env var isn't set
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY env var is not set')
+  return new Stripe(key, { apiVersion: '2026-04-22.dahlia' })
+}
 
 export async function POST(req: NextRequest) {
   const body      = await req.text()
   const signature = req.headers.get('stripe-signature') ?? ''
 
+  const stripe = getStripe()
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(
@@ -42,4 +48,3 @@ export async function POST(req: NextRequest) {
 }
 
 // Stripe needs the raw body — disable Next.js body parsing
-export const config = { api: { bodyParser: false } }
