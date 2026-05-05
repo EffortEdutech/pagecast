@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 
+// generateMetadata calls createClient() from @supabase/ssr (server).
+// force-dynamic prevents Next.js from trying to statically prerender this route.
+export const dynamic = 'force-dynamic'
+
 interface Props {
   params: { id: string }
 }

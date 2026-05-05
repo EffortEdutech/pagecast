@@ -10,10 +10,13 @@ import { createClient } from '@/lib/supabase/client'
  * - Loads all reading progress and merges into store
  * - Sets up a debounced write-back whenever progress changes
  *
+ * NOTE: createClient() is called inside effects only (never at render time) so
+ * that Next.js static prerender — which runs server-side without Supabase env
+ * vars — never triggers createBrowserClient() and never throws.
+ *
  * Place this hook in the root layout or a top-level client component.
  */
 export function useSync() {
-  const supabase = createClient()
   const store = useReaderStore()
   const syncedRef = useRef(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -22,6 +25,8 @@ export function useSync() {
   useEffect(() => {
     if (syncedRef.current) return
     syncedRef.current = true
+
+    const supabase = createClient()
 
     async function boot() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -75,6 +80,7 @@ export function useSync() {
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 

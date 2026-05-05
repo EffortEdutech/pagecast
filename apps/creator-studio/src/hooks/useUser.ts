@@ -4,11 +4,15 @@ import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 
 export function useUser() {
-  const supabase = createClient()
+  // NOTE: createClient() is called inside the effect (never at render time) so
+  // Next.js static prerender — which runs server-side without Supabase env vars —
+  // never calls createBrowserClient() and never throws.
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const supabase = createClient()
+
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
       setLoading(false)
@@ -19,7 +23,7 @@ export function useUser() {
     })
 
     return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const displayName = user?.user_metadata?.display_name
     ?? user?.email?.split('@')[0]

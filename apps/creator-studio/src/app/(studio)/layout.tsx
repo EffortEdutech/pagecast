@@ -3,6 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BooksSync } from '@/components/BooksSync'
 
+// This layout calls createClient() from @supabase/ssr (server), which requires
+// env vars at runtime. Mark force-dynamic so Next.js never prerenders it.
+export const dynamic = 'force-dynamic'
+
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -6,7 +6,8 @@ import { BookOpen, Mic, Music, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient()
+  // NOTE: createClient() is deferred to inside the handler so Next.js prerender
+  // (server-side, no env vars) never calls createBrowserClient() and never throws.
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -18,6 +19,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    const supabase = createClient()
     const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -162,7 +164,7 @@ export default function LoginPage() {
               className="btn-primary w-full justify-center py-2.5 text-base disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading
-                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Signing in…</>
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Signing in&hellip;</>
                 : 'Sign In'
               }
             </button>
