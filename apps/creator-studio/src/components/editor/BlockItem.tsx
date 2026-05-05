@@ -115,29 +115,39 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
   const blockCharId = (block as any).characterId as string | undefined
   const blockChar   = blockCharId ? characters.find(c => c.id === blockCharId) : null
 
-  // Resolve voice for AudioUploadRow
-  const resolvedVoiceId = (() => {
+  // ── Resolve the effective character for this block ────────────────────────
+  // For dialogue/thought: use block.characterId OR first matching character
+  // (empty string '' is treated as "not set" — falsy)
+  const effectiveChar = (() => {
     const id = (block as any).characterId as string | undefined
-    if (id) return characters.find(c => c.id === id)?.voiceId
-    // fallback: narrator for narration/quote, first character for dialogue/thought
+    if (id) return characters.find(c => c.id === id) ?? null
+
+    // No explicit characterId set
     if (block.type === 'narration' || block.type === 'quote') {
-      return characters.find(c => c.role === 'narrator')?.voiceId ?? 'ai_female_soft'
+      return characters.find(c => c.role === 'narrator') ?? characters[0] ?? null
     }
-    return characters[0]?.voiceId ?? 'ai_female_soft'
+    if (block.type === 'dialogue' || block.type === 'thought') {
+      // Use first non-narrator character (matches what the <select> visually shows)
+      return characters.find(c => c.role === 'character') ?? null
+    }
+    return null
   })()
 
-  // Human-readable label shown next to Generate button
+  // voiceId sent to TTS API
+  const resolvedVoiceId: string =
+    effectiveChar?.voiceId ?? 'ai_female_soft'
+
+  // Human label shown on the badge: "Nova · Aria — Female Soft"
+  // Only show for dialogue/thought if a character is actually identified
   const resolvedVoiceLabel = (() => {
+    if (!effectiveChar) return undefined
+    // For dialogue/thought with no explicit characterId, don't show a label —
+    // the user hasn't picked a character yet so the badge would be misleading
     const id = (block as any).characterId as string | undefined
-    const char = id
-      ? characters.find(c => c.id === id)
-      : block.type === 'narration' || block.type === 'quote'
-        ? characters.find(c => c.role === 'narrator')
-        : characters[0]
-    if (!char) return undefined
-    return char.voiceLabel
-      ? `${char.displayName} · ${char.voiceLabel}`
-      : char.displayName
+    if (!id && (block.type === 'dialogue' || block.type === 'thought')) return undefined
+    return effectiveChar.voiceLabel
+      ? `${effectiveChar.displayName} · ${effectiveChar.voiceLabel}`
+      : effectiveChar.displayName
   })()
 
   return (
