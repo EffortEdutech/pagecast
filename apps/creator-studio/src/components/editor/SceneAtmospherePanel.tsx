@@ -5,7 +5,7 @@ import {
   Volume1, Volume2, VolumeX, Loader2, AlertCircle, X, Image as ImageIcon
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { uploadSceneAudio, deleteSceneAudio } from '@/lib/supabase/storage'
+import { uploadSceneAudio, deleteSceneAudio, uploadSceneImage, deleteSceneImage } from '@/lib/supabase/storage'
 import { updateSceneAtmosphere } from '@/lib/supabase/scenes'
 import { useStudioStore } from '@/store/studioStore'
 import { clsx } from 'clsx'
@@ -215,6 +215,38 @@ export function SceneAtmospherePanel({
   const [musicUrl,       setMusicUrl]       = useState(scene.musicUrl)
   const [ambienceVolume, setAmbienceVolume] = useState(scene.ambienceVolume ?? 0.4)
   const [musicVolume,    setMusicVolume]    = useState(scene.musicVolume    ?? 0.3)
+  const [sceneImage,     setSceneImage]     = useState<string | undefined>(scene.sceneImage)
+  const [imgUploading,   setImgUploading]   = useState(false)
+  const [imgError,       setImgError]       = useState<string | null>(null)
+  const [userId,         setUserId]         = useState<string | null>(null)
+  const imgInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+  }, [])
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !userId) return
+    setImgUploading(true)
+    setImgError(null)
+    const url = await uploadSceneImage(userId, bookId, scene.id, file)
+    if (url) {
+      setSceneImage(url)
+      syncStore({ sceneImage: url })
+    } else {
+      setImgError('Upload failed — check the covers bucket in Supabase.')
+    }
+    setImgUploading(false)
+    if (imgInputRef.current) imgInputRef.current.value = ''
+  }
+
+  const handleImageDelete = async () => {
+    if (!userId) return
+    await deleteSceneImage(userId, bookId, scene.id)
+    setSceneImage(undefined)
+    syncStore({ sceneImage: undefined })
+  }
 
   // Keep store in sync
   const syncStore = (patch: Partial<Scene>) => {
@@ -291,15 +323,54 @@ export function SceneAtmospherePanel({
 
         <div className="border-t border-bg-border/50" />
 
-        {/* ── Scene Image (stub) ── */}
+        {/* ── Scene Image ── */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <ImageIcon size={12} className="text-text-muted" />
             <span className="text-text-secondary text-xs font-medium">Scene Image</span>
           </div>
-          <button className="btn-ghost w-full text-xs py-2 border border-dashed border-bg-border hover:border-accent/40 justify-center opacity-60 cursor-not-allowed" disabled>
-            <Upload size={11} /> Coming soon
-          </button>
+
+          {sceneImage ? (
+            <div className="relative rounded-lg overflow-hidden border border-bg-border group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={sceneImage} alt="Scene" className="w-full h-28 object-cover" />
+              <button
+                onClick={handleImageDelete}
+                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/80"
+                title="Remove image"
+              >
+                <Trash2 size={10} />
+              </button>
+            </div>
+          ) : imgUploading ? (
+            <div className="flex items-center gap-2 text-xs text-text-muted py-2">
+              <Loader2 size={12} className="animate-spin text-accent" /> Uploading…
+            </div>
+          ) : (
+            <>
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              <button
+                className="btn-ghost w-full text-xs py-2 border border-dashed border-bg-border hover:border-accent/40 justify-center"
+                onClick={() => imgInputRef.current?.click()}
+                disabled={!userId}
+              >
+                <Upload size={11} /> Upload image
+              </button>
+            </>
+          )}
+
+          {imgError && (
+            <p className="text-danger text-[10px] flex items-center gap-1">
+              <AlertCircle size={10} /> {imgError}
+            </p>
+          )}
+          <p className="text-[10px] text-text-muted">JPG / PNG / WebP · shown behind scene in reader</p>
         </div>
 
         <div className="border-t border-bg-border/50" />

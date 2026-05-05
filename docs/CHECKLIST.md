@@ -13,7 +13,7 @@
 |---|------|--------|-------|
 | 0.1 | GitHub repo created (EffortEdutech/pagecast) | ✅ | https://github.com/EffortEdutech/pagecast |
 | 0.2 | `.gitignore` configured (node_modules, .next, .env, build) | ✅ | Root-level, covers all apps |
-| 0.3 | Initial commit & push to `main` | ✅ | Sprints 1–3 committed and pushed |
+| 0.3 | Initial commit & push to `main` | ✅ | All sprints committed and pushed |
 | 0.4 | Branch strategy set (`main` = production, `dev` = active work) | ⬜ | Create `dev` branch after first push |
 | 0.5 | GitHub branch protection on `main` (no direct push) | ⬜ | Settings → Branches → Add rule |
 | 0.6 | Commit message convention agreed (`feat:` `fix:` `chore:`) | ✅ | Using conventional commits |
@@ -65,20 +65,6 @@ SUPABASE_SERVICE_ROLE_KEY=    # Service role key — see external_services.txt
 NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 ```
 
-**`apps/backend/.env`** *(when NestJS is scaffolded — Sprint 4)*
-```
-DATABASE_URL=                 # Supabase → Settings → Database → Connection string
-SUPABASE_SERVICE_KEY=         # Service role key — see external_services.txt
-R2_ACCOUNT_ID=2c89a228789d6a63a431e5d13391d452
-R2_ACCESS_KEY_ID=             # Fill when R2 bucket is created
-R2_SECRET_ACCESS_KEY=         # Fill when R2 bucket is created
-R2_BUCKET_NAME=pagecast-assets
-R2_PUBLIC_URL=                # Custom domain or R2 public URL
-STRIPE_SECRET_KEY=            # Fill when Stripe is set up
-STRIPE_WEBHOOK_SECRET=        # Fill after Render URL is known
-JWT_SECRET=                   # Generate: openssl rand -base64 32
-```
-
 ---
 
 ## SPRINT 1 — Authentication System
@@ -110,8 +96,8 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | 2.7 | List author books from DB | ✅ | `useBooks` hook, syncs to studioStore |
 | 2.8 | Delete book | ✅ | Cascades to characters, chapters, scenes, blocks |
 | 2.9 | Duplicate book | 🔧 | Creates blank copy — does not copy chapters/blocks yet |
-| 2.10 | Publish / unpublish toggle | 🔧 | UI only — does not write to DB yet |
-| 2.11 | Preview reader from Studio | ⬜ | |
+| 2.10 | Publish / unpublish toggle | 🔧 | Writes status to DB; book not yet served to store |
+| 2.11 | Preview reader from Studio | ✅ | "Preview" button opens `/reader/[id]?preview=1` — bypasses ownership gate |
 
 ---
 
@@ -133,7 +119,7 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | 3.12 | Supabase: `chapters`, `scenes`, `blocks` CRUD | ✅ | `src/lib/supabase/blocks.ts` |
 | 3.13 | Load story content from Supabase on open | ✅ | `useEditor` hook, fetches on mount |
 | 3.14 | Drag-and-drop block reordering | ⬜ | |
-| 3.15 | Auto-save | ⬜ | Currently manual (every mutation saves immediately) |
+| 3.15 | Auto-save | ⬜ | Currently: every mutation saves immediately |
 | 3.16 | Undo / redo | ⬜ | |
 
 ---
@@ -146,17 +132,20 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | 4.2 | Add / edit / delete character | ✅ | Persists to Supabase `characters` table |
 | 4.3 | Character color picker | ✅ | |
 | 4.4 | Character role (narrator / character) | ✅ | |
-| 4.5 | Voice Studio page (audio management) | ✅ | UI shell built |
-| 4.6 | AI TTS voice generation (per block) | ✅ | Wand2 Generate button in AudioUploadRow; calls /api/tts/generate |
-| 4.7 | TTS provider integration (OpenAI / ElevenLabs) | ✅ | /api/tts/generate route; OPENAI_VOICE_MAP; ElevenLabs fallback |
+| 4.5 | Voice Library page (browse & assign voices) | ✅ | 17 voices with real `speechSynthesis` preview, pitch/rate per voice, narrator tab |
+| 4.6 | AI TTS voice generation (per block) | 🔧 | Requires creator's own OpenAI/ElevenLabs key in Settings |
+| 4.7 | TTS provider integration (OpenAI / ElevenLabs) | 🔧 | Route built; only works with user-supplied API key |
 | 4.8 | Upload recorded audio per block | ✅ | AudioUploadRow upload + Supabase Storage |
 | 4.9 | Audio preview player | ✅ | Mini player in AudioUploadRow (play/pause/progress/time) |
 | 4.10 | Voice assignment (character → voice ID) | ✅ | BlockItem passes char voiceId → AudioUploadRow → TTS |
-| 4.11 | Scene atmosphere designer (ambience + music) | ✅ | SceneAtmospherePanel: upload, mini player, volume, Supabase persist; reader fade-in/out |
-| 4.12 | SFX library browser | ✅ | SfxLibrary component: 26 presets across 5 categories, click-to-assign in SFX block |
-| 4.13 | Asset manager (upload & manage files) | ⬜ | |
+| 4.11 | Scene atmosphere designer (ambience + music) | ✅ | SceneAtmospherePanel: upload, mini player, volume, Supabase persist |
+| 4.12 | SFX library browser | ✅ | SfxLibrary: 26 presets across 5 categories, click-to-assign |
+| 4.13 | Asset manager (upload & manage files) | ✅ | Real Supabase Storage listing: `assets` + `covers` buckets, play/preview, delete |
 | 4.14 | Cloudflare R2 upload integration | ⬜ | Blocked by R2 bucket setup |
-| 4.15 | Audio credits usage meter | ⬜ | Post-free-tier feature |
+| 4.15 | Audio credits usage meter | ✅ | `tts_chars_used/limit` in profiles; `increment_tts_chars` RPC; progress bar in Settings |
+| 4.16 | **Browser TTS voice preview in Voice Library** | ✅ | `window.speechSynthesis.speak()` per card; gender-matched browser voice selection |
+| 4.17 | **Narrator-only mode** (single voice reads all) | ✅ | Book-level toggle in Voices → Settings tab; reader engine fully honours it |
+| 4.18 | **Creator audio QA gate before publish** | ✅ | `getUncoveredCount()` — dialog warns with block count before first publish |
 
 ---
 
@@ -166,14 +155,39 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 |---|------|--------|-------|
 | T.1 | Text import modal (paste / file upload) | ✅ | TextImportModal: split-panel, .txt/.md/.fountain support |
 | T.2 | Auto-detect format (prose / script / markdown) | ✅ | detectFormat(): script tag density + markdown header heuristic |
-| T.3 | Smart paragraph splitter | ✅ | splitIntoParagraphs(): handles double-newline AND single-newline (PDF exports) |
+| T.3 | Smart paragraph splitter | ✅ | splitIntoParagraphs() |
 | T.4 | Chapter / scene header detection | ✅ | isChapterHeader / isSceneHeader / extractTitle helpers |
-| T.5 | Block type detection (narration / dialogue / thought / quote / sfx / pause) | ✅ | Full prose + script + markdown parsing |
-| T.6 | Inline dialogue extraction from prose paragraphs | ✅ | splitProseDialogue(): splits "Hello," said John. → dialogue + narration |
-| T.7 | Import preview (chapter/scene tree + first 5 blocks) | ✅ | ChapterPreview + BlockPreviewRow components |
-| T.8 | Import into book (creates chapters/scenes/blocks in editor) | ✅ | handleImport() in studio page |
-| T.9 | Dialogue placeholder (characterId: '' — assign after import) | ✅ | Note shown in preview panel |
-| T.10 | PDF text extraction | ⬜ | Currently: convert to .txt first; future: /api/pdf/extract route |
+| T.5 | Block type detection | ✅ | Full prose + script + markdown parsing |
+| T.6 | Inline dialogue extraction from prose paragraphs | ✅ | splitProseDialogue() |
+| T.7 | Import preview (chapter/scene tree + first 5 blocks) | ✅ | |
+| T.8 | Import into book | ✅ | handleImport() in studio page |
+| T.9 | Dialogue placeholder (characterId: '' — assign after import) | ✅ | |
+| T.10 | PDF text extraction | ⬜ | Currently: convert to .txt first |
+
+---
+
+## SPRINT 4c — Polish, Infrastructure & Bug Fixes
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 4c.1 | Book Settings Panel (metadata slide-out) | ✅ | Description, genre, age rating, estimated time, cover icon + gradient |
+| 4c.2 | Scene image upload | ✅ | Upload to Supabase `covers` bucket; preview + delete in SceneAtmospherePanel |
+| 4c.3 | Block browser TTS preview ("Preview" button) | ✅ | `speechSynthesis` per block in AudioUploadRow; no API key needed |
+| 4c.4 | Delete story confirmation dialog | ✅ | Modal with story title + irreversible warning before Supabase delete |
+| 4c.5 | Supabase Storage buckets + RLS | ✅ | `audio` (50 MB) + `covers` (5 MB) buckets; public read, auth upload/delete |
+| 4c.6 | Seed SQL — two demo stories | ✅ | `006_seed_demo_stories.sql`: Whispering Forest + Midnight Circuit, 41 blocks |
+| 4c.7 | RLS fix — anon read of published books | ✅ | `status = 'published' OR author_id = auth.uid()` covers both anon + auth |
+| 4c.8 | Hydration fix (`useHydrated` hook) | ✅ | Guards Zustand persist reads on Navbar, Store, Library, Book pages |
+| 4c.9 | SEO metadata — reader-app | ✅ | Root layout + `/store` static meta + `/book/[id]` dynamic `generateMetadata` |
+| 4c.10 | Error pages | ✅ | `not-found.tsx` + `error.tsx` in both apps |
+| 4c.11 | `BooksSync` component in studio layout | ✅ | Supabase → Zustand sync on every studio page, not just dashboard |
+| 4c.12 | UUID guard in voices page | ✅ | Regex guard prevents `story-001` non-UUID from reaching Supabase |
+| 4c.13 | Narrator voice columns in DB | ✅ | `007_narrator_only_mode.sql`: adds `narrator_only_mode` + `narrator_voice_id` |
+| 4c.14 | Voice selector on narration blocks | ✅ | `VoiceSelect` dropdown in BlockItem; `characterId` stored on `NarrationBlock` |
+| 4c.15 | Voice selector on quote blocks | ✅ | `VoiceSelect` dropdown alongside style picker on `QuoteBlock` |
+| 4c.16 | Auto-expanding textareas in block editor | ✅ | `AutoTextarea` component — height set to `scrollHeight` on every keystroke |
+| 4c.17 | Reader engine: characterId on all block types | ✅ | TTS voice slot + real-audio volume respect `characterId` on narration/quote blocks |
+
 
 ---
 
@@ -185,39 +199,24 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | 5.2 | Book landing page (`/book/[id]`) | ✅ | Cover, cast, chapters, buy CTA |
 | 5.3 | Library page (`/library`) | ✅ | Progress rings, continue reading |
 | 5.4 | Reader Engine page (`/reader/[id]`) | ✅ | Full rendering engine |
-| 5.5 | Narration block rendering | ✅ | |
-| 5.6 | Dialogue block rendering (with character color) | ✅ | |
-| 5.7 | Thought block rendering | ✅ | |
-| 5.8 | Quote / Poem block rendering | ✅ | |
-| 5.9 | SFX block rendering (label + skip) | ✅ | |
-| 5.10 | Active block highlight (glow + left border) | ✅ | |
-| 5.11 | Past block fade | ✅ | |
+| 5.5 | All block types rendered | ✅ | narration, dialogue, thought, quote, sfx, pause |
+| 5.10 | Active block highlight + past block fade | ✅ | |
 | 5.12 | Auto-scroll to active block | ✅ | |
-| 5.13 | Reading Mode (manual scroll) | ✅ | |
-| 5.14 | Audiobook Mode (auto-play + highlight) | ✅ | Web Speech API |
-| 5.15 | Cinematic Mode (fullscreen, one block at a time) | ✅ | |
-| 5.16 | Play / Pause controls | ✅ | |
-| 5.17 | Skip forward / back controls | ✅ | |
-| 5.18 | Playback speed control (0.75x–2x) | ✅ | |
-| 5.19 | Narrator volume slider | ✅ | |
-| 5.20 | Character volume slider | ✅ | |
-| 5.21 | Music volume slider | ✅ | |
-| 5.22 | Font size control (sm / base / lg / xl) | ✅ | |
-| 5.23 | Theme switcher (dark / light / sepia) | ✅ | |
-| 5.24 | Dyslexia font toggle | ✅ | |
-| 5.25 | Table of contents drawer | ✅ | Jump to any chapter/scene |
-| 5.26 | Reading progress bar (% complete) | ✅ | |
-| 5.27 | Resume from last position | ✅ | Zustand persist |
-| 5.28 | Progress saved per story | ✅ | Supabase `reading_progress` table via `useSync` |
-| 5.29 | Web Speech API voice per character | ✅ | Browser TTS, voice rotation |
-| 5.30 | Real audio file playback (Web Audio API) | ⬜ | Needs actual audio assets |
-| 5.31 | Multi-layer audio mixing (voice + music + sfx) | ⬜ | Web Audio API integration |
-| 5.32 | Streaming audio per scene | ⬜ | Backend + signed URLs required |
-| 5.33 | Closed captions / subtitles | ⬜ | Accessibility feature |
-| 5.34 | Audio-only mode | ⬜ | Accessibility feature |
-| 5.35 | High contrast theme | ⬜ | Accessibility feature |
-| 5.36 | Sandboxed iframe rendering (DRM) | ⬜ | Post-MVP |
-| 5.37 | Disable right-click / text selection (DRM) | ⬜ | Post-MVP |
+| 5.13 | Reading Mode | ✅ | |
+| 5.14 | Audiobook Mode (Web Speech API) | ✅ | Browser TTS fallback |
+| 5.15 | Cinematic Mode | ✅ | |
+| 5.16–5.18 | Play/Pause, skip, speed control | ✅ | |
+| 5.19–5.21 | Volume sliders (narrator, character, music) | ✅ | |
+| 5.22–5.24 | Font size, theme, dyslexia font | ✅ | |
+| 5.25 | Table of contents drawer | ✅ | |
+| 5.26–5.28 | Progress bar, resume, Supabase sync | ✅ | |
+| 5.29 | Web Speech API voice per character | ✅ | |
+| 5.30 | Real audio file playback (Web Audio API) | ⬜ | Needs actual uploaded audio assets |
+| 5.31 | Multi-layer audio mixing (voice + music + sfx) | ⬜ | |
+| 5.32 | Store loads books from Supabase (not seed data) | ✅ | `fetchPublishedBooks()` + `usePublishedBooks` hook; RLS anon read |
+| 5.33 | Reader loads book content from Supabase | ✅ | `fetchBook(id)` — full chapters/scenes/blocks from DB |
+| 5.34 | Closed captions / subtitles | ⬜ | Accessibility |
+| 5.35 | Audio-only mode | ⬜ | Accessibility |
 
 ---
 
@@ -225,28 +224,28 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 6.1 | Buy button (reader app) | 🔧 | Demo mode — adds to library free |
-| 6.2 | Stripe checkout session (backend) | ⬜ | |
-| 6.3 | Stripe webhook handler | ⬜ | |
-| 6.4 | Purchase record in database | 🔧 | `purchases` table exists; `acquireBook` helper built; no Stripe yet |
-| 6.5 | Library unlocks after payment | 🔧 | Works in demo (mock) |
-| 6.6 | Book ownership gate in reader | ✅ | Redirects to `/book` if not owned |
+| 6.1 | Buy button (reader app) | ✅ | Calls `/api/stripe/checkout`; free books skip Stripe; spinner + error state |
+| 6.2 | Stripe checkout session | ✅ | `/api/stripe/checkout/route.ts` — creates hosted session; free books upsert directly |
+| 6.3 | Stripe webhook handler | ✅ | `/api/stripe/webhook/route.ts` — validates sig, upserts `purchases` on `checkout.session.completed` |
+| 6.4 | Purchase record in database | ✅ | Webhook upserts `{user_id, book_id, price_paid}`; idempotent |
+| 6.5 | Library unlocks after payment | ✅ | `useSync` loads `purchases` → Zustand library; `?purchased=1` redirect adds book immediately |
+| 6.6 | Book ownership gate in reader | ✅ | |
 | 6.7 | Creator revenue dashboard | ⬜ | |
 | 6.8 | Author payout system | 🚫 | Post-MVP |
 
 ---
 
-## PUBLISH SYSTEM (Sprint 4–5 overlap)
+## PUBLISH PIPELINE
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | P.1 | Publish page in Creator Studio | ✅ | UI built |
-| P.2 | PBF package generation (`story.html` + `production.json`) | ⬜ | |
-| P.3 | Asset bundling into `.pbf` archive | ⬜ | |
-| P.4 | AES-256 encryption of production layer | ⬜ | Post-MVP soft DRM |
-| P.5 | Upload `.pbf` to Cloudflare R2 | ⬜ | |
-| P.6 | Book listed in store after publish | ⬜ | Currently seed data only |
-| P.7 | Unpublish / take down | ⬜ | |
+| P.2 | Publish writes `status='published'` to DB | ✅ | `publishBook()` updates DB + Zustand store; QA gate for missing audio |
+| P.3 | Published book appears in reader store | ✅ | Reader store queries `status=published`; appears live after publish |
+| P.4 | Book content served from Supabase to reader | ✅ | Full block tree fetched by `fetchBook()` in reader engine |
+| P.5 | Unpublish / take down | ✅ | Publish button toggles draft↔published; same RLS |
+| P.6 | PBF package / asset bundling | 🚫 | Post-MVP |
+| P.7 | AES-256 encryption (soft DRM) | 🚫 | Post-MVP |
 
 ---
 
@@ -254,45 +253,30 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| L.1 | Landing page (`/`) for reader app | ⬜ | Currently redirects to `/store` |
-| L.2 | Hero section with live demo simulation | ⬜ | |
-| L.3 | Problem / Solution sections | ⬜ | |
-| L.4 | How It Works (3-step) | ⬜ | |
-| L.5 | Reader experience demo section (animated) | ⬜ | |
-| L.6 | Creator value proposition section | ⬜ | |
-| L.7 | Why PageCast comparison table | ⬜ | |
-| L.8 | Early access / Beta CTA section | ⬜ | |
-| L.9 | Footer with links | ⬜ | |
-| L.10 | Email capture for beta waitlist | ⬜ | |
-| L.11 | Mobile responsive layout | 🔧 | Reader app is responsive; landing page missing |
+| L.1 | Landing page (`/`) for reader app | ✅ | Full cinematic page at `src/app/page.tsx` |
+| L.2 | Hero section | ✅ | Gradient headline, reader preview card, ambient glow |
+| L.3 | Problem / Solution section | ✅ | eBook vs Audiobook vs PageCast cards |
+| L.4 | How It Works (3-step) | ✅ | Reading / Audiobook / Cinematic mode cards |
+| L.5 | Reader demo section | ✅ | Inline story excerpt preview card in hero |
+| L.6 | Creator value proposition section | ✅ | Split layout + Creator Studio mockup |
+| L.7 | Why PageCast comparison table | ✅ | 8-row feature grid |
+| L.8 | Early access / Beta CTA section | ✅ | "Your first story is free" banner |
+| L.9 | Footer with links | ✅ | 4-column footer |
+| L.10 | Email capture | ✅ | Form with success state |
+| L.11 | Mobile responsive layout | ✅ | Hamburger nav, stacked grids, fluid |
 
 ---
 
-## BACKEND API (NestJS Monolith)
+## BACKEND API (NestJS — future)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| B.1 | NestJS project scaffolded | ⬜ | |
-| B.1a | `GET /health` — keep-alive endpoint for cron-job.org | ⬜ | Returns `{ status: "ok", timestamp }` |
-| B.2 | `POST /auth/signup` | ⬜ | |
-| B.3 | `POST /auth/login` | ⬜ | |
-| B.4 | `GET /books` — list published stories | ⬜ | |
-| B.5 | `GET /books/:id` — story detail | ⬜ | |
-| B.6 | `POST /books` — create book (author) | ⬜ | |
-| B.7 | `PUT /books/:id` — update book | ⬜ | |
-| B.8 | `POST /books/:id/publish` — publish book | ⬜ | |
-| B.9 | `GET /library` — reader's purchased books | ⬜ | |
-| B.10 | `POST /purchases` — Stripe checkout session | ⬜ | |
-| B.11 | `POST /webhooks/stripe` — payment confirmed | ⬜ | |
-| B.12 | `GET /assets/signed-url` — secure asset access | ⬜ | |
-| B.13 | `POST /tts/generate` — AI voice generation | ⬜ | |
-| B.14 | Database migrations (Supabase) | ✅ | `docs/supabase-schema.sql` applied manually |
-| B.15 | JWT middleware | ⬜ | |
-| B.16 | Deploy to Render | ⬜ | |
+| B.1 | NestJS project scaffolded | ⬜ | Currently using Next.js API routes |
+| B.2–B.16 | Auth, books, purchases, TTS, deploy | ⬜ | Next.js routes cover TTS for now |
 
 ---
 
-## FUTURE ROADMAP (Post-MVP · Do not build yet)
+## FUTURE ROADMAP (Post-MVP)
 
 | # | Feature | Priority |
 |---|---------|----------|
@@ -301,45 +285,19 @@ JWT_SECRET=                   # Generate: openssl rand -base64 32
 | R.3 | AI voice marketplace (curated voices) | Medium |
 | R.4 | Multi-language audio tracks | Medium |
 | R.5 | Animation & visual story layer | Medium |
-| R.6 | Interactive story branching (choose your path) | High |
-| R.7 | Shared reading rooms (sync playback) | High |
-| R.8 | WebRTC voice chat reading rooms | Low |
-| R.9 | Global live reading events | Low |
-| R.10 | AI-assisted story drafting | Medium |
-| R.11 | Hard DRM (AES streaming + device binding) | High |
-| R.12 | Offline mode (encrypted local cache) | Medium |
-| R.13 | Mobile native apps (iOS / Android) | High |
-| R.14 | PBF format v2 (animation blocks, choices) | Medium |
+| R.6 | Interactive story branching | Low |
+| R.7 | Creator analytics dashboard | Medium |
+| R.8 | Social features (reviews, follows) | Low |
 
 ---
 
-## AUDIENCE & CREATOR TEST READINESS
+## BUG FIXES & DATA INTEGRITY
 
-### ✅ Ready now (can be tested today)
-- Browse the store at `/store`
-- View any story landing page at `/book/[id]`
-- "Buy" a story (mock — free in demo mode)
-- Read in Reading Mode, Audiobook Mode, Cinematic Mode
-- Hear browser TTS voices per character
-- Adjust font, theme, speed, volume in settings panel
-- Navigate TOC, track progress, resume reading
-- View library with progress rings at `/library`
-- Sign up / log in to Creator Studio (Supabase Auth — real accounts)
-- Create books, chapters, scenes, and story blocks — all persist to Supabase DB
-- Characters saved to DB per book
+| # | Fix | Status | Notes |
+|---|-----|--------|-------|
+| B.1 | `reading_progress` 400 error | ✅ | UUID guard in `saveProgress()` — skips non-UUID book IDs (demo stories) |
+| B.2 | `readerStore` demo library seed removed | ✅ | `library: []` — populated by `useSync` from Supabase `purchases` table |
+| B.3 | Library page uses real Supabase books | ✅ | `usePublishedBooks` hook replaces `DEMO_STORIES.filter()` |
+| B.4 | Stripe `apiVersion` mismatch | ✅ | Updated to `2026-04-22.dahlia` (installed package version) |
+| B.5 | `story-001` non-UUID 400 errors | ✅ | `studioStore` seed removed; UUID regex guard in voices page |
 
-### 🔧 Needs work before audience test
-- [ ] Real audio files (currently TTS browser voices only)
-- [ ] Landing page (currently skips to `/store`)
-- [ ] Real payment flow (currently demo/free)
-- [ ] Books created in Studio need to appear in Reader store
-
-### 🔧 Needs work before creator test
-- [ ] Publish toggle → writes `status=published` to DB
-- [ ] Published books surfaced in reader store
-- [ ] Audio upload / TTS generation (Sprint 4)
-- [ ] Duplicate book copies chapters+blocks (currently blank copy)
-
----
-
-*Last updated: 2026-05-03 — Sprints 1–4 complete (TTS, scene atmosphere, text import)*

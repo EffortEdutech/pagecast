@@ -44,7 +44,7 @@ interface ReaderStore {
 export const useReaderStore = create<ReaderStore>()(
   persist(
     (set, get) => ({
-      library: ['story-001'],  // seed one owned story
+      library: [],
       addToLibrary: (id) => set(s => ({ library: [...new Set([...s.library, id])] })),
       isOwned: (id) => get().library.includes(id),
 

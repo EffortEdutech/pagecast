@@ -3,12 +3,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
+import { useHydrated } from '@/hooks/useHydrated'
 import { Navbar } from '@/components/layout/Navbar'
 import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
 import {
   Play, Clock, Mic, Music, Volume2, BookOpen,
-  Headphones, Film, Check, ChevronRight, ArrowLeft, Lock
+  Headphones, Film, Check, ChevronRight, ArrowLeft, Lock, Loader2, ShoppingCart
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
@@ -16,8 +17,11 @@ import type { Story } from '@/types'
 export default function BookPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const hydrated = useHydrated()
   const { isOwned, addToLibrary } = useReaderStore()
-  const [story, setStory] = useState<Story | null | undefined>(undefined) // undefined = loading
+  const [story,      setStory]      = useState<Story | null | undefined>(undefined)
+  const [buying,     setBuying]     = useState(false)
+  const [buyError,   setBuyError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -47,14 +51,54 @@ export default function BookPage() {
     </div>
   )
 
-  const owned = isOwned(story.id)
+  const owned = hydrated && isOwned(story.id)
   const totalBlocks = story.chapters.reduce((acc, ch) =>
     acc + ch.scenes.reduce((a, sc) => a + sc.blocks.length, 0), 0)
   const totalScenes = story.chapters.reduce((acc, ch) => acc + ch.scenes.length, 0)
 
-  const handleBuy = () => {
-    addToLibrary(story.id)
-    router.push(`/reader/${story.id}`)
+  // Handle ?purchased=1 redirect from Stripe success_url
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('purchased') === '1' && story) {
+      addToLibrary(story.id)
+      // Clean the URL
+      window.history.replaceState({}, '', `/book/${story.id}`)
+    }
+  }, [story, addToLibrary])
+
+  const handleBuy = async () => {
+    if (!story) return
+    setBuying(true)
+    setBuyError(null)
+    try {
+      const res  = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ bookId: story.id }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        // Not logged in → send to login
+        if (res.status === 401) { router.push(`/login?next=/book/${story.id}`); return }
+        setBuyError(data.error ?? 'Something went wrong.')
+        return
+      }
+
+      if (data.alreadyOwned || data.free) {
+        addToLibrary(story.id)
+        router.push(`/reader/${story.id}`)
+        return
+      }
+
+      if (data.url) {
+        window.location.href = data.url   // → Stripe hosted checkout
+      }
+    } catch {
+      setBuyError('Could not connect to checkout. Try again.')
+    } finally {
+      setBuying(false)
+    }
   }
 
   return (
@@ -99,10 +143,19 @@ export default function BookPage() {
                   </Link>
                 ) : (
                   <>
-                    <button onClick={handleBuy} className="btn-primary text-base px-6 py-3 shadow-accent">
-                      <Play size={18} className="fill-white" /> Get for ${story.price.toFixed(2)}
+                    <button
+                      onClick={handleBuy}
+                      disabled={buying}
+                      className="btn-primary text-base px-6 py-3 shadow-accent disabled:opacity-70"
+                    >
+                      {buying
+                        ? <><Loader2 size={18} className="animate-spin" /> Processing…</>
+                        : story.price === 0
+                          ? <><Play size={18} className="fill-white" /> Read Free</>
+                          : <><ShoppingCart size={18} /> Get for ${story.price.toFixed(2)}</>
+                      }
                     </button>
-                    <span className="text-white/50 text-sm">(Demo: free access)</span>
+                    {buyError && <p className="text-danger text-sm mt-2">{buyError}</p>}
                   </>
                 )}
               </div>

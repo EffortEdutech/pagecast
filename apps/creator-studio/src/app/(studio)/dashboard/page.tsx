@@ -35,8 +35,9 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
   onDuplicate: () => void
   onPublish: () => void
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [duplicating, setDuplicating] = useState(false)
+  const [menuOpen,       setMenuOpen]       = useState(false)
+  const [duplicating,    setDuplicating]    = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
 
   const coverColors = ['from-accent/30 to-accent/10', 'from-gold/30 to-gold/10', 'from-info/30 to-info/10', 'from-success/30 to-success/10']
   const colorIdx = story.id.charCodeAt(story.id.length - 1) % coverColors.length
@@ -103,7 +104,7 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
                   {isPublished ? <><FileText size={12} /> Unpublish</> : <><Globe size={12} /> Publish</>}
                 </button>
                 <div className="my-1 border-t border-bg-border" />
-                <button onClick={() => { onDelete(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-danger/10 text-text-muted hover:text-danger transition-colors">
+                <button onClick={() => { setMenuOpen(false); setConfirmDelete(true) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-danger/10 text-text-muted hover:text-danger transition-colors">
                   <Trash2 size={12} /> Delete
                 </button>
               </div>

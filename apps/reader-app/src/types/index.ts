@@ -37,6 +37,8 @@ export interface Story {
   characters: Character[]; chapters: Chapter[]
   createdAt: string; durationMinutes?: number
   genre?: string; ageRating?: string
+  narratorOnlyMode?: boolean
+  narratorVoiceId?: string
 }
 
 export interface ReaderPrefs {

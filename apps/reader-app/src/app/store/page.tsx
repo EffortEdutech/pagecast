@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
+import { useHydrated } from '@/hooks/useHydrated'
 import { usePublishedBooks } from '@/hooks/usePublishedBooks'
 import { Navbar } from '@/components/layout/Navbar'
 import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check } from 'lucide-react'
@@ -8,7 +9,9 @@ import { clsx } from 'clsx'
 import type { Story } from '@/types'
 
 function StoryCard({ story }: { story: Story }) {
-  const isOwned = useReaderStore(s => s.isOwned(story.id))
+  const hydrated   = useHydrated()
+  const isOwnedRaw = useReaderStore(s => s.isOwned(story.id))
+  const isOwned    = hydrated && isOwnedRaw
 
   return (
     <Link href={`/book/${story.id}`} className="card hover:border-accent/40 transition-all duration-200 overflow-hidden group flex flex-col">

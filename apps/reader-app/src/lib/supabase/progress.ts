@@ -13,7 +13,10 @@ export interface ReadingProgressData {
 // ── Reading Progress ──────────────────────────────────────────────────────────
 
 /** Upsert reading progress for the current user */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function saveProgress(data: ReadingProgressData): Promise<boolean> {
+  if (!UUID_RE.test(data.bookId)) return false   // skip demo/non-UUID IDs
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false

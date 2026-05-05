@@ -1,6 +1,6 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
-import { Upload, Play, Pause, Trash2, Loader2, AlertCircle, Wand2, RefreshCw } from 'lucide-react'
+import { Upload, Play, Pause, Trash2, Loader2, AlertCircle, Wand2, RefreshCw, Mic } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { uploadBlockAudio, deleteBlockAudio } from '@/lib/supabase/storage'
 import { generateBlockTts, getTtsSettings } from '@/lib/tts'
@@ -36,11 +36,34 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
   const [duration,    setDuration]    = useState(0)
   const [userId,      setUserId]      = useState<string | null>(null)
   const [hasTtsKey,   setHasTtsKey]   = useState(false)
+  const [isSpeaking,  setIsSpeaking]  = useState(false)
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
     setHasTtsKey(!!getTtsSettings().apiKey)
   }, [])
+
+  // -- Browser TTS preview (no API key needed) --
+
+  const speakPreview = () => {
+    if (!('speechSynthesis' in window)) return
+    const text = getBlockText(block)
+    if (!text.trim()) return
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      return
+    }
+    window.speechSynthesis.cancel()
+    const utt = new SpeechSynthesisUtterance(text)
+    utt.rate   = 0.95
+    utt.pitch  = 1.0
+    utt.volume = 1
+    utt.onend  = () => setIsSpeaking(false)
+    utt.onerror = () => setIsSpeaking(false)
+    setIsSpeaking(true)
+    window.speechSynthesis.speak(utt)
+  }
 
   useEffect(() => {
     return () => { audioRef.current?.pause() }
@@ -150,6 +173,16 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
             title={!userId ? 'Loading user...' : 'Upload an audio file'}
           >
             <Upload size={11} /> Upload
+          </button>
+
+          <button
+            className={`btn-ghost text-xs px-2 py-1 border transition-colors ${isSpeaking ? 'border-info/60 text-info' : 'border-bg-border hover:border-info/50 hover:text-info'}`}
+            onClick={speakPreview}
+            disabled={!getBlockText(block).trim()}
+            title={isSpeaking ? 'Stop preview' : 'Preview with browser voice'}
+          >
+            {isSpeaking ? <Pause size={11} /> : <Mic size={11} />}
+            {isSpeaking ? 'Stop' : 'Preview'}
           </button>
 
           <button

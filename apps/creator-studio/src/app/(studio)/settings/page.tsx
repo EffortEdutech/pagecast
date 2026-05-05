@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
-import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
+import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle, Loader2, Zap } from 'lucide-react'
 import { getTtsSettings, saveTtsSettings } from '@/lib/tts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
@@ -21,8 +21,26 @@ export default function SettingsPage() {
   const [saving,   setSaving]   = useState(false)
   const [saved,    setSaved]    = useState(false)
   const [error,    setError]    = useState<string | null>(null)
+  const [charsUsed,  setCharsUsed]  = useState<number | null>(null)
+  const [charsLimit, setCharsLimit] = useState<number>(100000)
 
   useEffect(() => { if (displayName) setName(displayName) }, [displayName])
+
+  // Load TTS credit usage from profile
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tts_chars_used, tts_chars_limit')
+        .eq('id', data.user.id)
+        .single()
+      if (profile) {
+        setCharsUsed(profile.tts_chars_used ?? 0)
+        setCharsLimit(profile.tts_chars_limit ?? 100000)
+      }
+    })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const lang       = localStorage.getItem(PREF_LANGUAGE_KEY)
@@ -113,6 +131,33 @@ export default function SettingsPage() {
               Your API key is sent directly from your browser to the TTS provider via a server-side proxy route. It is never stored in the database.
             </p>
           </div>
+
+          {/* ── TTS Credit Meter ── */}
+          {charsUsed !== null && (
+            <div className="space-y-1.5 pt-1 border-t border-bg-border/50">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-text-secondary font-medium">
+                  <Zap size={11} className="text-gold" /> Characters generated (this account)
+                </span>
+                <span className="text-text-muted font-mono text-[11px]">
+                  {charsUsed.toLocaleString()} / {charsLimit.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-bg-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    charsUsed / charsLimit > 0.9 ? 'bg-danger'
+                    : charsUsed / charsLimit > 0.7 ? 'bg-warning'
+                    : 'bg-gold'
+                  }`}
+                  style={{ width: `${Math.min(100, (charsUsed / charsLimit) * 100).toFixed(1)}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-text-muted">
+                {Math.max(0, charsLimit - charsUsed).toLocaleString()} characters remaining · resets manually by admin · ~5 chars per word
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Book defaults */}

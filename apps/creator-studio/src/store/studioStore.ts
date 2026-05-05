@@ -3,63 +3,7 @@ import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
 import type { Story, Character, Chapter, Scene, StoryBlock, Creator } from '@/types'
 
-// ─── Seed Data ────────────────────────────────────────────────────────────────
-
-const SEED_STORIES: Story[] = [
-  {
-    id: 'story-001',
-    title: 'The Whispering Forest',
-    description: 'A young girl ventures into an enchanted forest and discovers secrets older than time.',
-    coverImage: '',
-    language: 'en',
-    status: 'published',
-    price: 4.99,
-    hasMusic: true,
-    hasSfx: true,
-    characters: [
-      { id: 'c1', name: 'Narrator', role: 'narrator', displayName: 'Narrator', color: '#9896A8', voiceSource: 'ai', voiceId: 'ai_female_soft', voiceLabel: 'Female Soft', defaultVolume: 1 },
-      { id: 'c2', name: 'Aisha', role: 'character', displayName: 'Aisha', color: '#A98BFF', voiceSource: 'ai', voiceId: 'ai_child_female', voiceLabel: 'Child Female', defaultVolume: 1 },
-      { id: 'c3', name: 'Ali', role: 'character', displayName: 'Ali', color: '#4DB8FF', voiceSource: 'ai', voiceId: 'ai_child_male', voiceLabel: 'Child Male', defaultVolume: 1 },
-    ],
-    chapters: [
-      {
-        id: 'ch1', title: 'A Strange Night', order: 1,
-        scenes: [
-          {
-            id: 'sc1', title: 'Opening', ambienceFile: 'forest-night.mp3', musicFile: 'mystery.mp3',
-            blocks: [
-              { id: 'b1', type: 'narration', text: 'The night was silent. Too silent.' },
-              { id: 'b2', type: 'dialogue', characterId: 'c2', text: 'Did you hear that?', emotion: 'worried' },
-              { id: 'b3', type: 'pause', duration: 2 },
-              { id: 'b4', type: 'sfx', sfxFile: 'branch_snap.mp3', label: 'Branch snapping' },
-              { id: 'b5', type: 'dialogue', characterId: 'c3', text: 'We are not alone.', emotion: 'scared' },
-            ],
-          },
-        ],
-      },
-    ],
-    createdAt: '2025-01-10T08:00:00Z',
-    updatedAt: '2025-01-15T14:30:00Z',
-    durationMinutes: 12,
-  },
-  {
-    id: 'story-002',
-    title: 'The Lost Star',
-    description: 'A little star falls from the sky and must find its way home with the help of a kind shepherd boy.',
-    coverImage: '',
-    language: 'en',
-    status: 'draft',
-    price: 3.99,
-    hasMusic: true,
-    hasSfx: false,
-    characters: [
-      { id: 'c1', name: 'Narrator', role: 'narrator', displayName: 'Narrator', color: '#9896A8', voiceSource: 'ai', voiceId: 'ai_female_soft', voiceLabel: 'Female Soft', defaultVolume: 1 },
-    ],
-    chapters: [],
-    createdAt: '2025-02-01T10:00:00Z',
-    updatedAt: '2025-02-01T10:00:00Z',
-  },
-]
+// ─── Defaults ──────────────────────────────────────────────────────────────────
 
 const MOCK_CREATOR: Creator = {
   id: 'creator-001',
@@ -126,7 +70,7 @@ export const useStudioStore = create<StudioStore>()(
     (set, get) => ({
       creator: null,
       isAuthenticated: false,
-      stories: SEED_STORIES,
+      stories: [],
       activeStoryId: null,
       activeChapterId: null,
       activeSceneId: null,
@@ -145,7 +89,7 @@ export const useStudioStore = create<StudioStore>()(
       // ── Stories ──
       createStory: (title, description) => {
         const story: Story = {
-          id: `story-${uuid()}`,
+          id: uuid(),
           title, description,
           language: 'en',
           status: 'draft',

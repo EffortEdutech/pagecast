@@ -1,13 +1,15 @@
 'use client'
 import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
+import { useHydrated } from '@/hooks/useHydrated'
+import { usePublishedBooks } from '@/hooks/usePublishedBooks'
 import { Navbar } from '@/components/layout/Navbar'
-import { DEMO_STORIES } from '@/data/stories'
 import {
   BookOpen, Play, Clock, Mic, Music, Library,
   ShoppingBag, ChevronRight, RotateCcw
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import type { Story } from '@/types'
 
 function ProgressRing({ pct }: { pct: number }) {
   const r = 18
@@ -27,8 +29,10 @@ function ProgressRing({ pct }: { pct: number }) {
   )
 }
 
-function LibraryCard({ story }: { story: typeof DEMO_STORIES[0] }) {
-  const progress = useReaderStore(s => s.getProgress(story.id))
+function LibraryCard({ story }: { story: Story }) {
+  const hydrated    = useHydrated()
+  const progressRaw = useReaderStore(s => s.getProgress(story.id))
+  const progress    = hydrated ? progressRaw : undefined
 
   const totalBlocks = story.chapters.reduce((acc, ch) =>
     ch.scenes.reduce((a, sc) => a + sc.blocks.length, acc), 0)
@@ -116,8 +120,12 @@ function LibraryCard({ story }: { story: typeof DEMO_STORIES[0] }) {
 }
 
 export default function LibraryPage() {
-  const library = useReaderStore(s => s.library)
-  const ownedStories = DEMO_STORIES.filter(s => library.includes(s.id))
+  const hydrated       = useHydrated()
+  const libraryRaw     = useReaderStore(s => s.library)
+  const library        = hydrated ? libraryRaw : []
+  const { stories: allPublished } = usePublishedBooks()
+  // Show books the user owns; if none in DB yet fall back gracefully
+  const ownedStories = allPublished.filter(s => library.includes(s.id))
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -160,7 +168,7 @@ export default function LibraryPage() {
             <div className="mt-8 p-5 card border-dashed flex items-center justify-between gap-4">
               <div>
                 <p className="text-text-primary font-medium text-sm">Looking for more stories?</p>
-                <p className="text-text-muted text-xs mt-0.5">{DEMO_STORIES.length - ownedStories.length} more available in the store.</p>
+                <p className="text-text-muted text-xs mt-0.5">{allPublished.length - ownedStories.length} more available in the store.</p>
               </div>
               <Link href="/store" className="btn-secondary text-xs shrink-0">
                 <ShoppingBag size={13} /> Visit Store

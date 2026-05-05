@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 /**
  * Maps internal PageCast voice IDs → OpenAI TTS voice names.
@@ -77,11 +78,25 @@ export async function POST(req: NextRequest) {
     }
 
     const audioBuffer = await res.arrayBuffer()
+
+    // Track TTS credit usage (fire-and-forget)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.rpc('increment_tts_chars', {
+          p_user_id: user.id,
+          p_chars:   text.trim().length,
+        })
+      }
+    } catch { /* non-blocking */ }
+
     return new NextResponse(audioBuffer, {
       headers: {
         'Content-Type':   'audio/mpeg',
         'Content-Length': String(audioBuffer.byteLength),
         'Cache-Control':  'no-store',
+        'X-Chars-Used':   String(text.trim().length),
       },
     })
   }
@@ -125,11 +140,25 @@ export async function POST(req: NextRequest) {
     }
 
     const audioBuffer = await res.arrayBuffer()
+
+    // Track TTS credit usage (fire-and-forget)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.rpc('increment_tts_chars', {
+          p_user_id: user.id,
+          p_chars:   text.trim().length,
+        })
+      }
+    } catch { /* non-blocking */ }
+
     return new NextResponse(audioBuffer, {
       headers: {
         'Content-Type':   'audio/mpeg',
         'Content-Length': String(audioBuffer.byteLength),
         'Cache-Control':  'no-store',
+        'X-Chars-Used':   String(text.trim().length),
       },
     })
   }

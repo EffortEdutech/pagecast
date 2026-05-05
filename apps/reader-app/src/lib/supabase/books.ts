@@ -21,6 +21,10 @@ function pickGradient(id: string): string {
   return COVER_GRADIENTS[idx]
 }
 
+// ─── Type helpers ─────────────────────────────────────────────────────────────
+
+type QuoteBlock = Extract<StoryBlock, { type: 'quote' }>
+
 // ─── Block converter (mirrors creator-studio blocks.ts) ──────────────────────
 
 function dbContentToBlock(id: string, type: string, content: Record<string, unknown>): StoryBlock {
@@ -29,11 +33,25 @@ function dbContentToBlock(id: string, type: string, content: Record<string, unkn
     case 'narration':
       return { ...base, type: 'narration', text: String(content.text ?? '') }
     case 'dialogue':
-      return { ...base, type: 'dialogue', characterId: String(content.character_id ?? ''), text: String(content.text ?? ''), emotion: content.emotion as string | undefined }
+      return {
+        ...base, type: 'dialogue',
+        characterId: String(content.character_id ?? ''),
+        text: String(content.text ?? ''),
+        emotion: content.emotion as string | undefined,
+      }
     case 'thought':
-      return { ...base, type: 'thought', characterId: String(content.character_id ?? ''), text: String(content.text ?? '') }
+      return {
+        ...base, type: 'thought',
+        characterId: String(content.character_id ?? ''),
+        text: String(content.text ?? ''),
+      }
     case 'quote':
-      return { ...base, type: 'quote', text: String(content.text ?? ''), attribution: content.attribution as string | undefined, style: content.style as QuoteBlock['style'] }
+      return {
+        ...base, type: 'quote',
+        text: String(content.text ?? ''),
+        attribution: content.attribution as string | undefined,
+        style: content.style as QuoteBlock['style'],
+      }
     case 'pause':
       return { ...base, type: 'pause', duration: Number(content.duration_ms ?? 2000) / 1000 }
     case 'sfx':
@@ -43,11 +61,6 @@ function dbContentToBlock(id: string, type: string, content: Record<string, unkn
   }
 }
 
-// ─── Type helpers ─────────────────────────────────────────────────────────────
-
-// QuoteBlock needed for style type
-type QuoteBlock = Extract<StoryBlock, { type: 'quote' }>
-
 // ─── DB row types ─────────────────────────────────────────────────────────────
 
 interface DbBook {
@@ -55,14 +68,23 @@ interface DbBook {
   cover_gradient: string; cover_emoji: string; genre: string | null
   age_rating: string; status: string; price: number; is_free: boolean
   estimated_time: string | null; created_at: string
+  narrator_only_mode: boolean | null; narrator_voice_id: string | null
 }
 interface DbCharacter {
   id: string; book_id: string; name: string; role: string | null
-  color: string; voice_label: string | null; sort_order: number
+  color: string; voice_label: string | null; voice_id: string | null; sort_order: number
 }
-interface DbChapter  { id: string; book_id: string; title: string; sort_order: number }
-interface DbScene    { id: string; chapter_id: string; book_id: string; title: string; sort_order: number; ambience_file?: string | null; music_file?: string | null }
-interface DbBlock    { id: string; scene_id: string; type: string; content: Record<string, unknown>; sort_order: number }
+interface DbChapter {
+  id: string; book_id: string; title: string; sort_order: number
+}
+interface DbScene {
+  id: string; chapter_id: string; book_id: string; title: string; sort_order: number
+  ambience_url: string | null; music_url: string | null
+  ambience_volume: number | null; music_volume: number | null
+}
+interface DbBlock {
+  id: string; scene_id: string; type: string; content: Record<string, unknown>; sort_order: number
+}
 
 // ─── Converters ───────────────────────────────────────────────────────────────
 
@@ -73,6 +95,7 @@ function dbCharToCharacter(c: DbCharacter): Character {
     role: (c.role ?? 'character') as 'narrator' | 'character',
     displayName: c.name,
     color: c.color,
+    voiceId: c.voice_id ?? undefined,
     defaultVolume: 1,
   }
 }
@@ -93,6 +116,8 @@ function dbToStory(book: DbBook, chars: DbCharacter[], chapters: Chapter[] = [])
     characters: chars.map(dbCharToCharacter),
     chapters,
     createdAt: book.created_at,
+    narratorOnlyMode: book.narrator_only_mode ?? undefined,
+    narratorVoiceId: book.narrator_voice_id ?? undefined,
   }
 }
 
@@ -126,7 +151,7 @@ export async function fetchPublishedBooks(): Promise<Story[]> {
   return (books as DbBook[]).map(b => dbToStory(b, charsByBook[b.id] ?? []))
 }
 
-/** Fetch a single book with full chapters + scenes + blocks (for reader engine) */
+/** Fetch a single book with full chapters + scenes + blocks (for the reader engine) */
 export async function fetchBook(bookId: string): Promise<Story | null> {
   const supabase = createClient()
 
@@ -152,8 +177,10 @@ export async function fetchBook(bookId: string): Promise<Story | null> {
       .map(sc => ({
         id: sc.id,
         title: sc.title,
-        ambienceFile: sc.ambience_file ?? undefined,
-        musicFile: sc.music_file ?? undefined,
+        ambienceUrl: sc.ambience_url ?? undefined,
+        musicUrl: sc.music_url ?? undefined,
+        ambienceVolume: sc.ambience_volume ?? undefined,
+        musicVolume: sc.music_volume ?? undefined,
         blocks: ((dbBlocks ?? []) as DbBlock[])
           .filter(b => b.scene_id === sc.id)
           .map(b => dbContentToBlock(b.id, b.type, b.content)),

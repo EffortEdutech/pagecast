@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { BookOpen, Library, ShoppingBag, LogIn, LogOut, User } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useReaderStore } from '@/store/readerStore'
+import { useHydrated } from '@/hooks/useHydrated'
 import { createClient } from '@/lib/supabase/client'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
@@ -12,6 +13,7 @@ export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const hydrated = useHydrated()
   const library = useReaderStore(s => s.library)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -44,7 +46,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 h-14 flex items-center justify-between px-6 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border">
-      <Link href="/store" className="flex items-center gap-2.5 group">
+      <Link href="/" className="flex items-center gap-2.5 group">
         <div className="w-8 h-8 bg-accent rounded-xl flex items-center justify-center group-hover:shadow-accent transition-shadow">
           <BookOpen size={15} className="text-white" />
         </div>
@@ -68,7 +70,7 @@ export function Navbar() {
           >
             <Icon size={15} />
             <span className="hidden sm:inline">{label}</span>
-            {badge != null && badge > 0 && (
+            {hydrated && badge != null && badge > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                 {badge}
               </span>

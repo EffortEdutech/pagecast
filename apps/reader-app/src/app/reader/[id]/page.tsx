@@ -224,9 +224,11 @@ export default function ReaderPage() {
     }).catch(() => setStory(getStory(id) ?? null))
   }, [id])
 
-  // Gate: must own
+  // Gate: must own (bypass with ?preview=1 for creator studio preview)
   useEffect(() => {
-    if (story && !isOwned(story.id)) {
+    if (typeof window === 'undefined') return
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
+    if (story && !isOwned(story.id) && !isPreview) {
       router.replace(`/book/${id}`)
     }
   }, [story, id, isOwned, router])
@@ -364,7 +366,9 @@ export default function ReaderPage() {
     if (block.audioUrl) {
       const audio = new Audio(block.audioUrl)
       audio.playbackRate = Math.min(2, Math.max(0.5, prefs.playbackSpeed))
-      audio.volume = block.type === 'narration'
+      // Use narrator volume for narrator-only mode, or narration/quote blocks with no assigned character
+      const hasAssignedChar = !!(block as any).characterId
+      audio.volume = (block.type === 'narration' || block.type === 'quote') && !hasAssignedChar
         ? prefs.narratorVolume
         : prefs.characterVolume
       audio.onended = () => advance()
@@ -390,21 +394,32 @@ export default function ReaderPage() {
 
     const utter = new SpeechSynthesisUtterance(speakText)
     utter.rate   = Math.min(2, Math.max(0.5, prefs.playbackSpeed))
-    utter.volume = block.type === 'narration'
+    // Narrator-only mode — all blocks use narrator volume
+    utter.volume = (block.type === 'narration' || story.narratorOnlyMode)
       ? prefs.narratorVolume
       : prefs.characterVolume
 
     if (voices.length > 0) {
       const speakable = voices.filter(v => v.lang.startsWith('en'))
       const pool = speakable.length > 0 ? speakable : voices
-      if (block.type === 'dialogue' || block.type === 'thought') {
+      const blockCharId = (block as any).characterId as string | undefined
+      if (story.narratorOnlyMode) {
+        // Narrator-only: single voice reads everything
+        utter.voice  = pool[0]
+        utter.pitch  = 0.88
+        utter.volume = prefs.narratorVolume
+      } else if (blockCharId) {
+        // Any block type with an assigned characterId → use that character's voice slot
         const charList = story.characters.filter(c => c.role === 'character')
-        const charPos  = charList.findIndex(c => c.id === (block as any).characterId)
-        utter.voice = pool[(1 + charPos) % pool.length]
-        utter.pitch = 0.8 + (charPos % 4) * 0.15
+        const charPos  = charList.findIndex(c => c.id === blockCharId)
+        utter.voice  = pool[(1 + Math.max(0, charPos)) % pool.length]
+        utter.pitch  = 0.8 + (Math.max(0, charPos) % 4) * 0.15
+        utter.volume = prefs.characterVolume
       } else {
-        utter.voice = pool[0]
-        utter.pitch = 0.85
+        // No character assigned → narrator voice
+        utter.voice  = pool[0]
+        utter.pitch  = 0.85
+        utter.volume = prefs.narratorVolume
       }
     }
 

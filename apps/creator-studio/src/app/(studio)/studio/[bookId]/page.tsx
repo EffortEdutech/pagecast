@@ -8,6 +8,7 @@ import { AddBlockMenu } from '@/components/editor/AddBlockMenu'
 import { SceneAtmospherePanel } from '@/components/editor/SceneAtmospherePanel'
 import { TextImportModal } from '@/components/editor/TextImportModal'
 import { Header } from '@/components/layout/Header'
+import { BookSettingsPanel } from '@/components/editor/BookSettingsPanel'
 import {
   Plus, ChevronRight, ChevronDown, Settings2, Eye,
   BookOpen, Layers, Save, FileText,
@@ -60,7 +61,9 @@ export default function StudioPage() {
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
   const [rightPanel, setRightPanel] = useState<'scene' | 'block' | null>('scene')
   const [saved, setSaved] = useState(false)
-  const [showImport, setShowImport] = useState(false)
+  const [showImport,    setShowImport]    = useState(false)
+  const [showSettings, setShowSettings]   = useState(false)
+  const [showPublishQA, setShowPublishQA] = useState(false)
 
   useEffect(() => {
     if (story?.chapters.length && !activeChapterId) {
@@ -126,6 +129,29 @@ export default function StudioPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const getUncoveredCount = (): number => {
+    let count = 0
+    for (const ch of story.chapters) {
+      for (const sc of ch.scenes) {
+        for (const bl of sc.blocks) {
+          if (bl.type !== 'pause' && bl.type !== 'sfx') {
+            const hasAudio = 'audioUrl' in bl && Boolean((bl as { audioUrl?: string }).audioUrl)
+            if (!hasAudio) count++
+          }
+        }
+      }
+    }
+    return count
+  }
+
+  const handleSettingsSave = async (updates: Partial<import('@/types').Story>) => {
+    await import('@/lib/supabase/books').then(m => m.updateBook(bookId, updates))
+    useStudioStore.setState(state => ({
+      stories: state.stories.map(s => s.id === bookId ? { ...s, ...updates } : s)
+    }))
+    setShowSettings(false)
+  }
+
   const handleImport = async (parsed: ParsedImport) => {
     let firstChapterId: string | null = null
     let firstSceneId:   string | null = null
@@ -177,14 +203,25 @@ export default function StudioPage() {
           <FileText size={13} /> Import Text
         </button>
         <button
+          className="btn-ghost text-xs px-2 py-1.5"
+          onClick={() => setShowSettings(true)}
+          title="Book metadata"
+        >
+          <Settings2 size={13} /> Settings
+        </button>
+        <button
           className="btn-secondary text-xs"
-          onClick={() => window.open(`${process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800'}/reader/${bookId}`, '_blank')}
+          onClick={() => window.open(`${process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800'}/reader/${bookId}?preview=1`, '_blank')}
         >
           <Eye size={13} /> Preview
         </button>
         <button
           className={clsx('text-xs', story.status === 'published' ? 'btn-secondary text-success' : 'btn-secondary')}
           onClick={async () => {
+            if (story.status !== 'published') {
+              const uncovered = getUncoveredCount()
+              if (uncovered > 0) { setShowPublishQA(true); return }
+            }
             const newStatus = story.status === 'published' ? 'draft' : 'published'
             await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus as 'draft' | 'published'))
             useStudioStore.setState(state => ({
@@ -382,11 +419,53 @@ export default function StudioPage() {
       </div>
 
       {/* ── Import Text Modal ── */}
-      {showImport && (
-        <TextImportModal
-          onImport={handleImport}
-          onClose={() => setShowImport(false)}
+      {/* Book settings panel */}
+      {showSettings && (
+        <BookSettingsPanel
+          story={story}
+          onClose={() => setShowSettings(false)}
+          onSave={handleSettingsSave}
         />
+      )}
+
+      {/* Publish QA gate */}
+      {showPublishQA && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="card-elevated w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-warning/20 flex items-center justify-center shrink-0">
+                <Film size={16} className="text-warning" />
+              </div>
+              <div>
+                <h3 className="text-text-primary font-semibold">Missing voice audio</h3>
+                <p className="text-text-secondary text-sm mt-1">
+                  {getUncoveredCount()} block{getUncoveredCount() !== 1 ? 's' : ''} don't have audio yet.
+                  Readers in Audiobook mode will hear browser TTS instead of your recorded voice.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-sm" onClick={() => setShowPublishQA(false)}>
+                Go back
+              </button>
+              <button
+                className="btn-primary text-sm"
+                onClick={async () => {
+                  setShowPublishQA(false)
+                  const newStatus = 'published'
+                  await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus))
+                  useStudioStore.setState(state => ({
+                    stories: state.stories.map(s =>
+                      s.id === bookId ? { ...s, status: newStatus } : s
+                    )
+                  }))
+                }}
+              >
+                Publish anyway
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

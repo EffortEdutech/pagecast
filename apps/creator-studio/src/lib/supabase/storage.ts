@@ -105,3 +105,53 @@ export async function deleteSceneAudio(
     .remove([sceneAudioPath(userId, bookId, sceneId, layer)])
   return !error
 }
+
+// ─── Scene image ──────────────────────────────────────────────────────────────
+
+function sceneImagePath(userId: string, bookId: string, sceneId: string): string {
+  return `${userId}/${bookId}/scene_${sceneId}_image`
+}
+
+/**
+ * Upload a scene cover image to the 'covers' bucket.
+ * Returns the public URL or null on error.
+ */
+export async function uploadSceneImage(
+  userId: string,
+  bookId: string,
+  sceneId: string,
+  file: File
+): Promise<string | null> {
+  const supabase = createClient()
+  const path = sceneImagePath(userId, bookId, sceneId)
+
+  const { error } = await supabase.storage
+    .from('covers')
+    .upload(path, file, {
+      upsert: true,
+      contentType: file.type || 'image/jpeg',
+    })
+
+  if (error) {
+    console.error('uploadSceneImage error:', error.message)
+    return null
+  }
+
+  const { data } = supabase.storage.from('covers').getPublicUrl(path)
+  return data.publicUrl
+}
+
+/**
+ * Delete the scene image from the 'covers' bucket.
+ */
+export async function deleteSceneImage(
+  userId: string,
+  bookId: string,
+  sceneId: string
+): Promise<boolean> {
+  const supabase = createClient()
+  const { error } = await supabase.storage
+    .from('covers')
+    .remove([sceneImagePath(userId, bookId, sceneId)])
+  return !error
+}

@@ -35,6 +35,7 @@ export interface BaseBlock {
 export interface NarrationBlock extends BaseBlock {
   type: 'narration'
   text: string
+  characterId?: string   // which character reads this — defaults to narrator
 }
 
 export interface DialogueBlock extends BaseBlock {
@@ -55,6 +56,7 @@ export interface QuoteBlock extends BaseBlock {
   text: string
   attribution?: string
   style?: 'poem' | 'letter' | 'quran' | 'default'
+  characterId?: string   // voice used to read this quote
 }
 
 export interface PauseBlock extends BaseBlock {
@@ -119,6 +121,11 @@ export interface Story {
   createdAt: string
   updatedAt: string
   durationMinutes?: number
+  narratorOnlyMode?: boolean
+  narratorVoiceId?: string
+  coverGradient?: string
+  genre?: string
+  ageRating?: string
 }
 
 // ─── Voice Profile ────────────────────────────────────────────────────────────
@@ -126,7 +133,7 @@ export interface Story {
 export interface VoiceProfile {
   id: string
   label: string
-  category: 'male' | 'female' | 'child' | 'elder' | 'fantasy' | 'cartoon' | 'villain' | 'robot' | 'whisper' | 'dramatic'
+  category: 'male' | 'female' | 'child' | 'elder' | 'fantasy' | 'cartoon' | 'villain' | 'robot' | 'whisper' | 'dramatic' | 'narrator'
   gender: 'male' | 'female' | 'neutral'
   preview?: string
 }

@@ -23,6 +23,8 @@ export interface DbBook {
   is_free: boolean
   total_chapters: number
   estimated_time: string | null
+  narrator_only_mode: boolean
+  narrator_voice_id: string | null
   created_at: string
   updated_at: string
 }
@@ -70,6 +72,8 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     createdAt: book.created_at,
     updatedAt: book.updated_at,
     durationMinutes: book.estimated_time ? parseInt(book.estimated_time) : undefined,
+    narratorOnlyMode: book.narrator_only_mode,
+    narratorVoiceId: book.narrator_voice_id ?? undefined,
   }
 }
 
@@ -155,7 +159,9 @@ export async function updateBook(bookId: string, updates: Partial<Story>): Promi
     ...(updates.description !== undefined && { description: updates.description }),
     ...(updates.status      !== undefined && { status: updates.status }),
     ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
-    ...(updates.coverImage  !== undefined && { cover_emoji: updates.coverImage }),
+    ...(updates.coverImage        !== undefined && { cover_emoji:          updates.coverImage }),
+    ...(updates.narratorOnlyMode  !== undefined && { narrator_only_mode:  updates.narratorOnlyMode }),
+    ...(updates.narratorVoiceId   !== undefined && { narrator_voice_id:   updates.narratorVoiceId }),
   }
   const { error } = await supabase.from('books').update(dbUpdates).eq('id', bookId)
   return !error

@@ -58,6 +58,12 @@ body.theme-sepia  { background:#1C170E; color:#D9C9A3; }
 .waveform-bar:nth-child(4) { animation-delay:.15s; }
 .waveform-bar:nth-child(5) { animation-delay:.05s; }
 
+/* ── Keyframes ── */
+@keyframes fadeIn      { from { opacity:0 } to { opacity:1 } }
+@keyframes slideUp     { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
+@keyframes waveform    { 0%,100% { transform:scaleY(0.3) } 50% { transform:scaleY(1) } }
+@keyframes highlightIn { from { background:rgba(124,92,252,0.25) } to { background:rgba(124,92,252,0.08) } }
+
 @layer components {
   .btn-primary   { @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2; }
   .btn-secondary { @apply bg-bg-elevated hover:bg-bg-hover border border-bg-border text-text-primary font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2; }
