@@ -6,11 +6,59 @@ import { uploadBlockAudio, deleteBlockAudio } from '@/lib/supabase/storage'
 import { generateBlockTts, getTtsSettings } from '@/lib/tts'
 import type { StoryBlock } from '@/types'
 
+// Maps internal voiceId → browser speech characteristics for preview
+const VOICE_META: Record<string, { pitch: number; rate: number; female: boolean }> = {
+  ai_narrator_warm: { pitch: 1.0,  rate: 0.88, female: false },
+  ai_narrator_deep: { pitch: 0.8,  rate: 0.85, female: false },
+  ai_female_soft:   { pitch: 1.2,  rate: 0.9,  female: true  },
+  ai_female_warm:   { pitch: 1.1,  rate: 1.0,  female: true  },
+  ai_male_deep:     { pitch: 0.7,  rate: 0.9,  female: false },
+  ai_male_calm:     { pitch: 0.9,  rate: 0.95, female: false },
+  ai_male_gruff:    { pitch: 0.65, rate: 0.92, female: false },
+  ai_child_female:  { pitch: 1.4,  rate: 1.05, female: true  },
+  ai_child_male:    { pitch: 1.3,  rate: 1.05, female: false },
+  ai_elder_female:  { pitch: 1.0,  rate: 0.85, female: true  },
+  ai_elder_male:    { pitch: 0.75, rate: 0.85, female: false },
+  ai_villain:       { pitch: 0.6,  rate: 0.88, female: false },
+  ai_whisper:       { pitch: 1.0,  rate: 0.75, female: false },
+  ai_dramatic:      { pitch: 0.85, rate: 0.9,  female: false },
+  ai_cartoon:       { pitch: 1.3,  rate: 1.1,  female: false },
+  ai_robot:         { pitch: 0.7,  rate: 1.15, female: false },
+  ai_fantasy:       { pitch: 1.15, rate: 0.88, female: true  },
+}
+
+// Female name hints for browser voice matching
+const FEMALE_NAMES = ['female','woman','samantha','victoria','karen','moira','fiona',
+  'allison','ava','susan','nicky','tessa','veena','zira','hazel','linda',
+  'aria','jenny','emma','nora','nara','siri','serena','kyoko','mei']
+const MALE_NAMES   = ['male','man','daniel','david','mark','alex','fred','junior',
+  'reed','thomas','rishi','guy','ryan','steffan','james','liam','lee','bruce']
+
+function pickBrowserVoice(voiceId: string | undefined): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined') return null
+  const all = window.speechSynthesis.getVoices()
+  const en  = all.filter(v => v.lang.startsWith('en'))
+  if (!en.length) return all[0] ?? null
+
+  const meta    = voiceId ? VOICE_META[voiceId] : undefined
+  const wantsFemale = meta?.female ?? true          // default female if unknown
+
+  const matches = en.filter(v => {
+    const n = v.name.toLowerCase()
+    return wantsFemale
+      ? FEMALE_NAMES.some(k => n.includes(k))
+      : MALE_NAMES.some(k => n.includes(k))
+  })
+
+  return matches[0] ?? en[0]
+}
+
 interface AudioUploadRowProps {
-  block:    StoryBlock
-  bookId:   string
-  voiceId?: string
-  onUpdate: (updates: Partial<StoryBlock>) => void
+  block:       StoryBlock
+  bookId:      string
+  voiceId?:    string   // internal id like 'ai_female_soft'
+  voiceLabel?: string   // human label like 'Aria — Female Soft'
+  onUpdate:    (updates: Partial<StoryBlock>) => void
 }
 
 function formatTime(s: number): string {
@@ -24,7 +72,7 @@ function getBlockText(block: StoryBlock): string {
   return ''
 }
 
-export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUploadRowProps) {
+export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }: AudioUploadRowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef     = useRef<HTMLAudioElement | null>(null)
 
@@ -43,23 +91,33 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     setHasTtsKey(!!getTtsSettings().apiKey)
   }, [])
 
-  // -- Browser TTS preview (no API key needed) --
+  // ── Browser TTS preview — uses gender-matched browser voice ──────────────
 
   const speakPreview = () => {
     if (!('speechSynthesis' in window)) return
     const text = getBlockText(block)
     if (!text.trim()) return
+
     if (isSpeaking) {
       window.speechSynthesis.cancel()
       setIsSpeaking(false)
       return
     }
+
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text)
-    utt.rate   = 0.95
-    utt.pitch  = 1.0
+
+    // Apply voice characteristics from our map
+    const meta = voiceId ? VOICE_META[voiceId] : undefined
+    utt.rate   = meta?.rate  ?? 0.95
+    utt.pitch  = meta?.pitch ?? 1.0
     utt.volume = 1
-    utt.onend  = () => setIsSpeaking(false)
+
+    // Pick a browser voice that matches the gender
+    const picked = pickBrowserVoice(voiceId)
+    if (picked) utt.voice = picked
+
+    utt.onend   = () => setIsSpeaking(false)
     utt.onerror = () => setIsSpeaking(false)
     setIsSpeaking(true)
     window.speechSynthesis.speak(utt)
@@ -69,7 +127,7 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     return () => { audioRef.current?.pause() }
   }, [block.audioUrl])
 
-  // -- Upload --
+  // ── Upload ───────────────────────────────────────────────────────────────
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -80,13 +138,13 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     if (url) {
       onUpdate({ audioUrl: url } as Partial<StoryBlock>)
     } else {
-      setActionError('Upload failed -- check storage bucket & RLS policies.')
+      setActionError('Upload failed — check storage bucket & RLS policies.')
     }
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // -- TTS Generate --
+  // ── TTS Generate ─────────────────────────────────────────────────────────
 
   const handleGenerate = async () => {
     if (!userId) return
@@ -124,7 +182,7 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     setDuration(0)
   }
 
-  // -- Mini player --
+  // ── Mini player ───────────────────────────────────────────────────────────
 
   const initAudio = () => {
     if (audioRef.current) return
@@ -149,11 +207,25 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     }
   }
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const progress    = duration > 0 ? (currentTime / duration) * 100 : 0
   const blockText   = getBlockText(block)
   const canGenerate = !!blockText.trim() && !!userId
 
-  // -- No audio yet --
+  // The OpenAI voice that will actually be used — shown to user for transparency
+  const OPENAI_VOICE_MAP: Record<string, string> = {
+    ai_narrator_warm: 'fable', ai_narrator_deep: 'onyx',
+    ai_female_soft: 'nova',    ai_female_warm: 'shimmer',
+    ai_male_deep: 'onyx',      ai_male_calm: 'echo',
+    ai_male_gruff: 'onyx',     ai_child_female: 'nova',
+    ai_child_male: 'echo',     ai_elder_female: 'shimmer',
+    ai_elder_male: 'fable',    ai_villain: 'onyx',
+    ai_whisper: 'echo',        ai_dramatic: 'fable',
+    ai_cartoon: 'alloy',       ai_robot: 'alloy',
+    ai_fantasy: 'nova',
+  }
+  const openaiVoiceName = OPENAI_VOICE_MAP[voiceId ?? ''] ?? 'nova'
+
+  // ── No audio yet ──────────────────────────────────────────────────────────
 
   if (!block.audioUrl && !uploading && !generating) {
     return (
@@ -178,8 +250,8 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
           <button
             className={`btn-ghost text-xs px-2 py-1 border transition-colors ${isSpeaking ? 'border-info/60 text-info' : 'border-bg-border hover:border-info/50 hover:text-info'}`}
             onClick={speakPreview}
-            disabled={!getBlockText(block).trim()}
-            title={isSpeaking ? 'Stop preview' : 'Preview with browser voice'}
+            disabled={!blockText.trim()}
+            title={isSpeaking ? 'Stop preview' : `Browser preview${voiceLabel ? ` · ${voiceLabel}` : ''}`}
           >
             {isSpeaking ? <Pause size={11} /> : <Mic size={11} />}
             {isSpeaking ? 'Stop' : 'Preview'}
@@ -194,13 +266,21 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
                 ? 'Add your OpenAI or ElevenLabs API key in Settings'
                 : !blockText.trim()
                   ? 'Add text to this block first'
-                  : 'Generate AI voice for this block'
+                  : `Generate AI voice · OpenAI "${openaiVoiceName}"${voiceLabel ? ` · ${voiceLabel}` : ''}`
             }
           >
             <Wand2 size={11} /> Generate
           </button>
 
-          {!actionError && (
+          {/* Voice label badge */}
+          {voiceLabel && (
+            <span className="text-[10px] text-text-muted bg-bg-elevated px-1.5 py-0.5 rounded">
+              {voiceLabel}
+              <span className="text-text-muted/50 ml-1">→ {openaiVoiceName}</span>
+            </span>
+          )}
+
+          {!actionError && !voiceLabel && (
             <span className="text-text-muted text-xs">No audio</span>
           )}
           {actionError && (
@@ -224,7 +304,7 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     )
   }
 
-  // -- Loading states --
+  // ── Loading states ────────────────────────────────────────────────────────
 
   if (uploading) {
     return (
@@ -239,15 +319,22 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
     return (
       <div className="flex items-center gap-2 pt-1 text-text-muted text-xs">
         <Loader2 size={12} className="animate-spin text-gold" />
-        <span className="text-gold">Generating AI voice…</span>
+        <span className="text-gold">Generating with {openaiVoiceName}{voiceLabel ? ` · ${voiceLabel}` : ''}…</span>
       </div>
     )
   }
 
-  // -- Mini player (audio exists) --
+  // ── Mini player (audio exists) ────────────────────────────────────────────
 
   return (
     <div className="pt-1 space-y-1.5">
+      {/* Voice label above player */}
+      {voiceLabel && (
+        <p className="text-[10px] text-text-muted">
+          {voiceLabel} <span className="opacity-50">· OpenAI {openaiVoiceName}</span>
+        </p>
+      )}
+
       {/* Progress bar */}
       <div
         className="w-full h-1 rounded-full bg-bg-border overflow-hidden cursor-pointer"
@@ -282,17 +369,15 @@ export function AudioUploadRow({ block, bookId, voiceId, onUpdate }: AudioUpload
         </span>
 
         <div className="flex items-center gap-1 ml-auto">
-          {/* Re-generate */}
           <button
             className="btn-ghost text-[10px] px-1.5 py-0.5 border border-bg-border hover:border-gold/40 hover:text-gold disabled:opacity-40"
             onClick={handleGenerate}
             disabled={!canGenerate || generating}
-            title="Re-generate AI voice"
+            title={`Re-generate · OpenAI "${openaiVoiceName}"${voiceLabel ? ` · ${voiceLabel}` : ''}`}
           >
             <RefreshCw size={9} /> Re-gen
           </button>
 
-          {/* Delete */}
           <button
             className="btn-ghost text-[10px] px-1.5 py-0.5 border border-bg-border hover:border-danger/40 hover:text-danger"
             onClick={handleDelete}

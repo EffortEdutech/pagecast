@@ -126,6 +126,20 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
     return characters[0]?.voiceId ?? 'ai_female_soft'
   })()
 
+  // Human-readable label shown next to Generate button
+  const resolvedVoiceLabel = (() => {
+    const id = (block as any).characterId as string | undefined
+    const char = id
+      ? characters.find(c => c.id === id)
+      : block.type === 'narration' || block.type === 'quote'
+        ? characters.find(c => c.role === 'narrator')
+        : characters[0]
+    if (!char) return undefined
+    return char.voiceLabel
+      ? `${char.displayName} · ${char.voiceLabel}`
+      : char.displayName
+  })()
+
   return (
     <div className={clsx('rounded-xl border border-bg-border overflow-hidden transition-all', meta.bg)}>
 
@@ -328,6 +342,7 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
               bookId={bookId}
               onUpdate={onUpdate}
               voiceId={resolvedVoiceId}
+              voiceLabel={resolvedVoiceLabel}
             />
           )}
 

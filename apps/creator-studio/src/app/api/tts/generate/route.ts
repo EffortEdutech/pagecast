@@ -6,20 +6,27 @@ import { createClient } from '@/lib/supabase/server'
  * OpenAI voices: alloy | echo | fable | onyx | nova | shimmer
  */
 const OPENAI_VOICE_MAP: Record<string, string> = {
-  ai_female_soft:   'nova',
-  ai_female_warm:   'shimmer',
-  ai_male_deep:     'onyx',
-  ai_male_calm:     'echo',
-  ai_child_female:  'nova',
-  ai_child_male:    'echo',
-  ai_elder_female:  'shimmer',
-  ai_elder_male:    'fable',
-  ai_villain:       'onyx',
-  ai_whisper:       'echo',
-  ai_dramatic:      'fable',
-  ai_cartoon:       'alloy',
-  ai_robot:         'alloy',
-  ai_fantasy:       'nova',
+  // Narrator voices
+  ai_narrator_warm:  'fable',   // warm, storytelling male
+  ai_narrator_deep:  'onyx',    // deep authoritative male
+  // Female voices
+  ai_female_soft:    'nova',
+  ai_female_warm:    'shimmer',
+  ai_child_female:   'nova',
+  ai_elder_female:   'shimmer',
+  ai_fantasy:        'nova',
+  // Male voices
+  ai_male_deep:      'onyx',
+  ai_male_calm:      'echo',
+  ai_male_gruff:     'onyx',    // closest deep/gruff voice
+  ai_child_male:     'echo',
+  ai_elder_male:     'fable',
+  ai_villain:        'onyx',
+  ai_dramatic:       'fable',
+  // Neutral / character voices
+  ai_whisper:        'echo',
+  ai_cartoon:        'alloy',
+  ai_robot:          'alloy',
 }
 
 export async function POST(req: NextRequest) {
