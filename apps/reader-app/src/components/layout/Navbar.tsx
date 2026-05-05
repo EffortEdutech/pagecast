@@ -12,22 +12,26 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
+  // NOTE: createClient() is called inside the effect (never at render time) so
+  // Next.js static prerender — which runs server-side without Supabase env vars —
+  // never calls createBrowserClient() and never throws.
   const hydrated = useHydrated()
   const library = useReaderStore(s => s.library)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   useEffect(() => {
+    const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
     return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSignOut = async () => {
+    const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/store')
     router.refresh()
