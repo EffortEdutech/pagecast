@@ -159,28 +159,13 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     if (!file) return
     if (fileRef.current) fileRef.current.value = ''
 
-    // ── PDF: extract via server route ──
+    // ── PDF: not supported in current build — guide user to convert first ──
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      setExtracting(true)
-      setError(null)
-      setPdfPages(null)
-      setText('')
-      setParsed(null)
-      try {
-        const form = new FormData()
-        form.append('file', file)
-        const res = await fetch('/api/pdf/extract', { method: 'POST', body: form })
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? 'PDF extraction failed')
-        setText(json.text)
-        setPdfPages(json.pages)
-        // Auto-parse after extraction
-        try { setParsed(parseText(json.text, format)) } catch {}
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setExtracting(false)
-      }
+      setError(
+        'PDF import is not available. Please convert your PDF to a .txt file first ' +
+        '(use Google Docs: File → Open → upload PDF → File → Download → Plain Text, ' +
+        'or any online PDF-to-text converter), then import the .txt file.'
+      )
       return
     }
 
@@ -229,7 +214,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
           <div className="flex-1">
             <h2 className="text-text-primary font-bold text-base">Import Text</h2>
             <p className="text-text-muted text-xs mt-0.5">
-              Paste your story or upload a .txt, .md, or .pdf file. The engine parses it into blocks for you.
+              Paste your story or upload a .txt, .md, or .fountain file. The engine parses it into blocks for you.
             </p>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-secondary transition-colors">
@@ -256,7 +241,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
               </select>
 
               {/* File upload */}
-              <input ref={fileRef} type="file" accept=".txt,.md,.fountain,.pdf" className="hidden" onChange={handleFileUpload} />
+              <input ref={fileRef} type="file" accept=".txt,.md,.fountain" className="hidden" onChange={handleFileUpload} />
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={extracting}
