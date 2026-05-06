@@ -247,9 +247,12 @@ export default function ReaderPage() {
   const [blockIdx, setBlockIdx]     = useState(savedProgress?.blockIdx   ?? 0)
 
   // ── UI state ──
-  const [showTOC,      setShowTOC]      = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [cinemaMode,   setCinemaMode]   = useState(false)
+  const [showTOC,        setShowTOC]        = useState(false)
+  const [showSettings,   setShowSettings]   = useState(false)
+  const [cinemaMode,     setCinemaMode]     = useState(false)
+  const [muteAtmosphere, setMuteAtmosphere] = useState(false)
+  const [navVisible,     setNavVisible]     = useState(true)
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Speech synthesis ──
   const synthRef     = useRef<SpeechSynthesis | null>(null)
@@ -518,6 +521,24 @@ export default function ReaderPage() {
     if (block) setCurrentBlock(block.id)
   }, [block, setCurrentBlock])
 
+  // ── Mute / unmute atmosphere ──
+  useEffect(() => {
+    if (ambienceRef.current) ambienceRef.current.muted = muteAtmosphere
+    if (musicRef.current)    musicRef.current.muted    = muteAtmosphere
+  }, [muteAtmosphere])
+
+  // ── Navbar auto-hide during playback ──
+  useEffect(() => {
+    if (!isPlaying || prefs.mode === 'reading') {
+      setNavVisible(true)
+      if (navTimerRef.current) clearTimeout(navTimerRef.current)
+      return
+    }
+    // Auto-hide after 3s of playing
+    navTimerRef.current = setTimeout(() => setNavVisible(false), 3000)
+    return () => { if (navTimerRef.current) clearTimeout(navTimerRef.current) }
+  }, [isPlaying, prefs.mode])
+
   // ── TOC jump ──
   const jumpTo = (ci: number, si: number) => {
     setChapterIdx(ci); setSceneIdx(si); setBlockIdx(0)
@@ -569,7 +590,19 @@ export default function ReaderPage() {
 
       {/* ── Top bar ── */}
       {!cinemaMode && (
-        <header className="sticky top-0 z-40 h-12 flex items-center justify-between px-4 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border">
+        <header
+          className={clsx(
+            "sticky top-0 z-40 h-12 flex items-center justify-between px-4 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border transition-all duration-300",
+            !navVisible && "opacity-0 -translate-y-full pointer-events-none"
+          )}
+          onMouseEnter={() => {
+            setNavVisible(true)
+            if (navTimerRef.current) clearTimeout(navTimerRef.current)
+            if (isPlaying && prefs.mode !== 'reading') {
+              navTimerRef.current = setTimeout(() => setNavVisible(false), 2000)
+            }
+          }}
+        >
           <div className="flex items-center gap-3">
             <Link href="/library" className="btn-ghost px-2 py-1.5 text-text-muted hover:text-text-primary">
               <ArrowLeft size={15} />
@@ -723,6 +756,23 @@ export default function ReaderPage() {
                 )} />
               </div>
             </label>
+
+            {/* Mute scene atmosphere */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-text-secondary flex items-center gap-1.5">
+                <VolumeX size={11} /> Mute ambience/music
+              </span>
+              <div onClick={() => setMuteAtmosphere(m => !m)}
+                className={clsx(
+                  'w-10 h-5 rounded-full transition-colors relative cursor-pointer',
+                  muteAtmosphere ? 'bg-danger/70' : 'bg-bg-elevated border border-bg-border'
+                )}>
+                <span className={clsx(
+                  'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                  muteAtmosphere ? 'translate-x-5' : 'translate-x-0.5'
+                )} />
+              </div>
+            </label>
           </div>
         </div>
       )}
@@ -776,13 +826,21 @@ export default function ReaderPage() {
         {cinemaMode ? (
           // ── Cinematic mode ──
           <div className="min-h-screen flex flex-col items-center justify-center px-8 relative">
+            {/* Cinematic scene image background */}
+            {scene?.sceneImage && (
+              <div className="absolute inset-0 z-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={scene.sceneImage} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/70" />
+              </div>
+            )}
             <button
               onClick={() => { setCinemaMode(false); setMode('reading') }}
-              className="absolute top-5 left-5 text-white/40 hover:text-white transition-colors">
+              className="absolute top-5 left-5 z-10 text-white/40 hover:text-white transition-colors">
               <X size={18} />
             </button>
             {block && (
-              <div className="max-w-2xl w-full text-center animate-fade-in">
+              <div className="relative z-10 max-w-2xl w-full text-center animate-fade-in">
                 {block.type === 'narration' && (
                   <p className={clsx('text-white/70 italic', `font-${prefs.fontSize}`, 'reader-text text-lg leading-loose')}>
                     {(block as any).text}
@@ -841,13 +899,33 @@ export default function ReaderPage() {
         ) : (
           // ── Reading / Audiobook mode ──
           <div className="max-w-2xl mx-auto px-6 py-10">
-            {/* Scene header */}
-            <div className="mb-8 pb-6 border-b border-bg-border">
-              <p className="text-text-muted text-xs uppercase tracking-widest mb-1">
-                Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
-              </p>
-              <h2 className="text-text-primary font-bold text-xl">{scene?.title}</h2>
-            </div>
+            {/* Scene image banner */}
+            {scene?.sceneImage && (
+              <div className="relative -mx-6 -mt-10 mb-8 h-48 overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={scene.sceneImage}
+                  alt={scene.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-bg-primary" />
+                <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
+                  <p className="text-white/60 text-xs uppercase tracking-widest mb-0.5">
+                    Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
+                  </p>
+                  <h2 className="text-white font-bold text-xl drop-shadow">{scene?.title}</h2>
+                </div>
+              </div>
+            )}
+            {/* Scene header (shown only when no image) */}
+            {!scene?.sceneImage && (
+              <div className="mb-8 pb-6 border-b border-bg-border">
+                <p className="text-text-muted text-xs uppercase tracking-widest mb-1">
+                  Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
+                </p>
+                <h2 className="text-text-primary font-bold text-xl">{scene?.title}</h2>
+              </div>
+            )}
 
             {/* Blocks */}
             <div className="space-y-1">

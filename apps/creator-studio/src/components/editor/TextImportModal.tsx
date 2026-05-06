@@ -9,6 +9,33 @@ import { clsx } from 'clsx'
 import { parseText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
 import type { StoryBlock } from '@/types'
 
+// ── PDF extraction (pdfjs-dist, browser-side) ─────────────────────────────────
+
+async function extractPdfText(file: File): Promise<{ text: string; pages: number }> {
+  // Dynamic import to avoid SSR issues
+  const pdfjs = await import('pdfjs-dist')
+  // Use unpkg CDN for the worker — avoids Next.js bundler complexity
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+
+  const arrayBuffer = await file.arrayBuffer()
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
+  const pdf = await loadingTask.promise
+
+  const pageParts: string[] = []
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items
+      .filter((item: any) => 'str' in item)
+      .map((item: any) => (item.str as string))
+      .join(' ')
+    if (pageText.trim()) pageParts.push(pageText.trim())
+  }
+
+  return { text: pageParts.join('\n\n'), pages: pdf.numPages }
+}
+
 // ── Block type display ────────────────────────────────────────────────────────
 
 const BLOCK_DISPLAY = {
@@ -25,8 +52,6 @@ const FORMAT_LABELS: Record<string, string> = {
   script:   'Script / Screenplay',
   markdown: 'Markdown',
 }
-
-// ── Block preview row ─────────────────────────────────────────────────────────
 
 function BlockPreviewRow({ block }: { block: StoryBlock }) {
   const d = BLOCK_DISPLAY[block.type]
@@ -53,15 +78,12 @@ function BlockPreviewRow({ block }: { block: StoryBlock }) {
   )
 }
 
-// ── Chapter/scene tree preview ────────────────────────────────────────────────
-
 function ChapterPreview({ chapter, idx }: { chapter: ParsedChapter; idx: number }) {
   const [expanded, setExpanded] = useState(idx === 0)
   const totalBlocks = chapter.scenes.reduce((n, s) => n + s.blocks.length, 0)
 
   return (
     <div className="rounded-xl border border-bg-border overflow-hidden">
-      {/* Chapter header */}
       <button
         onClick={() => setExpanded(e => !e)}
         className="flex items-center gap-2 w-full px-3 py-2 bg-bg-elevated hover:bg-bg-hover transition-colors text-left"
@@ -78,13 +100,11 @@ function ChapterPreview({ chapter, idx }: { chapter: ParsedChapter; idx: number 
         <div className="p-2 space-y-2 bg-bg-primary">
           {chapter.scenes.map((scene, si) => (
             <div key={si} className="pl-2 border-l border-bg-border space-y-1">
-              {/* Scene row */}
               <div className="flex items-center gap-1.5 py-1">
                 <Film size={10} className="text-text-muted shrink-0" />
                 <span className="text-text-secondary text-[11px] font-medium">{scene.title}</span>
                 <span className="text-text-muted text-[10px] ml-auto">{scene.blocks.length} blocks</span>
               </div>
-              {/* First 5 blocks preview */}
               <div className="space-y-0.5 pl-1">
                 {scene.blocks.slice(0, 5).map((block, bi) => (
                   <BlockPreviewRow key={bi} block={block} />
@@ -138,7 +158,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
   const [format,      setFormat]      = useState<ParseFormat>('auto')
   const [parsed,      setParsed]      = useState<ParsedImport | null>(null)
   const [importing,   setImporting]   = useState(false)
-  const [extracting,  setExtracting]  = useState(false)   // PDF extraction in progress
+  const [extracting,  setExtracting]  = useState(false)
   const [pdfPages,    setPdfPages]    = useState<number | null>(null)
   const [error,       setError]       = useState<string | null>(null)
   const [importDone,  setImportDone]  = useState(false)
@@ -158,14 +178,26 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     const file = e.target.files?.[0]
     if (!file) return
     if (fileRef.current) fileRef.current.value = ''
+    setError(null)
+    setParsed(null)
+    setPdfPages(null)
 
-    // ── PDF: not supported in current build — guide user to convert first ──
-    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      setError(
-        'PDF import is not available. Please convert your PDF to a .txt file first ' +
-        '(use Google Docs: File → Open → upload PDF → File → Download → Plain Text, ' +
-        'or any online PDF-to-text converter), then import the .txt file.'
-      )
+    // ── PDF: extract text with pdfjs-dist ──
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      setExtracting(true)
+      try {
+        const { text: extracted, pages } = await extractPdfText(file)
+        if (!extracted.trim()) {
+          setError('Could not extract text from this PDF. It may be a scanned image. Try exporting as .txt first.')
+        } else {
+          setText(extracted)
+          setPdfPages(pages)
+        }
+      } catch (err: any) {
+        setError('PDF extraction failed: ' + (err?.message ?? 'unknown error'))
+      } finally {
+        setExtracting(false)
+      }
       return
     }
 
@@ -174,8 +206,6 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     reader.onload = ev => {
       const content = ev.target?.result as string
       setText(content)
-      setPdfPages(null)
-      setParsed(null)
     }
     reader.readAsText(file)
   }
@@ -194,13 +224,10 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     setImporting(false)
   }
 
-  // Re-parse on format change if text exists
   const handleFormatChange = (f: ParseFormat) => {
     setFormat(f)
     if (text.trim()) {
-      try {
-        setParsed(parseText(text, f))
-      } catch {}
+      try { setParsed(parseText(text, f)) } catch {}
     }
   }
 
@@ -214,7 +241,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
           <div className="flex-1">
             <h2 className="text-text-primary font-bold text-base">Import Text</h2>
             <p className="text-text-muted text-xs mt-0.5">
-              Paste your story or upload a .txt, .md, or .fountain file. The engine parses it into blocks for you.
+              Paste your story or upload a .txt, .md, .fountain, or .pdf file.
             </p>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-secondary transition-colors">
@@ -226,9 +253,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
 
           {/* ── Left: Input ── */}
           <div className="w-1/2 flex flex-col border-r border-bg-border">
-            {/* Controls */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-bg-border shrink-0 flex-wrap">
-              {/* Format selector */}
               <select
                 className="input text-xs py-1 flex-1 min-w-0"
                 value={format}
@@ -240,8 +265,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                 <option value="markdown">Markdown</option>
               </select>
 
-              {/* File upload */}
-              <input ref={fileRef} type="file" accept=".txt,.md,.fountain" className="hidden" onChange={handleFileUpload} />
+              <input ref={fileRef} type="file" accept=".txt,.md,.fountain,.pdf" className="hidden" onChange={handleFileUpload} />
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={extracting}
@@ -254,12 +278,12 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
               </button>
             </div>
 
-            {/* Textarea */}
             <div className="flex-1 relative overflow-hidden">
               {extracting && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-bg-primary/80 backdrop-blur-sm gap-3">
                   <Loader2 size={24} className="text-accent animate-spin" />
                   <p className="text-text-secondary text-xs">Extracting text from PDF…</p>
+                  <p className="text-text-muted text-[10px]">This may take a moment for large files</p>
                 </div>
               )}
               <textarea
@@ -273,16 +297,15 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
               {pdfPages !== null && (
                 <div className="absolute bottom-2 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20">
                   <FileUp size={9} className="text-accent" />
-                  <span className="text-[9px] text-accent font-medium">{pdfPages}-page PDF</span>
+                  <span className="text-[9px] text-accent font-medium">{pdfPages}-page PDF extracted</span>
                 </div>
               )}
             </div>
 
-            {/* Parse button */}
             <div className="px-4 py-3 border-t border-bg-border shrink-0">
               <button
                 onClick={handleParse}
-                disabled={!text.trim()}
+                disabled={!text.trim() || extracting}
                 className="btn-primary w-full justify-center text-sm disabled:opacity-40"
               >
                 <Wand2 size={14} /> Parse Text
@@ -298,13 +321,13 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
               </span>
             </div>
 
-            {!parsed && (
+            {!parsed && !error && (
               <div className="flex-1 flex items-center justify-center p-6 text-center">
                 <div className="space-y-2">
                   <Wand2 size={28} className="text-text-muted mx-auto" />
                   <p className="text-text-secondary text-sm">Paste your text and click Parse</p>
                   <p className="text-text-muted text-xs">
-                    Supports novel prose, screenplay format, and markdown
+                    Supports .pdf, .txt, .md, novel prose, screenplay, and markdown
                   </p>
                 </div>
               </div>
@@ -312,7 +335,6 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
 
             {parsed && (
               <>
-                {/* Stats bar */}
                 <div className="flex items-center gap-3 px-4 py-2.5 bg-bg-elevated border-b border-bg-border shrink-0 flex-wrap gap-y-1">
                   <span className="text-[10px] font-medium text-text-secondary">
                     Detected: <span className="text-accent">{FORMAT_LABELS[parsed.format] ?? parsed.format}</span>
@@ -330,18 +352,16 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                   </div>
                 </div>
 
-                {/* Dialogue notice */}
                 {parsed.stats.dialogues > 0 && (
                   <div className="flex items-start gap-2 px-4 py-2 bg-accent/5 border-b border-accent/20 shrink-0">
                     <Info size={11} className="text-accent mt-0.5 shrink-0" />
                     <p className="text-[10px] text-text-secondary leading-relaxed">
                       <span className="text-accent font-medium">{parsed.stats.dialogues} dialogue</span> block{parsed.stats.dialogues !== 1 ? 's' : ''} detected.
-                      Assign characters to each one in the editor after import.
+                      Assign characters in the editor after import.
                     </p>
                   </div>
                 )}
 
-                {/* Chapter tree */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {parsed.chapters.map((ch, i) => (
                     <ChapterPreview key={i} chapter={ch} idx={i} />
@@ -351,8 +371,8 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
             )}
 
             {error && (
-              <div className="mx-4 my-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20 text-danger text-xs shrink-0">
-                <AlertCircle size={13} /> {error}
+              <div className="m-4 flex items-start gap-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20 text-danger text-xs">
+                <AlertCircle size={13} className="shrink-0 mt-0.5" /> {error}
               </div>
             )}
           </div>
@@ -363,13 +383,11 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
           <p className="text-text-muted text-xs">
             {parsed
               ? `Ready to import ${parsed.stats.chapters} chapter${parsed.stats.chapters !== 1 ? 's' : ''} into your book`
-              : 'Paste text or upload a file to begin'
+              : 'Paste text or upload a .txt / .pdf file to begin'
             }
           </p>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary text-sm" onClick={onClose} disabled={importing}>
-              Cancel
-            </button>
+            <button className="btn-secondary text-sm" onClick={onClose} disabled={importing}>Cancel</button>
             <button
               className={clsx('btn-primary text-sm min-w-28 justify-center', importDone && 'bg-success/80')}
               onClick={handleImport}

@@ -250,6 +250,17 @@ export function SceneAtmospherePanel({
   const [ambienceLoop,   setAmbienceLoop]   = useState(scene.ambienceLoop   ?? true)
   const [musicLoop,      setMusicLoop]      = useState(scene.musicLoop      ?? true)
   const [sceneImage,     setSceneImage]     = useState<string | undefined>(scene.sceneImage)
+
+  // Re-sync all state when the active scene changes
+  useEffect(() => {
+    setAmbienceUrl(scene.ambienceUrl)
+    setMusicUrl(scene.musicUrl)
+    setAmbienceVolume(scene.ambienceVolume ?? 0.4)
+    setMusicVolume(scene.musicVolume ?? 0.3)
+    setAmbienceLoop(scene.ambienceLoop ?? true)
+    setMusicLoop(scene.musicLoop ?? true)
+    setSceneImage(scene.sceneImage)
+  }, [scene.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const [imgUploading,   setImgUploading]   = useState(false)
   const [imgError,       setImgError]       = useState<string | null>(null)
   const [userId,         setUserId]         = useState<string | null>(null)
