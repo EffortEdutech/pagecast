@@ -8,11 +8,14 @@ export interface SceneAtmosphereUpdate {
   musicUrl?:       string | null
   ambienceVolume?: number
   musicVolume?:    number
+  ambienceLoop?:   boolean
+  musicLoop?:      boolean
+  sceneImage?:     string | null
 }
 
 /**
- * Persist atmosphere fields (ambience/music URLs + volumes) for a scene.
- * Requires migration 004_scene_atmosphere.sql to have been run.
+ * Persist atmosphere fields (ambience/music URLs, volumes, loop flags, scene image) for a scene.
+ * Requires migrations 004 and 008 to have been run.
  */
 export async function updateSceneAtmosphere(
   sceneId: string,
@@ -25,6 +28,9 @@ export async function updateSceneAtmosphere(
   if ('musicUrl'       in update) payload.music_url       = update.musicUrl       ?? null
   if ('ambienceVolume' in update) payload.ambience_volume = update.ambienceVolume
   if ('musicVolume'    in update) payload.music_volume    = update.musicVolume
+  if ('ambienceLoop'   in update) payload.ambience_loop   = update.ambienceLoop
+  if ('musicLoop'      in update) payload.music_loop      = update.musicLoop
+  if ('sceneImage'     in update) payload.scene_image     = update.sceneImage     ?? null
 
   if (Object.keys(payload).length === 0) return true
 

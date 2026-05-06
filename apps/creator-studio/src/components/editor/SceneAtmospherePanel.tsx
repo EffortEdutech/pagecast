@@ -2,7 +2,8 @@
 import { useRef, useState, useEffect } from 'react'
 import {
   Music2, Wind, Upload, Play, Pause, Trash2,
-  Volume1, Volume2, VolumeX, Loader2, AlertCircle, X, Image as ImageIcon
+  Volume1, Volume2, VolumeX, Loader2, AlertCircle, X, Image as ImageIcon,
+  RotateCcw, MoveRight
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { uploadSceneAudio, deleteSceneAudio, uploadSceneImage, deleteSceneImage } from '@/lib/supabase/storage'
@@ -18,6 +19,7 @@ interface AudioLayerProps {
   icon:     React.ReactNode
   url:      string | undefined
   volume:   number
+  loop:     boolean
   storyId:  string
   chapterId: string
   sceneId:  string
@@ -25,6 +27,7 @@ interface AudioLayerProps {
   layer:    'ambience' | 'music'
   onUrlChange:    (url: string | undefined) => void
   onVolumeChange: (vol: number) => void
+  onLoopChange:   (loop: boolean) => void
 }
 
 function formatTime(s: number) {
@@ -33,9 +36,9 @@ function formatTime(s: number) {
 }
 
 function AudioLayer({
-  label, icon, url, volume,
+  label, icon, url, volume, loop,
   storyId, chapterId, sceneId, bookId, layer,
-  onUrlChange, onVolumeChange,
+  onUrlChange, onVolumeChange, onLoopChange,
 }: AudioLayerProps) {
   const fileRef  = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -60,10 +63,15 @@ function AudioLayer({
     setDuration(0)
   }, [url])
 
+  // Keep loop setting in sync with live audio
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.loop = loop
+  }, [loop])
+
   const initAudio = () => {
     if (audioRef.current || !url) return
     const a = new Audio(url)
-    a.loop              = true
+    a.loop              = loop
     a.volume            = volume
     a.onloadedmetadata  = () => setDuration(a.duration)
     a.ontimeupdate      = () => setCurrentTime(a.currentTime)
@@ -108,17 +116,41 @@ function AudioLayer({
     await updateSceneAtmosphere(sceneId, layer === 'ambience' ? { ambienceUrl: null } : { musicUrl: null })
   }
 
+  const handleLoopToggle = async () => {
+    const newLoop = !loop
+    onLoopChange(newLoop)
+    await updateSceneAtmosphere(
+      sceneId,
+      layer === 'ambience' ? { ambienceLoop: newLoop } : { musicLoop: newLoop }
+    )
+  }
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
 
   return (
     <div className="space-y-2">
-      {/* Header */}
+      {/* Header with loop toggle */}
       <div className="flex items-center gap-1.5">
         <span className="text-text-muted">{icon}</span>
         <span className="text-text-secondary text-xs font-medium">{label}</span>
-        <span className="text-[10px] text-text-muted ml-auto">loops</span>
+        {/* Loop toggle */}
+        <button
+          onClick={handleLoopToggle}
+          title={loop ? 'Loops (click to disable)' : 'No loop (click to enable)'}
+          className={clsx(
+            'ml-auto flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors',
+            loop
+              ? 'border-accent/40 text-accent bg-accent/10 hover:bg-accent/20'
+              : 'border-bg-border text-text-muted bg-bg-elevated hover:border-accent/30'
+          )}
+        >
+          {loop
+            ? <><RotateCcw size={8} /> loop</>
+            : <><MoveRight size={8} /> once</>
+          }
+        </button>
       </div>
 
       {/* Upload / Player */}
@@ -215,6 +247,8 @@ export function SceneAtmospherePanel({
   const [musicUrl,       setMusicUrl]       = useState(scene.musicUrl)
   const [ambienceVolume, setAmbienceVolume] = useState(scene.ambienceVolume ?? 0.4)
   const [musicVolume,    setMusicVolume]    = useState(scene.musicVolume    ?? 0.3)
+  const [ambienceLoop,   setAmbienceLoop]   = useState(scene.ambienceLoop   ?? true)
+  const [musicLoop,      setMusicLoop]      = useState(scene.musicLoop      ?? true)
   const [sceneImage,     setSceneImage]     = useState<string | undefined>(scene.sceneImage)
   const [imgUploading,   setImgUploading]   = useState(false)
   const [imgError,       setImgError]       = useState<string | null>(null)
@@ -234,6 +268,8 @@ export function SceneAtmospherePanel({
     if (url) {
       setSceneImage(url)
       syncStore({ sceneImage: url })
+      // Persist to DB so Vercel sees it too
+      await updateSceneAtmosphere(scene.id, { sceneImage: url })
     } else {
       setImgError('Upload failed — check the covers bucket in Supabase.')
     }
@@ -246,6 +282,7 @@ export function SceneAtmospherePanel({
     await deleteSceneImage(userId, bookId, scene.id)
     setSceneImage(undefined)
     syncStore({ sceneImage: undefined })
+    await updateSceneAtmosphere(scene.id, { sceneImage: null })
   }
 
   // Keep store in sync
@@ -268,6 +305,14 @@ export function SceneAtmospherePanel({
   const handleMusicVolume = (vol: number) => {
     setMusicVolume(vol)
     syncStore({ musicVolume: vol })
+  }
+  const handleAmbienceLoop = (loop: boolean) => {
+    setAmbienceLoop(loop)
+    syncStore({ ambienceLoop: loop })
+  }
+  const handleMusicLoop = (loop: boolean) => {
+    setMusicLoop(loop)
+    syncStore({ musicLoop: loop })
   }
 
   return (
@@ -292,6 +337,7 @@ export function SceneAtmospherePanel({
             icon={<Wind size={12} />}
             url={ambienceUrl}
             volume={ambienceVolume}
+            loop={ambienceLoop}
             storyId={storyId}
             chapterId={chapterId}
             sceneId={scene.id}
@@ -299,6 +345,7 @@ export function SceneAtmospherePanel({
             layer="ambience"
             onUrlChange={handleAmbienceUrl}
             onVolumeChange={handleAmbienceVolume}
+            onLoopChange={handleAmbienceLoop}
           />
         </div>
 
@@ -311,6 +358,7 @@ export function SceneAtmospherePanel({
             icon={<Music2 size={12} />}
             url={musicUrl}
             volume={musicVolume}
+            loop={musicLoop}
             storyId={storyId}
             chapterId={chapterId}
             sceneId={scene.id}
@@ -318,6 +366,7 @@ export function SceneAtmospherePanel({
             layer="music"
             onUrlChange={handleMusicUrl}
             onVolumeChange={handleMusicVolume}
+            onLoopChange={handleMusicLoop}
           />
         </div>
 
@@ -410,6 +459,12 @@ export function SceneAtmospherePanel({
             musicUrl ? 'bg-success/10 text-success border-success/20' : 'bg-bg-elevated text-text-muted border-bg-border'
           )}>
             {musicUrl ? '✓ Music' : '○ No music'}
+          </span>
+          <span className={clsx(
+            'text-[10px] px-2 py-0.5 rounded-full border',
+            sceneImage ? 'bg-success/10 text-success border-success/20' : 'bg-bg-elevated text-text-muted border-bg-border'
+          )}>
+            {sceneImage ? '✓ Image' : '○ No image'}
           </span>
         </div>
       </div>

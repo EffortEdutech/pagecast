@@ -11,17 +11,27 @@ import type { StoryBlock, Chapter, Scene } from '@/types'
  * 1. On mount, fetch chapters+scenes+blocks from Supabase for the active book
  * 2. Every mutation updates studioStore immediately (optimistic UI) then syncs to Supabase
  * 3. The studio editor page reads from studioStore as before — no changes needed there
+ *
+ * Race-condition fix (Vercel / empty localStorage):
+ * useBooks runs async — on first render the story may not yet be in studioStore.
+ * We must NOT lock loadedRef until the story is actually present in the store,
+ * otherwise the fetchBookContent result silently does nothing (map finds no match)
+ * and the editor shows blank content forever.
  */
 export function useEditor(bookId: string) {
   const store = useStudioStore()
   const story = store.stories.find(s => s.id === bookId)
+  const storyInStore = !!story   // becomes true once useBooks adds it
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadedRef = useRef<string | null>(null)
 
-  // ── Load content from Supabase on mount (once per bookId) ──
+  // ── Load content from Supabase once per bookId, but only after the story
+  //    exists in studioStore (so the setState map actually finds it).        ──
   useEffect(() => {
     if (loadedRef.current === bookId || !bookId) return
+    if (!storyInStore) return   // wait — useBooks hasn't populated the store yet
+
     loadedRef.current = bookId
     let cancelled = false
 
@@ -46,7 +56,7 @@ export function useEditor(bookId: string) {
 
     load()
     return () => { cancelled = true }
-  }, [bookId])
+  }, [bookId, storyInStore])   // re-runs when storyInStore flips true
 
   // ── Chapter ops ──
 

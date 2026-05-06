@@ -26,6 +26,8 @@ export interface Scene {
   ambienceFile?: string; musicFile?: string; sceneImage?: string
   ambienceUrl?: string; musicUrl?: string
   ambienceVolume?: number; musicVolume?: number
+  ambienceLoop?: boolean   // default true
+  musicLoop?: boolean      // default true
   blocks: StoryBlock[]
 }
 export interface Chapter { id: string; title: string; order: number; scenes: Scene[] }

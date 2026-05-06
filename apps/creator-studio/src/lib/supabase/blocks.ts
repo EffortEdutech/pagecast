@@ -22,6 +22,13 @@ export interface DbScene {
   book_id: string
   title: string
   sort_order: number
+  ambience_url:    string | null
+  music_url:       string | null
+  ambience_volume: number | null
+  music_volume:    number | null
+  ambience_loop:   boolean | null
+  music_loop:      boolean | null
+  scene_image:     string | null
   created_at: string
   updated_at: string
 }
@@ -32,6 +39,7 @@ export interface DbBlock {
   book_id: string
   type: string
   content: Record<string, unknown>
+  audio_url: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -41,7 +49,8 @@ export interface DbBlock {
 
 function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
   const c = b.content
-  const base = { id: b.id, type: b.type as BlockType }
+  const audioUrl = b.audio_url ?? undefined
+  const base = { id: b.id, type: b.type as BlockType, audioUrl }
   switch (b.type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(c.text ?? '') }
@@ -80,8 +89,15 @@ function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
 
 function dbSceneToScene(scene: DbScene, blocks: DbBlock[]): Scene {
   return {
-    id: scene.id,
-    title: scene.title,
+    id:            scene.id,
+    title:         scene.title,
+    ambienceUrl:   scene.ambience_url   ?? undefined,
+    musicUrl:      scene.music_url      ?? undefined,
+    ambienceVolume: scene.ambience_volume ?? undefined,
+    musicVolume:   scene.music_volume   ?? undefined,
+    ambienceLoop:  scene.ambience_loop  ?? undefined,
+    musicLoop:     scene.music_loop     ?? undefined,
+    sceneImage:    scene.scene_image    ?? undefined,
     blocks: blocks
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(dbBlockToStoryBlock),
@@ -172,6 +188,7 @@ export async function createBlock(bookId: string, sceneId: string, block: StoryB
       scene_id:   sceneId,
       type:       block.type,
       content:    storyBlockToDbContent(block),
+      audio_url:  block.audioUrl ?? null,
       sort_order: sortOrder,
     })
     .select().single()
@@ -184,6 +201,8 @@ export async function updateBlock(blockId: string, block: Partial<StoryBlock>): 
   const updates: Record<string, unknown> = {}
   if (block.type !== undefined) updates.type = block.type
   if (block !== undefined) updates.content = storyBlockToDbContent(block as StoryBlock)
+  // Persist audio URL if provided (even if undefined — null clears it)
+  if ('audioUrl' in block) updates.audio_url = (block as StoryBlock).audioUrl ?? null
   const { error } = await supabase.from('blocks').update(updates).eq('id', blockId)
   return !error
 }

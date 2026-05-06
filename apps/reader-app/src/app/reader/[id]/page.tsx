@@ -355,8 +355,33 @@ export default function ReaderPage() {
     if (!isPlaying || prefs.mode === 'reading') return
     if (!block || !story) return
 
-    // ── Pause / SFX blocks: skip after duration ──
-    if (block.type === 'pause' || block.type === 'sfx') {
+    // ── Pause block: skip after duration ──
+    if (block.type === 'pause') {
+      const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
+      timerRef.current = setTimeout(advance, ms)
+      return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    }
+
+    // ── SFX block: play audio file if available (no loop, wait for finish) ──
+    if (block.type === 'sfx') {
+      if (block.audioUrl) {
+        const sfxAudio = new Audio(block.audioUrl)
+        sfxAudio.loop = false
+        sfxAudio.volume = prefs.sfxVolume ?? 1
+        sfxAudio.onended = () => advance()
+        sfxAudio.onerror = () => {
+          // File missing — fall back to duration timer
+          const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
+          timerRef.current = setTimeout(advance, ms)
+        }
+        audioRef.current = sfxAudio
+        sfxAudio.play().catch(() => {
+          const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
+          timerRef.current = setTimeout(advance, ms)
+        })
+        return () => { sfxAudio.pause(); sfxAudio.onended = null; sfxAudio.onerror = null }
+      }
+      // No audio URL — skip after nominal duration
       const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
       timerRef.current = setTimeout(advance, ms)
       return () => { if (timerRef.current) clearTimeout(timerRef.current) }
@@ -455,7 +480,7 @@ export default function ReaderPage() {
     if (scene.ambienceUrl) {
       const a = new Audio(scene.ambienceUrl)
       const targetVol = (scene.ambienceVolume ?? 0.4) * prefs.musicVolume
-      a.loop   = true
+      a.loop   = scene.ambienceLoop !== false   // default: loops
       a.volume = 0
       a.play().catch(() => {})
       // Fade in
@@ -471,7 +496,7 @@ export default function ReaderPage() {
     if (scene.musicUrl) {
       const m = new Audio(scene.musicUrl)
       const targetVol = (scene.musicVolume ?? 0.3) * prefs.musicVolume
-      m.loop   = true
+      m.loop   = scene.musicLoop !== false   // default: loops
       m.volume = 0
       m.play().catch(() => {})
       const fadeIn = () => {

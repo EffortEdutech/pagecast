@@ -27,8 +27,13 @@ type QuoteBlock = Extract<StoryBlock, { type: 'quote' }>
 
 // ─── Block converter (mirrors creator-studio blocks.ts) ──────────────────────
 
-function dbContentToBlock(id: string, type: string, content: Record<string, unknown>): StoryBlock {
-  const base = { id, type: type as BlockType }
+function dbContentToBlock(
+  id: string,
+  type: string,
+  content: Record<string, unknown>,
+  audioUrl: string | null
+): StoryBlock {
+  const base = { id, type: type as BlockType, audioUrl: audioUrl ?? undefined }
   switch (type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(content.text ?? '') }
@@ -81,9 +86,14 @@ interface DbScene {
   id: string; chapter_id: string; book_id: string; title: string; sort_order: number
   ambience_url: string | null; music_url: string | null
   ambience_volume: number | null; music_volume: number | null
+  ambience_loop: boolean | null; music_loop: boolean | null
+  scene_image: string | null
 }
 interface DbBlock {
-  id: string; scene_id: string; type: string; content: Record<string, unknown>; sort_order: number
+  id: string; scene_id: string; type: string
+  content: Record<string, unknown>
+  audio_url: string | null
+  sort_order: number
 }
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -175,15 +185,19 @@ export async function fetchBook(bookId: string): Promise<Story | null> {
     const scenes: Scene[] = ((dbScenes ?? []) as DbScene[])
       .filter(s => s.chapter_id === ch.id)
       .map(sc => ({
-        id: sc.id,
-        title: sc.title,
-        ambienceUrl: sc.ambience_url ?? undefined,
-        musicUrl: sc.music_url ?? undefined,
+        id:            sc.id,
+        title:         sc.title,
+        ambienceUrl:   sc.ambience_url    ?? undefined,
+        musicUrl:      sc.music_url       ?? undefined,
         ambienceVolume: sc.ambience_volume ?? undefined,
-        musicVolume: sc.music_volume ?? undefined,
+        musicVolume:   sc.music_volume    ?? undefined,
+        ambienceLoop:  sc.ambience_loop   ?? undefined,
+        musicLoop:     sc.music_loop      ?? undefined,
+        sceneImage:    sc.scene_image     ?? undefined,
         blocks: ((dbBlocks ?? []) as DbBlock[])
           .filter(b => b.scene_id === sc.id)
-          .map(b => dbContentToBlock(b.id, b.type, b.content)),
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(b => dbContentToBlock(b.id, b.type, b.content, b.audio_url)),
       }))
 
     return { id: ch.id, title: ch.title, order: idx + 1, scenes }

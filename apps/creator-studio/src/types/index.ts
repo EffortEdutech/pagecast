@@ -91,7 +91,9 @@ export interface Scene {
   musicUrl?: string
   ambienceVolume?: number   // 0–1, default 0.4
   musicVolume?: number      // 0–1, default 0.3
-  sceneImage?: string
+  ambienceLoop?: boolean    // default true
+  musicLoop?: boolean       // default true
+  sceneImage?: string       // URL of background image
   blocks: StoryBlock[]
 }
 
