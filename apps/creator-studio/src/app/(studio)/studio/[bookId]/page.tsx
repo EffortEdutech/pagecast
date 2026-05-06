@@ -181,6 +181,17 @@ export default function StudioPage() {
     setShowImport(false)
   }
 
+  const handlePublishAnyway = async () => {
+    setShowPublishQA(false)
+    const newStatus = 'published' as const
+    await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus))
+    useStudioStore.setState(state => ({
+      stories: state.stories.map(s =>
+        s.id === bookId ? { ...s, status: newStatus } : s
+      ),
+    }))
+  }
+
   const toggleChapter = (id: string) => {
     setExpandedChapters(prev => {
       const n = new Set(prev)
@@ -419,6 +430,13 @@ export default function StudioPage() {
       </div>
 
       {/* ── Import Text Modal ── */}
+      {showImport && (
+        <TextImportModal
+          onImport={handleImport}
+          onClose={() => setShowImport(false)}
+        />
+      )}
+
       {/* Book settings panel */}
       {showSettings && (
         <BookSettingsPanel
@@ -450,16 +468,7 @@ export default function StudioPage() {
               </button>
               <button
                 className="btn-primary text-sm"
-                onClick={async () => {
-                  setShowPublishQA(false)
-                  const newStatus = 'published'
-                  await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus))
-                  useStudioStore.setState(state => ({
-                    stories: state.stories.map(s =>
-                      s.id === bookId ? { ...s, status: newStatus } : s
-                    )
-                  }))
-                }}
+                onClick={handlePublishAnyway}
               >
                 Publish anyway
               </button>
