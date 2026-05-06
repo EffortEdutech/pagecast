@@ -590,19 +590,32 @@ export default function ReaderPage() {
 
       {/* ── Top bar ── */}
       {!cinemaMode && (
-        <header
-          className={clsx(
-            "sticky top-0 z-40 h-12 flex items-center justify-between px-4 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border transition-all duration-300",
-            !navVisible && "opacity-0 -translate-y-full pointer-events-none"
-          )}
-          onMouseEnter={() => {
-            setNavVisible(true)
-            if (navTimerRef.current) clearTimeout(navTimerRef.current)
-            if (isPlaying && prefs.mode !== 'reading') {
-              navTimerRef.current = setTimeout(() => setNavVisible(false), 2000)
-            }
-          }}
-        >
+        <>
+          {/* Invisible hover strip — always present, reveals nav when hidden */}
+          <div
+            className="fixed top-0 left-0 right-0 h-4 z-50 pointer-events-auto"
+            onMouseEnter={() => {
+              setNavVisible(true)
+              if (navTimerRef.current) clearTimeout(navTimerRef.current)
+              if (isPlaying && prefs.mode !== 'reading') {
+                navTimerRef.current = setTimeout(() => setNavVisible(false), 2500)
+              }
+            }}
+          />
+
+          <header
+            className={clsx(
+              "fixed top-0 left-0 right-0 z-40 h-12 flex items-center justify-between px-4 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border transition-all duration-300",
+              !navVisible && "opacity-0 -translate-y-full pointer-events-none"
+            )}
+            onMouseEnter={() => {
+              setNavVisible(true)
+              if (navTimerRef.current) clearTimeout(navTimerRef.current)
+              if (isPlaying && prefs.mode !== 'reading') {
+                navTimerRef.current = setTimeout(() => setNavVisible(false), 2500)
+              }
+            }}
+          >
           <div className="flex items-center gap-3">
             <Link href="/library" className="btn-ghost px-2 py-1.5 text-text-muted hover:text-text-primary">
               <ArrowLeft size={15} />
@@ -643,13 +656,16 @@ export default function ReaderPage() {
               <Settings size={15} />
             </button>
           </div>
-        </header>
+          </header>
+        </>
       )}
 
-      {/* ── Progress bar ── */}
-      <div className="h-0.5 bg-bg-elevated">
-        <div className="h-full bg-accent transition-all duration-500" style={{ width: `${progressPct}%` }} />
-      </div>
+      {/* ── Progress bar — fixed just below header ── */}
+      {!cinemaMode && (
+        <div className="fixed top-12 left-0 right-0 z-40 h-0.5 bg-bg-elevated">
+          <div className="h-full bg-accent transition-all duration-500" style={{ width: `${progressPct}%` }} />
+        </div>
+      )}
 
       {/* ── Settings panel ── */}
       {showSettings && (
@@ -821,7 +837,8 @@ export default function ReaderPage() {
       {/* ── Main content ── */}
       <main className={clsx(
         'flex-1 overflow-y-auto transition-all duration-500',
-        cinemaMode ? 'pb-0' : 'pb-32'
+        cinemaMode ? 'pb-0' : 'pb-32',
+        !cinemaMode && 'pt-[52px]'   // clear fixed header (h-12 = 48px) + progress bar (2px) + 2px gap
       )}>
         {cinemaMode ? (
           // ── Cinematic mode ──
