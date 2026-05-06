@@ -19,13 +19,13 @@ export default function BookPage() {
   const router = useRouter()
   const hydrated = useHydrated()
   const { isOwned, addToLibrary } = useReaderStore()
-  const [story,      setStory]      = useState<Story | null | undefined>(undefined)
-  const [buying,     setBuying]     = useState(false)
-  const [buyError,   setBuyError]   = useState<string | null>(null)
+  const [story,    setStory]    = useState<Story | null | undefined>(undefined)
+  const [buying,   setBuying]   = useState(false)
+  const [buyError, setBuyError] = useState<string | null>(null)
 
+  // Load story — Supabase first, fall back to demo data
   useEffect(() => {
     if (!id) return
-    // Try Supabase first; fall back to demo data
     fetchBook(id).then(book => {
       setStory(book ?? getStory(id) ?? null)
     }).catch(() => {
@@ -33,14 +33,27 @@ export default function BookPage() {
     })
   }, [id])
 
-  // Still loading
+  // Handle ?purchased=1 redirect from Stripe success_url.
+  // NOTE: Must be declared here (before any early returns) to comply with
+  // React's Rules of Hooks — hooks must be called in the same order on every
+  // render regardless of conditions.
+  useEffect(() => {
+    if (!story) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('purchased') === '1') {
+      addToLibrary(story.id)
+      window.history.replaceState({}, '', `/book/${story.id}`)
+    }
+  }, [story, addToLibrary])
+
+  // ── Early exits (after all hooks) ─────────────────────────────────────────
+
   if (story === undefined) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
-  // Not found
   if (!story) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="text-center space-y-3">
@@ -51,20 +64,9 @@ export default function BookPage() {
     </div>
   )
 
-  const owned = hydrated && isOwned(story.id)
-  const totalBlocks = story.chapters.reduce((acc, ch) =>
-    acc + ch.scenes.reduce((a, sc) => a + sc.blocks.length, 0), 0)
-  const totalScenes = story.chapters.reduce((acc, ch) => acc + ch.scenes.length, 0)
+  // ── Derived state ──────────────────────────────────────────────────────────
 
-  // Handle ?purchased=1 redirect from Stripe success_url
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('purchased') === '1' && story) {
-      addToLibrary(story.id)
-      // Clean the URL
-      window.history.replaceState({}, '', `/book/${story.id}`)
-    }
-  }, [story, addToLibrary])
+  const owned = hydrated && isOwned(story.id)
 
   const handleBuy = async () => {
     if (!story) return
@@ -79,7 +81,6 @@ export default function BookPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        // Not logged in → send to login
         if (res.status === 401) { router.push(`/login?next=/book/${story.id}`); return }
         setBuyError(data.error ?? 'Something went wrong.')
         return
@@ -92,7 +93,7 @@ export default function BookPage() {
       }
 
       if (data.url) {
-        window.location.href = data.url   // → Stripe hosted checkout
+        window.location.href = data.url
       }
     } catch {
       setBuyError('Could not connect to checkout. Try again.')
@@ -136,7 +137,7 @@ export default function BookPage() {
               </div>
 
               {/* CTA */}
-              <div className="flex items-center gap-3 mt-6">
+              <div className="flex items-center gap-3 mt-6 flex-wrap">
                 {owned ? (
                   <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
                     <Play size={18} className="fill-white" /> Continue Reading
@@ -149,13 +150,13 @@ export default function BookPage() {
                       className="btn-primary text-base px-6 py-3 shadow-accent disabled:opacity-70"
                     >
                       {buying
-                        ? <><Loader2 size={18} className="animate-spin" /> Processing…</>
+                        ? <><Loader2 size={18} className="animate-spin" /> Processing&hellip;</>
                         : story.price === 0
                           ? <><Play size={18} className="fill-white" /> Read Free</>
                           : <><ShoppingCart size={18} /> Get for ${story.price.toFixed(2)}</>
                       }
                     </button>
-                    {buyError && <p className="text-danger text-sm mt-2">{buyError}</p>}
+                    {buyError && <p className="text-danger text-sm">{buyError}</p>}
                   </>
                 )}
               </div>
@@ -184,7 +185,8 @@ export default function BookPage() {
                   )}
                   {block.type === 'dialogue' && char && (
                     <div className="flex items-start gap-2.5">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 mt-0.5" style={{ backgroundColor: char.color + '25', color: char.color }}>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 mt-0.5"
+                        style={{ backgroundColor: char.color + '25', color: char.color }}>
                         {char.displayName}
                       </span>
                       <p className="text-text-primary text-sm leading-relaxed">"{(block as any).text}"</p>
@@ -284,7 +286,7 @@ export default function BookPage() {
               </button>
             )}
             {!owned && (
-              <p className="text-text-muted text-[10px]">Instant access · No app required</p>
+              <p className="text-text-muted text-[10px]">Instant access &middot; No app required</p>
             )}
           </div>
         </div>
