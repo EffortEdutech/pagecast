@@ -23,8 +23,14 @@ export function useEditor(bookId: string) {
   const story = store.stories.find(s => s.id === bookId)
   const storyInStore = !!story   // becomes true once useBooks adds it
   const [loading, setLoading] = useState(false)
+  const [contentReady, setContentReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadedRef = useRef<string | null>(null)
+  const blockSaveQueues = useRef<Record<string, Promise<void>>>({})
+
+  useEffect(() => {
+    setContentReady(false)
+  }, [bookId])
 
   // ── Load content from Supabase once per bookId, but only after the story
   //    exists in studioStore (so the setState map actually finds it).        ──
@@ -37,9 +43,10 @@ export function useEditor(bookId: string) {
 
     async function load() {
       setLoading(true)
+      setContentReady(false)
       try {
         const chapters = await BlocksApi.fetchBookContent(bookId)
-        if (!cancelled && chapters.length > 0) {
+        if (!cancelled) {
           // Populate studioStore with Supabase content
           useStudioStore.setState(state => ({
             stories: state.stories.map(s =>
@@ -50,7 +57,10 @@ export function useEditor(bookId: string) {
       } catch {
         if (!cancelled) setError('Failed to load story content.')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setContentReady(true)
+        }
       }
     }
 
@@ -175,7 +185,16 @@ export function useEditor(bookId: string) {
     updates: Partial<StoryBlock>
   ) => {
     store.updateBlock(bookId, chapterId, sceneId, blockId, updates)
-    await BlocksApi.updateBlock(blockId, updates as StoryBlock)
+    const previousSave = blockSaveQueues.current[blockId] ?? Promise.resolve()
+    const nextSave = previousSave
+      .catch(() => undefined)
+      .then(async () => {
+        const ok = await BlocksApi.updateBlock(blockId, updates)
+        if (!ok) setError('Failed to save block.')
+      })
+
+    blockSaveQueues.current[blockId] = nextSave
+    await nextSave
   }, [bookId, store])
 
   const removeBlock = useCallback(async (chapterId: string, sceneId: string, blockId: string) => {
@@ -195,6 +214,7 @@ export function useEditor(bookId: string) {
   return {
     story,
     loading,
+    contentReady,
     error,
     // Chapter
     addChapter,

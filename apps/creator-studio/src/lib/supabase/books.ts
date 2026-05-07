@@ -52,6 +52,7 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     title: book.title,
     description: book.description ?? '',
     coverImage: book.cover_emoji,
+    coverGradient: book.cover_gradient,
     language: 'en',
     status: book.status,
     price: book.price,
@@ -72,6 +73,8 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     createdAt: book.created_at,
     updatedAt: book.updated_at,
     durationMinutes: book.estimated_time ? parseInt(book.estimated_time) : undefined,
+    genre: book.genre ?? undefined,
+    ageRating: book.age_rating ?? undefined,
     narratorOnlyMode: book.narrator_only_mode,
     narratorVoiceId: book.narrator_voice_id ?? undefined,
   }
@@ -160,6 +163,10 @@ export async function updateBook(bookId: string, updates: Partial<Story>): Promi
     ...(updates.status      !== undefined && { status: updates.status }),
     ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
     ...(updates.coverImage        !== undefined && { cover_emoji:          updates.coverImage }),
+    ...(updates.coverGradient     !== undefined && { cover_gradient:       updates.coverGradient }),
+    ...(updates.genre             !== undefined && { genre:                updates.genre }),
+    ...(updates.ageRating         !== undefined && { age_rating:           updates.ageRating }),
+    ...(updates.durationMinutes   !== undefined && { estimated_time:       String(updates.durationMinutes) }),
     ...(updates.narratorOnlyMode  !== undefined && { narrator_only_mode:  updates.narratorOnlyMode }),
     ...(updates.narratorVoiceId   !== undefined && { narrator_voice_id:   updates.narratorVoiceId }),
   }
@@ -202,6 +209,9 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
       status:         'draft',
       price:          srcBook.price,
       is_free:        srcBook.is_free,
+      estimated_time: srcBook.estimated_time,
+      narrator_only_mode: srcBook.narrator_only_mode,
+      narrator_voice_id: srcBook.narrator_voice_id,
     })
     .select()
     .single()
@@ -216,8 +226,10 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
     .eq('book_id', sourceBookId)
     .order('sort_order')
 
+  const charIdMap = new Map<string, string>()
+  let newChars: DbCharacter[] = []
   if (srcChars?.length) {
-    await supabase.from('characters').insert(
+    const { data: insertedChars } = await supabase.from('characters').insert(
       srcChars.map(c => ({
         book_id:     newBookId,
         name:        c.name,
@@ -229,7 +241,13 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
         voice_rate:  c.voice_rate,
         sort_order:  c.sort_order,
       }))
-    )
+    ).select()
+
+    newChars = (insertedChars ?? []) as DbCharacter[]
+    srcChars.forEach((src, idx) => {
+      const inserted = newChars[idx]
+      if (inserted) charIdMap.set(src.id, inserted.id)
+    })
   }
 
   // 4. Copy chapters
@@ -266,6 +284,9 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
           music_url:      sc.music_url,
           ambience_volume: sc.ambience_volume,
           music_volume:   sc.music_volume,
+          ambience_loop:  sc.ambience_loop,
+          music_loop:     sc.music_loop,
+          scene_image:    sc.scene_image,
         })
         .select()
         .single()
@@ -280,18 +301,25 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
 
       if (srcBlocks?.length) {
         await supabase.from('blocks').insert(
-          srcBlocks.map(b => ({
-            book_id:    newBookId,
-            scene_id:   newSc.id,
-            type:       b.type,
-            data:       b.data,
-            audio_url:  b.audio_url,
-            sort_order: b.sort_order,
-          }))
+          srcBlocks.map(b => {
+            const content = { ...(b.content ?? {}) }
+            if (typeof content.character_id === 'string') {
+              content.character_id = charIdMap.get(content.character_id) ?? content.character_id
+            }
+
+            return {
+              book_id:    newBookId,
+              scene_id:   newSc.id,
+              type:       b.type,
+              content,
+              audio_url:  b.audio_url,
+              sort_order: b.sort_order,
+            }
+          })
         )
       }
     }
   }
 
-  return dbBookToStory(newBook, srcChars?.map(c => ({ ...c, book_id: newBookId })) ?? [])
+  return dbBookToStory(newBook, newChars)
 }

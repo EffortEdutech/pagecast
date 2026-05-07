@@ -53,13 +53,13 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
   const base = { id: b.id, type: b.type as BlockType, audioUrl }
   switch (b.type) {
     case 'narration':
-      return { ...base, type: 'narration', text: String(c.text ?? '') }
+      return { ...base, type: 'narration', text: String(c.text ?? ''), characterId: c.character_id as string | undefined }
     case 'dialogue':
       return { ...base, type: 'dialogue', characterId: String(c.character_id ?? ''), text: String(c.text ?? ''), emotion: c.emotion as string | undefined }
     case 'thought':
       return { ...base, type: 'thought', characterId: String(c.character_id ?? ''), text: String(c.text ?? '') }
     case 'quote':
-      return { ...base, type: 'quote', text: String(c.text ?? ''), attribution: c.attribution as string | undefined, style: c.style as QuoteBlock['style'] }
+      return { ...base, type: 'quote', text: String(c.text ?? ''), attribution: c.attribution as string | undefined, style: c.style as QuoteBlock['style'], characterId: c.character_id as string | undefined }
     case 'pause':
       return { ...base, type: 'pause', duration: Number(c.duration_ms ?? 2000) / 1000 }
     case 'sfx':
@@ -72,12 +72,12 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
 function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
   switch (block.type) {
     case 'narration':
-      return { text: block.text }
+      return { text: block.text, character_id: block.characterId }
     case 'dialogue':
     case 'thought':
       return { character_id: block.characterId, text: block.text, emotion: (block as DialogueBlock).emotion }
     case 'quote':
-      return { text: block.text, attribution: block.attribution, style: block.style }
+      return { text: block.text, attribution: block.attribution, style: block.style, character_id: block.characterId }
     case 'pause':
       return { duration_ms: block.duration * 1000 }
     case 'sfx':
@@ -85,6 +85,45 @@ function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
     default:
       return {}
   }
+}
+
+function storyBlockToDbContentPatch(
+  type: BlockType,
+  block: Partial<StoryBlock>,
+  current: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...current }
+
+  switch (type) {
+    case 'narration':
+      if ('text' in block) next.text = block.text ?? ''
+      if ('characterId' in block) next.character_id = block.characterId ?? undefined
+      break
+    case 'dialogue':
+      if ('characterId' in block) next.character_id = block.characterId ?? ''
+      if ('text' in block) next.text = block.text ?? ''
+      if ('emotion' in block) next.emotion = (block as Partial<DialogueBlock>).emotion
+      break
+    case 'thought':
+      if ('characterId' in block) next.character_id = block.characterId ?? ''
+      if ('text' in block) next.text = block.text ?? ''
+      break
+    case 'quote':
+      if ('text' in block) next.text = block.text ?? ''
+      if ('attribution' in block) next.attribution = (block as Partial<QuoteBlock>).attribution
+      if ('style' in block) next.style = (block as Partial<QuoteBlock>).style
+      if ('characterId' in block) next.character_id = block.characterId ?? undefined
+      break
+    case 'pause':
+      if ('duration' in block && typeof block.duration === 'number') next.duration_ms = block.duration * 1000
+      break
+    case 'sfx':
+      if ('label' in block) next.label = block.label
+      if ('sfxFile' in block) next.sfx_file = block.sfxFile
+      break
+  }
+
+  return next
 }
 
 function dbSceneToScene(scene: DbScene, blocks: DbBlock[]): Scene {
@@ -198,9 +237,22 @@ export async function createBlock(bookId: string, sceneId: string, block: StoryB
 
 export async function updateBlock(blockId: string, block: Partial<StoryBlock>): Promise<boolean> {
   const supabase = createClient()
+  const { data: current, error: fetchError } = await supabase
+    .from('blocks')
+    .select('type, content')
+    .eq('id', blockId)
+    .single()
+
+  if (fetchError || !current) return false
+
+  const type = (block.type ?? current.type) as BlockType
   const updates: Record<string, unknown> = {}
-  if (block.type !== undefined) updates.type = block.type
-  if (block !== undefined) updates.content = storyBlockToDbContent(block as StoryBlock)
+  if (block.type !== undefined) updates.type = type
+  updates.content = storyBlockToDbContentPatch(
+    type,
+    block,
+    (current.content ?? {}) as Record<string, unknown>
+  )
   // Persist audio URL if provided (even if undefined — null clears it)
   if ('audioUrl' in block) updates.audio_url = (block as StoryBlock).audioUrl ?? null
   const { error } = await supabase.from('blocks').update(updates).eq('id', blockId)

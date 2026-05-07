@@ -36,7 +36,7 @@ function dbContentToBlock(
   const base = { id, type: type as BlockType, audioUrl: audioUrl ?? undefined }
   switch (type) {
     case 'narration':
-      return { ...base, type: 'narration', text: String(content.text ?? '') }
+      return { ...base, type: 'narration', text: String(content.text ?? ''), characterId: content.character_id as string | undefined }
     case 'dialogue':
       return {
         ...base, type: 'dialogue',
@@ -56,6 +56,7 @@ function dbContentToBlock(
         text: String(content.text ?? ''),
         attribution: content.attribution as string | undefined,
         style: content.style as QuoteBlock['style'],
+        characterId: content.character_id as string | undefined,
       }
     case 'pause':
       return { ...base, type: 'pause', duration: Number(content.duration_ms ?? 2000) / 1000 }

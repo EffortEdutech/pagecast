@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStudioStore } from '@/store/studioStore'
 import { useEditor } from '@/hooks/useEditor'
@@ -12,7 +13,7 @@ import { BookSettingsPanel } from '@/components/editor/BookSettingsPanel'
 import {
   Plus, ChevronRight, ChevronDown, Settings2, Eye,
   BookOpen, Layers, Save, FileText,
-  ArrowLeft, Trash2, Edit3, Check, X, Film
+  ArrowLeft, Trash2, Edit3, Check, X, Film, Loader2
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { v4 as uuid } from 'uuid'
@@ -26,16 +27,16 @@ function InlineEdit({ value, onSave, className }: { value: string; onSave: (v: s
   const [draft, setDraft] = useState(value)
   if (editing) {
     return (
-      <span className="flex items-center gap-1">
+      <span className="flex min-w-0 flex-1 items-center gap-1" onClick={e => e.stopPropagation()}>
         <input
           autoFocus
-          className="input text-sm py-1 px-2 w-40"
+          className="input min-w-0 flex-1 text-sm py-1 px-2"
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { onSave(draft); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
         />
-        <button onClick={() => { onSave(draft); setEditing(false) }} className="text-success p-0.5"><Check size={13} /></button>
-        <button onClick={() => setEditing(false)} className="text-danger p-0.5"><X size={13} /></button>
+        <button type="button" onClick={() => { onSave(draft); setEditing(false) }} className="shrink-0 text-success p-0.5"><Check size={13} /></button>
+        <button type="button" onClick={() => setEditing(false)} className="shrink-0 text-danger p-0.5"><X size={13} /></button>
       </span>
     )
   }
@@ -64,6 +65,7 @@ export default function StudioPage() {
   const [showImport,    setShowImport]    = useState(false)
   const [showSettings, setShowSettings]   = useState(false)
   const [showPublishQA, setShowPublishQA] = useState(false)
+  const [chaptersWidth, setChaptersWidth] = useState(260)
 
   useEffect(() => {
     if (story?.chapters.length && !activeChapterId) {
@@ -85,6 +87,17 @@ export default function StudioPage() {
           <button className="btn-primary" onClick={() => router.push('/dashboard')}>
             <ArrowLeft size={14} /> Back to Dashboard
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!editor.contentReady) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-bg-primary">
+        <div className="flex items-center gap-2 text-text-muted text-sm">
+          <Loader2 size={16} className="animate-spin text-accent" />
+          Loading story content...
         </div>
       </div>
     )
@@ -200,6 +213,29 @@ export default function StudioPage() {
     })
   }
 
+  const handleChaptersResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = chaptersWidth
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const nextWidth = Math.min(420, Math.max(208, startWidth + moveEvent.clientX - startX))
+      setChaptersWidth(nextWidth)
+    }
+
+    const handleUp = () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+  }
+
   return (
     <>
       <Header title={story.title}>
@@ -252,7 +288,10 @@ export default function StudioPage() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* ── LEFT: Chapter / Scene Navigator ── */}
-        <aside className="w-52 shrink-0 border-r border-bg-border bg-bg-secondary overflow-y-auto flex flex-col">
+        <aside
+          className="relative shrink-0 border-r border-bg-border bg-bg-secondary flex flex-col"
+          style={{ width: chaptersWidth }}
+        >
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-bg-border">
             <span className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">Chapters</span>
             <button onClick={handleAddChapter} className="text-text-muted hover:text-accent transition-colors p-0.5">
@@ -340,6 +379,14 @@ export default function StudioPage() {
               ))
             )}
           </div>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chapters column"
+            title="Drag to resize chapters column"
+            onPointerDown={handleChaptersResizeStart}
+            className="absolute -right-1 top-0 h-full w-2 cursor-col-resize bg-transparent transition-colors hover:bg-accent/25"
+          />
         </aside>
 
         {/* ── CENTER: Block Editor Canvas ── */}

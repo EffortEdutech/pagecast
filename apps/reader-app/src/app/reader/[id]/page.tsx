@@ -205,6 +205,28 @@ const MODES: { id: ReaderMode; label: string; icon: typeof BookOpen }[] = [
 ]
 
 // ─── Main component ───────────────────────────────────────────────────
+function findPrevSceneLocation(story: Story, chapterIdx: number, sceneIdx: number) {
+  for (let ci = chapterIdx; ci >= 0; ci--) {
+    const scenes = story.chapters[ci]?.scenes ?? []
+    const start = ci === chapterIdx ? sceneIdx - 1 : scenes.length - 1
+    for (let si = start; si >= 0; si--) {
+      if (scenes[si]) return { chapterIdx: ci, sceneIdx: si }
+    }
+  }
+  return null
+}
+
+function findNextSceneLocation(story: Story, chapterIdx: number, sceneIdx: number) {
+  for (let ci = chapterIdx; ci < story.chapters.length; ci++) {
+    const scenes = story.chapters[ci]?.scenes ?? []
+    const start = ci === chapterIdx ? sceneIdx + 1 : 0
+    for (let si = start; si < scenes.length; si++) {
+      if (scenes[si]) return { chapterIdx: ci, sceneIdx: si }
+    }
+  }
+  return null
+}
+
 export default function ReaderPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -567,6 +589,12 @@ export default function ReaderPage() {
   const isLastBlock = blockIdx >= blocks.length - 1
     && sceneIdx >= (chapter?.scenes.length ?? 1) - 1
     && chapterIdx >= story.chapters.length - 1
+  const isFirstBlock = blockIdx <= 0 && sceneIdx <= 0 && chapterIdx <= 0
+
+  const prevSceneLocation = findPrevSceneLocation(story, chapterIdx, sceneIdx)
+  const nextSceneLocation = findNextSceneLocation(story, chapterIdx, sceneIdx)
+  const prevSceneLabel = prevSceneLocation && prevSceneLocation.chapterIdx !== chapterIdx ? 'Previous chapter' : 'Previous scene'
+  const nextSceneLabel = nextSceneLocation && nextSceneLocation.chapterIdx !== chapterIdx ? 'Next chapter' : 'Next scene'
 
   const progressPct = (() => {
     const total = story.chapters.reduce((a, c) => a + c.scenes.reduce((b, s) => b + s.blocks.length, 0), 0)
@@ -893,8 +921,10 @@ export default function ReaderPage() {
 
                 {/* Cinematic nav */}
                 <div className="flex items-center justify-center gap-6 mt-12">
-                  <button onClick={retreat}
-                    className="text-white/40 hover:text-white transition-colors">
+                  <button
+                    onClick={retreat}
+                    disabled={isFirstBlock}
+                    className="text-white/40 hover:text-white transition-colors disabled:opacity-25 disabled:hover:text-white/40">
                     <ChevronLeft size={28} />
                   </button>
                   <button
@@ -905,8 +935,10 @@ export default function ReaderPage() {
                       : <Play  size={22} className="text-white fill-white" />
                     }
                   </button>
-                  <button onClick={advance}
-                    className="text-white/40 hover:text-white transition-colors">
+                  <button
+                    onClick={advance}
+                    disabled={isLastBlock}
+                    className="text-white/40 hover:text-white transition-colors disabled:opacity-25 disabled:hover:text-white/40">
                     <ChevronRight size={28} />
                   </button>
                 </div>
@@ -967,24 +999,22 @@ export default function ReaderPage() {
             {/* Scene navigation */}
             <div className="flex items-center justify-between mt-12 pt-6 border-t border-bg-border">
               <button
-                onClick={() => { if (sceneIdx > 0) jumpTo(chapterIdx, sceneIdx - 1) }}
-                disabled={sceneIdx === 0 && chapterIdx === 0}
+                onClick={() => {
+                  if (!prevSceneLocation) return
+                  jumpTo(prevSceneLocation.chapterIdx, prevSceneLocation.sceneIdx)
+                }}
+                disabled={!prevSceneLocation}
                 className="btn-ghost flex items-center gap-2 disabled:opacity-30">
-                <ChevronLeft size={15} /> Previous scene
+                <ChevronLeft size={15} /> {prevSceneLabel}
               </button>
               <button
                 onClick={() => {
-                  if (!story) return
-                  const ch = story.chapters[chapterIdx]
-                  if (sceneIdx < (ch?.scenes.length ?? 1) - 1) {
-                    jumpTo(chapterIdx, sceneIdx + 1)
-                  } else if (chapterIdx < story.chapters.length - 1) {
-                    jumpTo(chapterIdx + 1, 0)
-                  }
+                  if (!nextSceneLocation) return
+                  jumpTo(nextSceneLocation.chapterIdx, nextSceneLocation.sceneIdx)
                 }}
-                disabled={isLastBlock}
+                disabled={!nextSceneLocation}
                 className="btn-ghost flex items-center gap-2 disabled:opacity-30">
-                Next scene <ChevronRight size={15} />
+                {nextSceneLabel} <ChevronRight size={15} />
               </button>
             </div>
           </div>
@@ -1009,7 +1039,10 @@ export default function ReaderPage() {
 
             {/* Controls */}
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={retreat} className="btn-ghost p-1.5 text-text-muted hover:text-text-primary">
+              <button
+                onClick={retreat}
+                disabled={isFirstBlock}
+                className="btn-ghost p-1.5 text-text-muted hover:text-text-primary disabled:opacity-30">
                 <Rewind size={16} />
               </button>
               <button
@@ -1020,7 +1053,10 @@ export default function ReaderPage() {
                   : <Play  size={15} className="text-white fill-white" />
                 }
               </button>
-              <button onClick={advance} className="btn-ghost p-1.5 text-text-muted hover:text-text-primary">
+              <button
+                onClick={advance}
+                disabled={isLastBlock}
+                className="btn-ghost p-1.5 text-text-muted hover:text-text-primary disabled:opacity-30">
                 <FastForward size={16} />
               </button>
             </div>
