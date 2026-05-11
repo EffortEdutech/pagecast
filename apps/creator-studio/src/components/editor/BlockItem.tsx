@@ -2,12 +2,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   AlignLeft, MessageSquare, Brain, Quote, Pause, Volume2,
-  Trash2, ChevronDown, ChevronUp, GripVertical, Mic
+  Trash2, ChevronDown, ChevronUp, GripVertical, Mic, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { StoryBlock, Character, DialogueBlock, NarrationBlock, ThoughtBlock, QuoteBlock, PauseBlock, SfxBlock } from '@/types'
+import type { StoryBlock, Character, DialogueBlock, NarrationBlock, ThoughtBlock, QuoteBlock, PauseBlock, SfxBlock, BlockType } from '@/types'
+import { createClient } from '@/lib/supabase/client'
+import { uploadBlockAudio } from '@/lib/supabase/storage'
 import { AudioUploadRow } from './AudioUploadRow'
-import { SfxLibrary } from './SfxLibrary'
+import { SfxLibrary, type SfxSelection } from './SfxLibrary'
+import { AddBlockMenu } from './AddBlockMenu'
 
 const BLOCK_META = {
   narration:  { icon: AlignLeft,      label: 'Narration',  color: 'text-text-secondary', bg: 'bg-bg-elevated' },
@@ -103,11 +106,29 @@ interface BlockItemProps {
   characters: Character[]
   onUpdate: (updates: Partial<StoryBlock>) => void
   onDelete: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  onInsertAbove?: (type: BlockType) => void | Promise<void>
+  canMoveUp?: boolean
+  canMoveDown?: boolean
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
 }
 
-export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragHandleProps }: BlockItemProps) {
+export function BlockItem({
+  block,
+  bookId,
+  characters,
+  onUpdate,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  onInsertAbove,
+  canMoveUp = false,
+  canMoveDown = false,
+  dragHandleProps,
+}: BlockItemProps) {
   const [expanded, setExpanded] = useState(true)
+  const [sfxError, setSfxError] = useState<string | null>(null)
   const meta = BLOCK_META[block.type]
   const Icon = meta.icon
 
@@ -150,6 +171,44 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
       : effectiveChar.displayName
   })()
 
+  const handleSfxSelect = async (selection: SfxSelection) => {
+    setSfxError(null)
+    onUpdate({
+      label: selection.label,
+      sfxFile: selection.sfxFile,
+      duration: selection.duration,
+      audioUrl: selection.audioUrl,
+    } as any)
+
+    if (selection.audioUrl) return
+
+    const supabase = createClient()
+    const { data } = await supabase.auth.getUser()
+    const userId = data.user?.id
+    if (!userId) {
+      setSfxError('Sign in again to save this SFX audio.')
+      return
+    }
+
+    if (!selection.file) {
+      setSfxError('This SFX has no audio file attached.')
+      return
+    }
+
+    const audioUrl = await uploadBlockAudio(userId, bookId, block.id, selection.file)
+    if (!audioUrl) {
+      setSfxError('Could not upload this SFX. Try again or upload your own file.')
+      return
+    }
+
+    onUpdate({
+      label: selection.label,
+      sfxFile: selection.sfxFile,
+      duration: selection.duration,
+      audioUrl,
+    } as any)
+  }
+
   return (
     <div className={clsx('rounded-xl border border-bg-border overflow-hidden transition-all', meta.bg)}>
 
@@ -175,6 +234,30 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
         )}
 
         <div className="flex items-center gap-1 ml-auto">
+          {onInsertAbove && (
+            <AddBlockMenu
+              compact
+              label="Insert above"
+              onAdd={onInsertAbove}
+              className="shrink-0"
+            />
+          )}
+          <button
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            title="Move beat up"
+            className="text-text-muted hover:text-accent p-0.5 transition-colors disabled:opacity-25 disabled:hover:text-text-muted"
+          >
+            <ArrowUp size={13} />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            title="Move beat down"
+            className="text-text-muted hover:text-accent p-0.5 transition-colors disabled:opacity-25 disabled:hover:text-text-muted"
+          >
+            <ArrowDown size={13} />
+          </button>
           <button onClick={() => setExpanded(!expanded)} className="text-text-muted hover:text-text-secondary p-0.5">
             {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
@@ -339,9 +422,11 @@ export function BlockItem({ block, bookId, characters, onUpdate, onDelete, dragH
                 onChange={e => onUpdate({ label: e.target.value } as any)}
               />
               <SfxLibrary
+                bookId={bookId}
                 currentLabel={(block as SfxBlock).label ?? ''}
-                onSelect={label => onUpdate({ label, sfxFile: label.toLowerCase().replace(/\s+/g, '-') + '.mp3' } as any)}
+                onSelect={handleSfxSelect}
               />
+              {sfxError && <p className="text-[11px] text-danger">{sfxError}</p>}
             </>
           )}
 

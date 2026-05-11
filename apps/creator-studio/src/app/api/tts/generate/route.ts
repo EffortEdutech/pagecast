@@ -1,32 +1,167 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getOpenAiVoiceForVoiceId, getPageCastVoice, getVoiceCastingInstruction } from '@/lib/voiceLibrary'
 
-/**
- * Maps internal PageCast voice IDs → OpenAI TTS voice names.
- * OpenAI voices: alloy | echo | fable | onyx | nova | shimmer
- */
-const OPENAI_VOICE_MAP: Record<string, string> = {
-  // Narrator voices
-  ai_narrator_warm:  'fable',   // warm, storytelling male
-  ai_narrator_deep:  'onyx',    // deep authoritative male
-  // Female voices
-  ai_female_soft:    'nova',
-  ai_female_warm:    'shimmer',
-  ai_child_female:   'nova',
-  ai_elder_female:   'shimmer',
-  ai_fantasy:        'nova',
-  // Male voices
-  ai_male_deep:      'onyx',
-  ai_male_calm:      'echo',
-  ai_male_gruff:     'onyx',    // closest deep/gruff voice
-  ai_child_male:     'echo',
-  ai_elder_male:     'fable',
-  ai_villain:        'onyx',
-  ai_dramatic:       'fable',
-  // Neutral / character voices
-  ai_whisper:        'echo',
-  ai_cartoon:        'alloy',
-  ai_robot:          'alloy',
+// Voice mapping and casting notes live in src/lib/voiceLibrary.ts.
+
+interface ElevenLabsVoice {
+  voice_id: string
+  name: string
+  category?: string
+  description?: string
+  labels?: Record<string, string>
+}
+
+const ELEVENLABS_MATCH_TERMS: Record<string, string[]> = {
+  ai_narrator_warm: ['narration', 'storytelling', 'warm', 'calm', 'middle aged', 'female'],
+  ai_narrator_deep: ['narration', 'storytelling', 'deep', 'male', 'middle aged', 'old'],
+  ai_female_soft: ['female', 'young', 'soft', 'calm', 'gentle'],
+  ai_female_warm: ['female', 'middle aged', 'warm', 'motherly', 'calm'],
+  ai_female_bright: ['female', 'young', 'teen', 'bright', 'excited'],
+  ai_male_deep: ['male', 'middle aged', 'deep', 'serious'],
+  ai_male_calm: ['male', 'young', 'calm', 'conversational'],
+  ai_male_gruff: ['male', 'gruff', 'raspy', 'rough', 'middle aged'],
+  ai_child_female: ['female', 'child', 'young', 'kid', 'cute'],
+  ai_child_male: ['male', 'child', 'young', 'kid', 'cute'],
+  ai_elder_female: ['female', 'old', 'elderly', 'grandmother', 'aged'],
+  ai_elder_male: ['male', 'old', 'elderly', 'grandfather', 'aged'],
+  ai_villain: ['male', 'villain', 'deep', 'dark', 'evil', 'serious'],
+  ai_whisper: ['whisper', 'soft', 'female', 'calm'],
+  ai_dramatic: ['male', 'dramatic', 'narration', 'announcer', 'strong'],
+  ai_cartoon: ['cartoon', 'child', 'young', 'animated', 'excited'],
+  ai_robot: ['robot', 'character', 'serious', 'male'],
+  ai_fantasy: ['female', 'narration', 'fantasy', 'calm', 'soft'],
+}
+
+const ELEVENLABS_FALLBACK_VOICES: Record<string, { id: string; name: string }> = {
+  ai_narrator_warm: { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
+  ai_narrator_deep: { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George' },
+  ai_female_soft: { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah' },
+  ai_female_warm: { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte' },
+  ai_female_bright: { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda' },
+  ai_male_deep: { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold' },
+  ai_male_calm: { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
+  ai_male_gruff: { id: '2EiwWnXFnvU5JabPnv8n', name: 'Clyde' },
+  ai_child_female: { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli' },
+  ai_child_male: { id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam' },
+  ai_elder_female: { id: 'ThT5KcBeYPX3keUQqHPh', name: 'Dorothy' },
+  ai_elder_male: { id: 'GBv7mTt0atIp3Br8iCZE', name: 'Thomas' },
+  ai_villain: { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum' },
+  ai_whisper: { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace' },
+  ai_dramatic: { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie' },
+  ai_cartoon: { id: 'jBpfuIE2acCO8z3wKNLl', name: 'Gigi' },
+  ai_robot: { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam' },
+  ai_fantasy: { id: 'jsCqWAovK2LkecY7zXl4', name: 'Freya' },
+}
+
+function voiceSearchText(voice: ElevenLabsVoice): string {
+  return [
+    voice.name,
+    voice.category,
+    voice.description,
+    ...Object.entries(voice.labels ?? {}).flatMap(([key, value]) => [key, value]),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function scoreElevenLabsVoice(voice: ElevenLabsVoice, voiceId: string): number {
+  const profile = getPageCastVoice(voiceId)
+  const text = voiceSearchText(voice)
+  const terms = ELEVENLABS_MATCH_TERMS[voiceId] ?? []
+  let score = 0
+
+  for (const term of terms) {
+    if (text.includes(term)) score += 4
+  }
+
+  if (profile.gender !== 'neutral' && text.includes(profile.gender)) score += 8
+  if (profile.category === 'child' && /(child|kid|young|teen)/.test(text)) score += 8
+  if (profile.category === 'elder' && /(old|elder|aged|senior|grand)/.test(text)) score += 8
+  if (profile.category === 'narrator' && /(narration|story|audiobook)/.test(text)) score += 6
+  if (profile.category === 'villain' && /(villain|dark|evil|deep|serious)/.test(text)) score += 6
+
+  return score
+}
+
+async function resolveElevenLabsVoice(apiKey: string, voiceId: string): Promise<{ id: string; name: string }> {
+  if (voiceId.startsWith('elevenlabs:')) {
+    const id = voiceId.slice('elevenlabs:'.length)
+    return { id, name: id }
+  }
+
+  if (!voiceId.startsWith('ai_')) return { id: voiceId, name: voiceId }
+
+  const res = await fetch('https://api.elevenlabs.io/v1/voices', {
+    headers: { 'xi-api-key': apiKey },
+    cache: 'no-store',
+  })
+
+  if (!res.ok) {
+    const fallback = ELEVENLABS_FALLBACK_VOICES[voiceId]
+    if (fallback) return fallback
+    throw new Error(`ElevenLabs voices error ${res.status}`)
+  }
+
+  const data = await res.json()
+  const voices = Array.isArray(data?.voices) ? data.voices as ElevenLabsVoice[] : []
+  if (!voices.length) {
+    const fallback = ELEVENLABS_FALLBACK_VOICES[voiceId]
+    if (fallback) return fallback
+    throw new Error('No ElevenLabs voices are available for this API key.')
+  }
+
+  const best = voices
+    .map(voice => ({ voice, score: scoreElevenLabsVoice(voice, voiceId) }))
+    .sort((a, b) => b.score - a.score)[0]?.voice ?? voices[0]
+
+  return { id: best.voice_id, name: best.name }
+}
+
+function buildStorytellingInstructions(opts: {
+  voiceId?: string
+  blockType?: string
+  emotion?: string
+  style?: string
+  voiceLabel?: string
+}): string {
+  const parts = [
+    'Perform this as an expressive PageCast storybook voice, not as plain narration.',
+    getVoiceCastingInstruction(opts.voiceId),
+    'Keep the chosen vocal identity consistent for the whole passage.',
+    'Use clear character intention, natural emotional color, and audible age/gender texture from the casting note.',
+    'Shape each sentence with rise and fall, emphasize meaningful words, and avoid a monotone delivery.',
+    'Leave a short natural breath between sentences and a slightly longer pause at the end of this story beat.',
+    'Do not announce stage directions, labels, punctuation, or the emotion name.',
+  ]
+
+  if (opts.voiceLabel) {
+    parts.push(`Stay consistent with this casting note: ${opts.voiceLabel}.`)
+  }
+
+  switch (opts.blockType) {
+    case 'dialogue':
+      parts.push('This is character dialogue. Speak as the character in the moment, with conversational timing and believable feeling.')
+      break
+    case 'thought':
+      parts.push('This is an inner thought. Make it intimate, reflective, and slightly softer than spoken dialogue.')
+      break
+    case 'quote':
+      parts.push('This is a quoted or special passage. Give it a measured, memorable cadence.')
+      break
+    case 'narration':
+    default:
+      parts.push('This is narration. Guide the listener through the scene with gentle suspense, wonder, and clarity.')
+      break
+  }
+
+  if (opts.emotion && opts.emotion !== 'neutral') {
+    parts.push(`Emotional direction: ${opts.emotion}. Let that feeling influence pace, tone, and emphasis without overacting.`)
+  }
+
+  if (opts.style && opts.style !== 'default') {
+    parts.push(`Style direction: ${opts.style}. Reflect the style in cadence while keeping the words unchanged.`)
+  }
+
+  return parts.join(' ')
 }
 
 export async function POST(req: NextRequest) {
@@ -36,6 +171,10 @@ export async function POST(req: NextRequest) {
     provider?: string
     apiKey: string
     speed?: number
+    blockType?: string
+    emotion?: string
+    style?: string
+    voiceLabel?: string
   }
 
   try {
@@ -44,7 +183,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { text, voiceId = 'ai_female_soft', provider = 'openai', apiKey, speed = 1.0 } = body
+  const {
+    text,
+    voiceId = 'ai_female_soft',
+    provider = 'openai',
+    apiKey,
+    speed = 0.95,
+    blockType,
+    emotion,
+    style,
+    voiceLabel,
+  } = body
 
   if (!text?.trim()) {
     return NextResponse.json({ error: 'No text provided' }, { status: 400 })
@@ -55,7 +204,8 @@ export async function POST(req: NextRequest) {
 
   // ── OpenAI TTS ──────────────────────────────────────────────────────────────
   if (provider === 'openai') {
-    const openaiVoice = OPENAI_VOICE_MAP[voiceId] ?? 'nova'
+    const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
+    const instructions = buildStorytellingInstructions({ voiceId, blockType, emotion, style, voiceLabel })
 
     let res: Response
     try {
@@ -66,9 +216,10 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model:           'tts-1',
+          model:           'gpt-4o-mini-tts',
           input:           text.trim(),
           voice:           openaiVoice,
+          instructions,
           speed:           Math.min(Math.max(speed, 0.25), 4.0),
           response_format: 'mp3',
         }),
@@ -104,20 +255,24 @@ export async function POST(req: NextRequest) {
         'Content-Length': String(audioBuffer.byteLength),
         'Cache-Control':  'no-store',
         'X-Chars-Used':   String(text.trim().length),
+        'X-TTS-Provider': 'OpenAI',
+        'X-TTS-Voice':    openaiVoice,
       },
     })
   }
 
   // ── ElevenLabs TTS ──────────────────────────────────────────────────────────
   if (provider === 'elevenlabs') {
-    // For ElevenLabs, voiceId should be the user's actual ElevenLabs voice ID.
-    // Fall back to a known public voice if the internal mapping is used.
-    const EL_FALLBACK = 'EXAVITQu4vr4xnSDxMaL' // "Bella" — common starter voice
-    const elVoiceId = voiceId.startsWith('ai_') ? EL_FALLBACK : voiceId
+    let elevenVoice: { id: string; name: string }
+    try {
+      elevenVoice = await resolveElevenLabsVoice(apiKey, voiceId)
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message ?? 'Could not load ElevenLabs voices' }, { status: 502 })
+    }
 
     let res: Response
     try {
-      res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elVoiceId}`, {
+      res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenVoice.id}`, {
         method: 'POST',
         headers: {
           'xi-api-key':   apiKey,
@@ -126,11 +281,11 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           text: text.trim(),
-          model_id: 'eleven_monolingual_v1',
+          model_id: 'eleven_multilingual_v2',
           voice_settings: {
-            stability:        0.5,
-            similarity_boost: 0.75,
-            style:            0.3,
+            stability:        0.38,
+            similarity_boost: 0.8,
+            style:            0.65,
             use_speaker_boost: true,
           },
         }),
@@ -166,6 +321,8 @@ export async function POST(req: NextRequest) {
         'Content-Length': String(audioBuffer.byteLength),
         'Cache-Control':  'no-store',
         'X-Chars-Used':   String(text.trim().length),
+        'X-TTS-Provider': 'ElevenLabs',
+        'X-TTS-Voice':    voiceLabel?.replace(/^ElevenLabs - /, '') ?? elevenVoice.name,
       },
     })
   }

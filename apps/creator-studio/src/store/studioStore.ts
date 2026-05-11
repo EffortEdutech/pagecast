@@ -27,12 +27,16 @@ interface StudioStore {
   activeStoryId: string | null
   activeChapterId: string | null
   activeSceneId: string | null
+  dirtyStoryIds: string[]
 
   // Story CRUD
   createStory: (title: string, description: string) => Story
   updateStory: (id: string, updates: Partial<Story>) => void
   deleteStory: (id: string) => void
   setActiveStory: (id: string | null) => void
+  markStoryDirty: (storyId: string) => void
+  clearStoryDirty: (storyId: string) => void
+  isStoryDirty: (storyId: string) => boolean
 
   // Chapter CRUD
   addChapter: (storyId: string, title: string) => Chapter
@@ -74,6 +78,7 @@ export const useStudioStore = create<StudioStore>()(
       activeStoryId: null,
       activeChapterId: null,
       activeSceneId: null,
+      dirtyStoryIds: [],
 
       // ── Auth ──
       login: (email, password) => {
@@ -97,7 +102,7 @@ export const useStudioStore = create<StudioStore>()(
           hasMusic: false,
           hasSfx: false,
           characters: [
-            { id: uuid(), name: 'Narrator', role: 'narrator', displayName: 'Narrator', color: '#9896A8', voiceSource: 'ai', voiceId: 'ai_female_soft', voiceLabel: 'Female Soft', defaultVolume: 1 },
+            { id: uuid(), name: 'Narrator', role: 'narrator', displayName: 'Narrator', color: '#9896A8', voiceSource: 'ai', voiceId: 'ai_narrator_warm', voiceLabel: 'Marin - Warm Premium Narrator', defaultVolume: 1 },
           ],
           chapters: [],
           createdAt: new Date().toISOString(),
@@ -111,6 +116,13 @@ export const useStudioStore = create<StudioStore>()(
       })),
       deleteStory: (id) => set(s => ({ stories: s.stories.filter(st => st.id !== id) })),
       setActiveStory: (id) => set({ activeStoryId: id, activeChapterId: null, activeSceneId: null }),
+      markStoryDirty: (storyId) => set(s => ({
+        dirtyStoryIds: s.dirtyStoryIds.includes(storyId) ? s.dirtyStoryIds : [...s.dirtyStoryIds, storyId],
+      })),
+      clearStoryDirty: (storyId) => set(s => ({
+        dirtyStoryIds: s.dirtyStoryIds.filter(id => id !== storyId),
+      })),
+      isStoryDirty: (storyId) => get().dirtyStoryIds.includes(storyId),
 
       // ── Chapters ──
       addChapter: (storyId, title) => {

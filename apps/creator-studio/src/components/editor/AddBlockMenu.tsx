@@ -14,13 +14,17 @@ const BLOCK_OPTIONS: { type: BlockType; icon: any; label: string; desc: string; 
 ]
 
 interface AddBlockMenuProps {
-  onAdd: (type: BlockType) => void
+  onAdd: (type: BlockType) => void | Promise<void>
+  label?: string
+  compact?: boolean
+  className?: string
 }
 
-export function AddBlockMenu({ onAdd }: AddBlockMenuProps) {
+export function AddBlockMenu({ onAdd, label = 'Add Story Beat', compact = false, className }: AddBlockMenuProps) {
   const [open, setOpen]   = useState(false)
   const [pos,  setPos]    = useState<{ top: number; left: number; width: number } | null>(null)
   const btnRef            = useRef<HTMLButtonElement>(null)
+  const menuRef           = useRef<HTMLDivElement>(null)
 
   const openMenu = useCallback(() => {
     if (!btnRef.current) return
@@ -42,7 +46,12 @@ export function AddBlockMenu({ onAdd }: AddBlockMenuProps) {
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        btnRef.current &&
+        !btnRef.current.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
         setOpen(false)
       }
     }
@@ -69,14 +78,18 @@ export function AddBlockMenu({ onAdd }: AddBlockMenuProps) {
     <>
       <button
         ref={btnRef}
-        className="btn-secondary w-full justify-center border-dashed text-sm"
+        className={clsx(
+          compact ? 'btn-ghost text-xs px-2 py-1 border border-bg-border hover:border-accent/40' : 'btn-secondary w-full justify-center border-dashed text-sm',
+          className
+        )}
         onClick={() => open ? setOpen(false) : openMenu()}
       >
-        <Plus size={14} /> Add Story Beat
+        <Plus size={compact ? 12 : 14} /> {label}
       </button>
 
       {open && pos && (
         <div
+          ref={menuRef}
           className="fixed card-elevated py-1.5 z-[200] animate-slide-up shadow-elevated"
           style={{ top: pos.top, left: pos.left, width: pos.width }}
         >
@@ -87,7 +100,7 @@ export function AddBlockMenu({ onAdd }: AddBlockMenuProps) {
             <button
               key={type}
               className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-bg-hover transition-colors text-left"
-              onClick={() => { onAdd(type); setOpen(false) }}
+              onClick={async () => { await onAdd(type); setOpen(false) }}
             >
               <Icon size={15} className={clsx(color, 'shrink-0')} />
               <div className="text-left min-w-0">

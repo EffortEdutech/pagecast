@@ -15,62 +15,27 @@ import {
   deleteCharacter as dbDeleteCharacter,
 } from '@/lib/supabase/characters'
 import * as BooksApi from '@/lib/supabase/books'
-import type { VoiceProfile, Character } from '@/types'
+import { CATEGORIES, VOICE_LIBRARY, type PageCastVoiceProfile } from '@/lib/voiceLibrary'
+import { getTtsSettings } from '@/lib/tts'
+import type { Character } from '@/types'
 
 // ── Voice catalogue ────────────────────────────────────────────────────────────
 
-const VOICE_LIBRARY: VoiceProfile[] = [
-  // Narrator
-  { id: 'ai_narrator_warm', label: 'Sage — Warm Narrator',    category: 'narrator', gender: 'neutral' },
-  { id: 'ai_narrator_deep', label: 'Reed — Deep Narrator',    category: 'narrator', gender: 'neutral' },
-  // Female
-  { id: 'ai_female_soft',   label: 'Aria — Female Soft',      category: 'female',   gender: 'female'  },
-  { id: 'ai_female_warm',   label: 'Nova — Female Warm',      category: 'female',   gender: 'female'  },
-  // Male
-  { id: 'ai_male_deep',     label: 'Atlas — Male Deep',       category: 'male',     gender: 'male'    },
-  { id: 'ai_male_calm',     label: 'Echo — Male Calm',        category: 'male',     gender: 'male'    },
-  { id: 'ai_male_gruff',    label: 'Croft — Male Gruff',      category: 'male',     gender: 'male'    },
-  // Child
-  { id: 'ai_child_female',  label: 'Lily — Child Female',     category: 'child',    gender: 'female'  },
-  { id: 'ai_child_male',    label: 'Finn — Child Male',       category: 'child',    gender: 'male'    },
-  // Elder
-  { id: 'ai_elder_female',  label: 'Sage — Elder Female',     category: 'elder',    gender: 'female'  },
-  { id: 'ai_elder_male',    label: 'Croft — Elder Male',      category: 'elder',    gender: 'male'    },
-  // Special
-  { id: 'ai_villain',       label: 'Void — Villain',          category: 'villain',  gender: 'neutral' },
-  { id: 'ai_whisper',       label: 'Hush — Whisper',          category: 'whisper',  gender: 'neutral' },
-  { id: 'ai_dramatic',      label: 'Rex — Dramatic',          category: 'dramatic', gender: 'male'    },
-  { id: 'ai_cartoon',       label: 'Pip — Cartoon',           category: 'cartoon',  gender: 'neutral' },
-  { id: 'ai_robot',         label: 'Core — Robot',            category: 'robot',    gender: 'neutral' },
-  { id: 'ai_fantasy',       label: 'Elara — Fantasy',         category: 'fantasy',  gender: 'female'  },
-]
-
-const CATEGORIES = ['all', 'narrator', 'female', 'male', 'child', 'elder', 'villain', 'whisper', 'dramatic', 'cartoon', 'robot', 'fantasy']
 const CHARACTER_COLORS = ['#A98BFF', '#4DB8FF', '#F5C842', '#3DD68C', '#F05F6E', '#FF9F43', '#C44AE8', '#48DBFB']
 
-// ── TTS preview parameters ─────────────────────────────────────────────────────
-
-interface TtsParams { pitch: number; rate: number; gender: string; sample: string }
-
-const VOICE_TTS: Record<string, TtsParams> = {
-  ai_narrator_warm: { pitch: 1.05, rate: 0.9,  gender: 'female', sample: 'In a land far away, a great story was about to begin.' },
-  ai_narrator_deep: { pitch: 0.8,  rate: 0.85, gender: 'male',   sample: 'The tale unfolds. Listen carefully, for every word matters.' },
-  ai_female_soft:   { pitch: 1.2,  rate: 0.9,  gender: 'female', sample: 'The moon rose gently over the still, silver water.' },
-  ai_female_warm:   { pitch: 1.1,  rate: 1.0,  gender: 'female', sample: 'Welcome! I am so glad you are here with me today.' },
-  ai_male_deep:     { pitch: 0.7,  rate: 0.9,  gender: 'male',   sample: 'The fortress had stood for a thousand years, unmoved.' },
-  ai_male_calm:     { pitch: 0.9,  rate: 0.95, gender: 'male',   sample: 'Take a breath. Everything is going to be alright.' },
-  ai_male_gruff:    { pitch: 0.65, rate: 0.92, gender: 'male',   sample: 'Listen up. I am only going to say this once.' },
-  ai_child_female:  { pitch: 1.5,  rate: 1.1,  gender: 'female', sample: 'Oh! Did you see that? A butterfly! Come look!' },
-  ai_child_male:    { pitch: 1.4,  rate: 1.1,  gender: 'male',   sample: 'Race you to the big oak tree! Last one is a rotten egg!' },
-  ai_elder_female:  { pitch: 1.0,  rate: 0.85, gender: 'female', sample: 'Child, sit with me. Let me tell you about the old days.' },
-  ai_elder_male:    { pitch: 0.8,  rate: 0.85, gender: 'male',   sample: 'In my time, we walked ten miles. And we were grateful.' },
-  ai_villain:       { pitch: 0.6,  rate: 0.85, gender: 'male',   sample: 'You cannot stop what has already begun. It is too late.' },
-  ai_whisper:       { pitch: 1.0,  rate: 0.8,  gender: 'female', sample: 'Quiet now... can you hear that? Something is near.' },
-  ai_dramatic:      { pitch: 0.85, rate: 1.1,  gender: 'male',   sample: 'This is the moment everything changes, forever!' },
-  ai_cartoon:       { pitch: 1.6,  rate: 1.2,  gender: 'neutral',sample: 'Wheee! Let us go on an adventure, pals!' },
-  ai_robot:         { pitch: 0.5,  rate: 0.9,  gender: 'neutral',sample: 'Initiating story sequence. Narrative data loaded.' },
-  ai_fantasy:       { pitch: 1.3,  rate: 0.95, gender: 'female', sample: 'The ancient magic stirs. The old prophecy awakens.' },
+interface ProviderVoice {
+  id: string
+  label: string
+  provider: 'elevenlabs'
+  category: string
+  description?: string
+  labels?: Record<string, string>
+  previewUrl?: string | null
 }
+
+const ELEVENLABS_SAMPLE_TEXT = 'PageCast premium voice sample. Every character deserves a voice that feels truly alive.'
+
+// ── TTS preview parameters ─────────────────────────────────────────────────────
 
 // Resolve best browser voice for gender
 const FEMALE_HINTS = ['female', 'woman', 'zira', 'samantha', 'victoria', 'karen', 'moira', 'fiona', 'tessa', 'veena', 'aria', 'jenny', 'sonia', 'libby', 'natasha', 'google uk english female']
@@ -90,21 +55,21 @@ function pickVoice(voices: SpeechSynthesisVoice[], gender: string): SpeechSynthe
 function previewVoice(voiceId: string) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   window.speechSynthesis.cancel()
-  const params = VOICE_TTS[voiceId]
-  if (!params) return
-  const utterance = new SpeechSynthesisUtterance(params.sample)
-  utterance.pitch  = params.pitch
-  utterance.rate   = params.rate
+  const profile = VOICE_LIBRARY.find(v => v.id === voiceId)
+  if (!profile) return
+  const utterance = new SpeechSynthesisUtterance(profile.sample)
+  utterance.pitch  = profile.pitch
+  utterance.rate   = profile.rate
   utterance.volume = 1
   const voices = window.speechSynthesis.getVoices()
-  const voice  = pickVoice(voices, params.gender)
+  const voice  = pickVoice(voices, profile.browserGender)
   if (voice) utterance.voice = voice
   window.speechSynthesis.speak(utterance)
 }
 
 // ── Voice card ────────────────────────────────────────────────────────────────
 
-function VoiceCard({ voice, selected, onSelect }: { voice: VoiceProfile; selected: boolean; onSelect: () => void }) {
+function VoiceCard({ voice, selected, onSelect }: { voice: PageCastVoiceProfile; selected: boolean; onSelect: () => void }) {
   const [playing, setPlaying] = useState(false)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
@@ -116,18 +81,17 @@ function VoiceCard({ voice, selected, onSelect }: { voice: VoiceProfile; selecte
       return
     }
     setPlaying(true)
-    const params = VOICE_TTS[voice.id]
-    if (!params || typeof window === 'undefined' || !window.speechSynthesis) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
       setTimeout(() => setPlaying(false), 1800)
       return
     }
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(params.sample)
-    utterance.pitch  = params.pitch
-    utterance.rate   = params.rate
+    const utterance = new SpeechSynthesisUtterance(voice.sample)
+    utterance.pitch  = voice.pitch
+    utterance.rate   = voice.rate
     utterance.volume = 1
     const voices = window.speechSynthesis.getVoices()
-    const bVoice = pickVoice(voices, params.gender)
+    const bVoice = pickVoice(voices, voice.browserGender)
     if (bVoice) utterance.voice = bVoice
     utterance.onend = () => setPlaying(false)
     utterance.onerror = () => setPlaying(false)
@@ -149,7 +113,7 @@ function VoiceCard({ voice, selected, onSelect }: { voice: VoiceProfile; selecte
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
-        <div className="text-text-muted text-[10px] capitalize">{voice.category}</div>
+        <div className="text-text-muted text-[10px] capitalize">{voice.category} / OpenAI {voice.openAiVoice}</div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
@@ -168,16 +132,112 @@ function VoiceCard({ voice, selected, onSelect }: { voice: VoiceProfile; selecte
   )
 }
 
+function ElevenLabsVoiceCard({
+  voice,
+  selected,
+  sampleUrl,
+  loading,
+  onSelect,
+  onSample,
+}: {
+  voice: ProviderVoice
+  selected: boolean
+  sampleUrl?: string
+  loading: boolean
+  onSelect: () => void
+  onSample: () => void
+}) {
+  const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const playSample = (e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (playing) {
+      audioRef.current?.pause()
+      setPlaying(false)
+      return
+    }
+
+    const url = sampleUrl ?? voice.previewUrl
+    if (!url) {
+      onSample()
+      return
+    }
+
+    const audio = new Audio(url)
+    audioRef.current = audio
+    audio.onended = () => setPlaying(false)
+    audio.onerror = () => setPlaying(false)
+    setPlaying(true)
+    audio.play().catch(() => setPlaying(false))
+  }
+
+  const labelText = Object.entries(voice.labels ?? {})
+    .slice(0, 2)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(' / ')
+
+  return (
+    <div
+      onClick={onSelect}
+      className={clsx(
+        'card p-3 cursor-pointer transition-all duration-150 flex items-center gap-3',
+        selected ? 'border-gold/70 bg-gold/10' : 'hover:border-bg-hover hover:bg-bg-elevated'
+      )}
+    >
+      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+        selected ? 'bg-gold/25 text-gold' : 'bg-bg-elevated text-text-muted')}>
+        <Mic size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
+        <div className="text-text-muted text-[10px] truncate">ElevenLabs / {labelText || voice.category}</div>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={playSample}
+          title={sampleUrl || voice.previewUrl ? (playing ? 'Stop sample' : 'Play sample') : 'Generate sample'}
+          className={clsx('w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+            playing ? 'bg-gold text-black' : 'bg-bg-elevated hover:bg-bg-hover text-text-muted')}
+        >
+          {loading
+            ? <Loader2 size={11} className="animate-spin" />
+            : playing
+              ? <Square size={9} className="fill-current" />
+              : <Play size={10} className="ml-0.5" />}
+        </button>
+        {selected && <Check size={14} className="text-gold" />}
+      </div>
+    </div>
+  )
+}
+
 // ── Add character modal ────────────────────────────────────────────────────────
 
 interface AddModalProps {
   storyId: string
   existingCount: number
+  elevenVoices: ProviderVoice[]
+  sampleUrls: Record<string, string>
+  syncingVoices: boolean
+  onSyncElevenLabsVoices: () => void
+  onGenerateElevenLabsSample: (voice: ProviderVoice) => void
   onAdd: (char: Character) => void
   onClose: () => void
 }
 
-function AddCharacterModal({ storyId, existingCount, onAdd, onClose }: AddModalProps) {
+function AddCharacterModal({
+  storyId,
+  existingCount,
+  elevenVoices,
+  sampleUrls,
+  syncingVoices,
+  onSyncElevenLabsVoices,
+  onGenerateElevenLabsSample,
+  onAdd,
+  onClose,
+}: AddModalProps) {
   const [name,    setName]    = useState('')
   const [role,    setRole]    = useState<'character' | 'narrator'>('character')
   const [color,   setColor]   = useState(CHARACTER_COLORS[existingCount % CHARACTER_COLORS.length])
@@ -185,7 +245,26 @@ function AddCharacterModal({ storyId, existingCount, onAdd, onClose }: AddModalP
   const [saving,  setSaving]  = useState(false)
   const [error,   setError]   = useState<string | null>(null)
 
-  const voice = VOICE_LIBRARY.find(v => v.id === voiceId)
+  const pageCastVoice = VOICE_LIBRARY.find(v => v.id === voiceId)
+  const elevenLabsVoice = voiceId.startsWith('elevenlabs:')
+    ? elevenVoices.find(v => `elevenlabs:${v.id}` === voiceId)
+    : undefined
+  const voiceLabel = elevenLabsVoice
+    ? `ElevenLabs - ${elevenLabsVoice.label}`
+    : pageCastVoice?.label ?? ''
+
+  const handlePreviewVoice = () => {
+    if (elevenLabsVoice) {
+      const sampleUrl = sampleUrls[elevenLabsVoice.id] ?? elevenLabsVoice.previewUrl
+      if (sampleUrl) {
+        new Audio(sampleUrl).play().catch(() => {})
+      } else {
+        onGenerateElevenLabsSample(elevenLabsVoice)
+      }
+      return
+    }
+    previewVoice(voiceId)
+  }
 
   const handleAdd = async () => {
     if (!name.trim()) return
@@ -198,7 +277,7 @@ function AddCharacterModal({ storyId, existingCount, onAdd, onClose }: AddModalP
       color,
       voiceSource: 'ai',
       voiceId,
-      voiceLabel: voice?.label ?? '',
+      voiceLabel,
       defaultVolume: 1,
     }, existingCount)
     if (!newChar) { setError('Failed to save. Check your connection.'); setSaving(false); return }
@@ -249,17 +328,35 @@ function AddCharacterModal({ storyId, existingCount, onAdd, onClose }: AddModalP
             <label className="label">Default Voice</label>
             <div className="flex gap-2">
               <select className="input flex-1" value={voiceId} onChange={e => setVoiceId(e.target.value)}>
-                {VOICE_LIBRARY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                <optgroup label="PageCast / OpenAI presets">
+                  {VOICE_LIBRARY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </optgroup>
+                {elevenVoices.length > 0 && (
+                  <optgroup label="ElevenLabs real voices">
+                    {elevenVoices.map(v => (
+                      <option key={v.id} value={`elevenlabs:${v.id}`}>ElevenLabs - {v.label}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <button
                 type="button"
                 title="Preview voice"
-                onClick={() => previewVoice(voiceId)}
+                onClick={handlePreviewVoice}
                 className="btn-secondary px-3"
               >
                 <Play size={13} />
               </button>
             </div>
+            <button
+              type="button"
+              className="btn-ghost mt-2 text-xs px-2 py-1 border border-bg-border hover:border-gold/40 hover:text-gold"
+              onClick={onSyncElevenLabsVoices}
+              disabled={syncingVoices}
+            >
+              {syncingVoices ? <Loader2 size={11} className="animate-spin" /> : <Volume2 size={11} />}
+              Sync ElevenLabs voices
+            </button>
           </div>
         </div>
 
@@ -293,6 +390,11 @@ export default function VoicesPage() {
   const [savingVoice,     setSavingVoice]      = useState<string | null>(null)
   const [activeTab,       setActiveTab]        = useState<'cast' | 'settings'>('cast')
   const [savingSettings,  setSavingSettings]   = useState(false)
+  const [elevenVoices,    setElevenVoices]     = useState<ProviderVoice[]>([])
+  const [syncingVoices,   setSyncingVoices]    = useState(false)
+  const [voiceSyncError,  setVoiceSyncError]   = useState<string | null>(null)
+  const [sampleUrls,      setSampleUrls]       = useState<Record<string, string>>({})
+  const [samplingVoiceId, setSamplingVoiceId]  = useState<string | null>(null)
 
   // Select first story once books load
   useEffect(() => {
@@ -301,8 +403,15 @@ export default function VoicesPage() {
     }
   }, [stories, selectedStoryId])
 
+  useEffect(() => {
+    return () => {
+      Object.values(sampleUrls).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [sampleUrls])
+
   const story = stories.find(s => s.id === selectedStoryId)
   const filteredVoices = VOICE_LIBRARY.filter(v => categoryFilter === 'all' || v.category === categoryFilter)
+  const providerFilteredVoices = categoryFilter === 'all' ? elevenVoices : []
 
   // Narrator character for narrator-only mode
   const narratorChar = story?.characters.find(c => c.role === 'narrator')
@@ -344,6 +453,94 @@ export default function VoicesPage() {
     await dbUpdateCharacter(charId, { voiceId, voiceLabel })
     setSavingVoice(null)
   }, [selectedStoryId, storeUpdate])
+
+  const syncElevenLabsVoices = useCallback(async () => {
+    const { apiKey, provider } = getTtsSettings()
+    setVoiceSyncError(null)
+
+    if (!apiKey || provider !== 'elevenlabs') {
+      setVoiceSyncError('Choose ElevenLabs in Settings and save your ElevenLabs API key first.')
+      return
+    }
+
+    setSyncingVoices(true)
+    try {
+      const res = await fetch('/api/tts/voices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'elevenlabs', apiKey }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not sync ElevenLabs voices.')
+      setElevenVoices(Array.isArray(body.voices) ? body.voices : [])
+    } catch (e: any) {
+      setVoiceSyncError(e.message ?? 'Could not sync ElevenLabs voices.')
+    } finally {
+      setSyncingVoices(false)
+    }
+  }, [])
+
+  const generateElevenLabsSample = useCallback(async (voice: ProviderVoice) => {
+    const { apiKey } = getTtsSettings()
+    setVoiceSyncError(null)
+
+    if (!apiKey) {
+      setVoiceSyncError('Add your ElevenLabs API key in Settings before generating samples.')
+      return
+    }
+
+    setSamplingVoiceId(voice.id)
+    try {
+      const res = await fetch('/api/tts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'elevenlabs',
+          apiKey,
+          voiceId: `elevenlabs:${voice.id}`,
+          voiceLabel: `ElevenLabs - ${voice.label}`,
+          text: ELEVENLABS_SAMPLE_TEXT,
+          speed: 0.95,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Could not generate sample.')
+      }
+      const blob = await res.blob()
+      setSampleUrls(prev => {
+        if (prev[voice.id]) URL.revokeObjectURL(prev[voice.id])
+        return { ...prev, [voice.id]: URL.createObjectURL(blob) }
+      })
+    } catch (e: any) {
+      setVoiceSyncError(e.message ?? 'Could not generate sample.')
+    } finally {
+      setSamplingVoiceId(null)
+    }
+  }, [])
+
+  const previewCastVoice = useCallback((voiceId?: string) => {
+    if (!voiceId) return
+
+    if (voiceId.startsWith('elevenlabs:')) {
+      const providerVoiceId = voiceId.slice('elevenlabs:'.length)
+      const voice = elevenVoices.find(v => v.id === providerVoiceId)
+      if (!voice) {
+        setVoiceSyncError('Sync ElevenLabs voices first to preview this cast voice.')
+        return
+      }
+
+      const sampleUrl = sampleUrls[voice.id] ?? voice.previewUrl
+      if (sampleUrl) {
+        new Audio(sampleUrl).play().catch(() => {})
+      } else {
+        generateElevenLabsSample(voice)
+      }
+      return
+    }
+
+    previewVoice(voiceId)
+  }, [elevenVoices, sampleUrls, generateElevenLabsSample])
 
   const handleDelete = useCallback(async (charId: string) => {
     storeDelete(selectedStoryId, charId)
@@ -476,7 +673,7 @@ export default function VoicesPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={e => { e.stopPropagation(); if (char.voiceId) previewVoice(char.voiceId) }}
+                        onClick={e => { e.stopPropagation(); previewCastVoice(char.voiceId) }}
                         className="text-text-muted hover:text-accent transition-colors p-0.5"
                         title="Preview voice"
                       >
@@ -523,6 +720,33 @@ export default function VoicesPage() {
                             </button>
                           </button>
                         ))}
+                        {elevenVoices.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-bg-border">
+                            <p className="px-2 pb-1 text-[9px] uppercase tracking-wide text-gold font-medium">ElevenLabs</p>
+                            {elevenVoices.map(v => {
+                              const id = `elevenlabs:${v.id}`
+                              return (
+                                <button key={v.id}
+                                  className={clsx(
+                                    'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs transition-colors',
+                                    char.voiceId === id
+                                      ? 'bg-gold/20 text-gold font-medium'
+                                      : 'hover:bg-bg-elevated text-text-secondary'
+                                  )}
+                                  onClick={e => { e.stopPropagation(); handleVoiceChange(char.id, id, `ElevenLabs - ${v.label}`) }}
+                                >
+                                  {savingVoice === char.id && char.voiceId === id
+                                    ? <Loader2 size={10} className="animate-spin shrink-0" />
+                                    : char.voiceId === id
+                                      ? <Check size={10} className="shrink-0 text-gold" />
+                                      : <span className="w-2.5 shrink-0" />
+                                  }
+                                  <span className="truncate flex-1">{v.label}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -580,7 +804,7 @@ export default function VoicesPage() {
                       </div>
                       <span className="text-text-secondary text-xs flex-1">{narratorChar.displayName} &mdash; {narratorChar.voiceLabel}</span>
                       <button
-                        onClick={() => narratorChar.voiceId && previewVoice(narratorChar.voiceId)}
+                        onClick={() => previewCastVoice(narratorChar.voiceId)}
                         className="text-text-muted hover:text-accent transition-colors"
                         title="Preview narrator voice"
                       >
@@ -613,6 +837,23 @@ export default function VoicesPage() {
 
         {/* ── Voice library browser ── */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="flex justify-end">
+            <button
+              className="btn-secondary text-xs"
+              onClick={syncElevenLabsVoices}
+              disabled={syncingVoices}
+              title="Load real voices from your ElevenLabs account"
+            >
+              {syncingVoices ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
+              Sync ElevenLabs
+            </button>
+          </div>
+
+          {voiceSyncError && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20 text-danger text-xs">
+              <AlertCircle size={13} /> {voiceSyncError}
+            </div>
+          )}
           <div>
             <h2 className="text-text-primary font-semibold text-base">Voice Library</h2>
             <p className="text-text-secondary text-sm mt-0.5">
@@ -658,6 +899,43 @@ export default function VoicesPage() {
               )
             })}
           </div>
+
+          {providerFilteredVoices.length > 0 && (
+            <div className="space-y-3 pt-3 border-t border-bg-border">
+              <div>
+                <h3 className="text-text-primary font-semibold text-sm">ElevenLabs Voices</h3>
+                <p className="text-text-muted text-xs mt-0.5">These are real voices from your ElevenLabs account. Samples are generated with ElevenLabs audio.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {providerFilteredVoices.map(voice => {
+                  const id = `elevenlabs:${voice.id}`
+                  const assignedChar = story?.characters.find(c => c.voiceId === id)
+                  return (
+                    <div key={voice.id} className="relative">
+                      <ElevenLabsVoiceCard
+                        voice={voice}
+                        selected={!!assignedChar}
+                        sampleUrl={sampleUrls[voice.id]}
+                        loading={samplingVoiceId === voice.id}
+                        onSample={() => generateElevenLabsSample(voice)}
+                        onSelect={() => {
+                          if (editingCharId) {
+                            handleVoiceChange(editingCharId, id, `ElevenLabs - ${voice.label}`)
+                          }
+                        }}
+                      />
+                      {assignedChar && (
+                        <div className="absolute top-1.5 right-8 px-1.5 py-0.5 rounded-full text-[9px] font-medium"
+                          style={{ backgroundColor: assignedChar.color + '30', color: assignedChar.color }}>
+                          {assignedChar.displayName}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -665,6 +943,11 @@ export default function VoicesPage() {
         <AddCharacterModal
           storyId={story.id}
           existingCount={story.characters.length}
+          elevenVoices={elevenVoices}
+          sampleUrls={sampleUrls}
+          syncingVoices={syncingVoices}
+          onSyncElevenLabsVoices={syncElevenLabsVoices}
+          onGenerateElevenLabsSample={generateElevenLabsSample}
           onAdd={handleAddChar}
           onClose={() => setShowAddModal(false)}
         />

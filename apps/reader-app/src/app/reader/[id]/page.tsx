@@ -12,7 +12,8 @@ import {
   BookOpen, Headphones, Film, Volume2, VolumeX,
   Settings, ChevronLeft, ChevronRight, List, X,
   Check, Mic, Type, Moon, Sun, AlignLeft,
-  FastForward, Rewind, Minus, Plus
+  FastForward, Rewind, Minus, Plus, Bookmark, BookmarkCheck,
+  Trash2, RotateCcw, Timer, Users
 } from 'lucide-react'
 
 // ─── Waveform animation ───────────────────────────────────────────────
@@ -204,6 +205,19 @@ const MODES: { id: ReaderMode; label: string; icon: typeof BookOpen }[] = [
   { id: 'cinematic', label: 'Cinematic', icon: Film },
 ]
 
+const BEAT_GAP_MS = 550
+
+function blockSummary(block: StoryBlock, index: number): string {
+  const prefix = `Beat ${index + 1}`
+  if (block.type === 'pause') return `${prefix} - Pause`
+  if (block.type === 'sfx') return `${prefix} - ${(block as any).label ?? 'Sound effect'}`
+
+  const text = 'text' in block ? String((block as any).text ?? '') : ''
+  if (!text.trim()) return prefix
+  const clean = text.replace(/\s+/g, ' ').trim()
+  return `${prefix} - ${clean.slice(0, 72)}${clean.length > 72 ? '...' : ''}`
+}
+
 // ─── Main component ───────────────────────────────────────────────────
 function findPrevSceneLocation(story: Story, chapterIdx: number, sceneIdx: number) {
   for (let ci = chapterIdx; ci >= 0; ci--) {
@@ -233,7 +247,8 @@ export default function ReaderPage() {
   const {
     isOwned, prefs, setMode, setTheme, setPref,
     isPlaying, setPlaying, currentBlockId, setCurrentBlock,
-    saveProgress, getProgress
+    saveProgress, getProgress, addBookmark, removeBookmark,
+    getBookmarks, isBookmarked
   } = useReaderStore()
 
   const [story, setStory] = useState<Story | null | undefined>(undefined)
@@ -270,7 +285,16 @@ export default function ReaderPage() {
 
   // ── UI state ──
   const [showTOC,        setShowTOC]        = useState(false)
+  const [showBookmarks,  setShowBookmarks]  = useState(false)
   const [showSettings,   setShowSettings]   = useState(false)
+  const [showResumePrompt, setShowResumePrompt] = useState(false)
+  const [resumeHandled, setResumeHandled] = useState(false)
+  const [expandedTocScenes, setExpandedTocScenes] = useState<Set<string>>(new Set())
+  const [replayNonce, setReplayNonce] = useState(0)
+  const [sleepTimerDuration, setSleepTimerDuration] = useState<number | null>(null)
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null)
+  const [chapterComplete, setChapterComplete] = useState<{ chapterTitle: string; nextChapter?: string } | null>(null)
+  const [bookComplete, setBookComplete] = useState(false)
   const [cinemaMode,     setCinemaMode]     = useState(false)
   const [muteAtmosphere, setMuteAtmosphere] = useState(false)
   const [navVisible,     setNavVisible]     = useState(true)
@@ -304,11 +328,52 @@ export default function ReaderPage() {
   const scene   = chapter?.scenes[sceneIdx]
   const blocks  = scene?.blocks ?? []
   const block   = blocks[blockIdx]
+  const bookmarks = story ? getBookmarks(story.id) : []
+  const autoAdvance = prefs.autoAdvance ?? true
+  const childMode = prefs.childMode ?? false
+  const sleepTimerMinutesLeft = sleepTimerEndsAt
+    ? Math.max(1, Math.ceil((sleepTimerEndsAt - Date.now()) / 60000))
+    : null
+  const currentIsBookmarked = story
+    ? isBookmarked(story.id, chapterIdx, sceneIdx, blockIdx)
+    : false
+
+  useEffect(() => {
+    if (!scene) return
+    setExpandedTocScenes(prev => new Set([...Array.from(prev), scene.id]))
+  }, [scene?.id])
+
+  useEffect(() => {
+    if (!sleepTimerEndsAt) return
+    const delay = Math.max(0, sleepTimerEndsAt - Date.now())
+    const timeout = window.setTimeout(() => {
+      setPlaying(false)
+      setSleepTimerDuration(null)
+      setSleepTimerEndsAt(null)
+    }, delay)
+    return () => window.clearTimeout(timeout)
+  }, [sleepTimerEndsAt, setPlaying])
+
+  useEffect(() => {
+    if (!story || resumeHandled) return
+    const progress = getProgress(story.id)
+    if (progress && (progress.chapterIdx > 0 || progress.sceneIdx > 0 || progress.blockIdx > 0)) {
+      setShowResumePrompt(true)
+    }
+    setResumeHandled(true)
+  }, [story, getProgress, resumeHandled])
 
   // ── Persist progress ──
   const persistProgress = useCallback((ci: number, si: number, bi: number) => {
     if (!story) return
-    saveProgress({ storyId: story.id, chapterIdx: ci, sceneIdx: si, blockIdx: bi, timestamp: Date.now() })
+    saveProgress({
+      storyId: story.id,
+      chapterIdx: ci,
+      sceneIdx: si,
+      blockIdx: bi,
+      timestamp: Date.now(),
+      lastReadAt: new Date().toISOString(),
+    })
   }, [story, saveProgress])
 
   // ── Advance block ──
@@ -331,6 +396,10 @@ export default function ReaderPage() {
       persistProgress(chapterIdx, ns, 0)
     } else if (chapterIdx < story.chapters.length - 1) {
       const nc = chapterIdx + 1
+      setChapterComplete({
+        chapterTitle: ch.title,
+        nextChapter: story.chapters[nc]?.title,
+      })
       setChapterIdx(nc); setSceneIdx(0); setBlockIdx(0)
       const b0 = story.chapters[nc]?.scenes[0]?.blocks[0]
       setCurrentBlock(b0?.id ?? null)
@@ -339,8 +408,18 @@ export default function ReaderPage() {
       // Finished
       setPlaying(false)
       setCurrentBlock(null)
+      setBookComplete(true)
+      saveProgress({
+        storyId: story.id,
+        chapterIdx,
+        sceneIdx,
+        blockIdx,
+        timestamp: Date.now(),
+        lastReadAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      })
     }
-  }, [story, chapterIdx, sceneIdx, blockIdx, setCurrentBlock, persistProgress, setPlaying])
+  }, [story, chapterIdx, sceneIdx, blockIdx, setCurrentBlock, persistProgress, setPlaying, saveProgress])
 
   const retreat = useCallback(() => {
     if (!story) return
@@ -380,10 +459,21 @@ export default function ReaderPage() {
     if (!isPlaying || prefs.mode === 'reading') return
     if (!block || !story) return
 
+    const advanceAfterBeat = () => {
+      if (!autoAdvance) {
+        setPlaying(false)
+        return
+      }
+      timerRef.current = setTimeout(advance, BEAT_GAP_MS / prefs.playbackSpeed)
+    }
+
     // ── Pause block: skip after duration ──
     if (block.type === 'pause') {
-      const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
-      timerRef.current = setTimeout(advance, ms)
+      const ms = ((block.duration ?? 1) * 1000 + BEAT_GAP_MS) / prefs.playbackSpeed
+      timerRef.current = setTimeout(() => {
+        if (autoAdvance) advance()
+        else setPlaying(false)
+      }, ms)
       return () => { if (timerRef.current) clearTimeout(timerRef.current) }
     }
 
@@ -393,22 +483,31 @@ export default function ReaderPage() {
         const sfxAudio = new Audio(block.audioUrl)
         sfxAudio.loop = false
         sfxAudio.volume = prefs.sfxVolume ?? 1
-        sfxAudio.onended = () => advance()
+        sfxAudio.onended = advanceAfterBeat
         sfxAudio.onerror = () => {
           // File missing — fall back to duration timer
-          const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
-          timerRef.current = setTimeout(advance, ms)
+          const ms = ((block.duration ?? 1) * 1000 + BEAT_GAP_MS) / prefs.playbackSpeed
+          timerRef.current = setTimeout(() => {
+            if (autoAdvance) advance()
+            else setPlaying(false)
+          }, ms)
         }
         audioRef.current = sfxAudio
         sfxAudio.play().catch(() => {
-          const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
-          timerRef.current = setTimeout(advance, ms)
+          const ms = ((block.duration ?? 1) * 1000 + BEAT_GAP_MS) / prefs.playbackSpeed
+          timerRef.current = setTimeout(() => {
+            if (autoAdvance) advance()
+            else setPlaying(false)
+          }, ms)
         })
         return () => { sfxAudio.pause(); sfxAudio.onended = null; sfxAudio.onerror = null }
       }
       // No audio URL — skip after nominal duration
       const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
-      timerRef.current = setTimeout(advance, ms)
+      timerRef.current = setTimeout(() => {
+        if (autoAdvance) advance()
+        else setPlaying(false)
+      }, ms)
       return () => { if (timerRef.current) clearTimeout(timerRef.current) }
     }
 
@@ -421,10 +520,10 @@ export default function ReaderPage() {
       audio.volume = (block.type === 'narration' || block.type === 'quote') && !hasAssignedChar
         ? prefs.narratorVolume
         : prefs.characterVolume
-      audio.onended = () => advance()
-      audio.onerror = () => advance()   // fallback if file missing
+      audio.onended = advanceAfterBeat
+      audio.onerror = advanceAfterBeat   // fallback if file missing
       audioRef.current = audio
-      audio.play().catch(() => advance())
+      audio.play().catch(advanceAfterBeat)
       return () => {
         audio.pause()
         audio.onended = null
@@ -440,7 +539,7 @@ export default function ReaderPage() {
       block.type === 'thought'   ? (block as any).text :
       block.type === 'quote'     ? (block as any).text : ''
 
-    if (!speakText) { advance(); return }
+    if (!speakText) { advanceAfterBeat(); return }
 
     const utter = new SpeechSynthesisUtterance(speakText)
     utter.rate   = Math.min(2, Math.max(0.5, prefs.playbackSpeed))
@@ -473,15 +572,15 @@ export default function ReaderPage() {
       }
     }
 
-    utter.onend   = () => advance()
-    utter.onerror = () => advance()
+    utter.onend   = advanceAfterBeat
+    utter.onerror = advanceAfterBeat
     utterRef.current = utter
     synth.speak(utter)
 
     return () => { synth.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, block, prefs.mode, prefs.playbackSpeed,
-      prefs.narratorVolume, prefs.characterVolume, voices])
+  }, [isPlaying, block, prefs.mode, prefs.playbackSpeed, autoAdvance,
+      prefs.narratorVolume, prefs.characterVolume, voices, replayNonce])
 
   // ── Scene atmosphere: ambience + music loops ──────────────────────────────
   useEffect(() => {
@@ -561,13 +660,89 @@ export default function ReaderPage() {
     return () => { if (navTimerRef.current) clearTimeout(navTimerRef.current) }
   }, [isPlaying, prefs.mode])
 
-  // ── TOC jump ──
-  const jumpTo = (ci: number, si: number) => {
-    setChapterIdx(ci); setSceneIdx(si); setBlockIdx(0)
-    const b0 = story?.chapters[ci]?.scenes[si]?.blocks[0]
-    setCurrentBlock(b0?.id ?? null)
+  // ── Controlled jumps ──
+  const jumpTo = (ci: number, si: number, bi = 0) => {
+    const targetBlock = story?.chapters[ci]?.scenes[si]?.blocks[bi]
+    setChapterIdx(ci); setSceneIdx(si); setBlockIdx(bi)
+    setCurrentBlock(targetBlock?.id ?? null)
     setShowTOC(false)
-    persistProgress(ci, si, 0)
+    setShowBookmarks(false)
+    persistProgress(ci, si, bi)
+  }
+
+  const pointStartAt = (ci: number, si: number, bi: number) => {
+    const wasPlaying = isPlaying
+    setPlaying(false)
+    synthRef.current?.cancel()
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current = null
+    }
+    jumpTo(ci, si, bi)
+    if (wasPlaying) window.setTimeout(() => setPlaying(true), 0)
+  }
+
+  const replayCurrentBeat = () => {
+    synthRef.current?.cancel()
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current = null
+    }
+    setReplayNonce(n => n + 1)
+    setPlaying(true)
+  }
+
+  const toggleTocScene = (sceneId: string) => {
+    setExpandedTocScenes(prev => {
+      const next = new Set(prev)
+      next.has(sceneId) ? next.delete(sceneId) : next.add(sceneId)
+      return next
+    })
+  }
+
+  const setSleepTimer = (minutes: number | null) => {
+    setSleepTimerDuration(minutes)
+    setSleepTimerEndsAt(minutes ? Date.now() + minutes * 60_000 : null)
+  }
+
+  const continueFromLastStop = () => {
+    if (!story) return
+    const progress = getProgress(story.id)
+    if (!progress) return
+    jumpTo(progress.chapterIdx, progress.sceneIdx, progress.blockIdx)
+    setShowResumePrompt(false)
+  }
+
+  const startOver = () => {
+    setBookComplete(false)
+    setChapterComplete(null)
+    jumpTo(0, 0, 0)
+    setShowResumePrompt(false)
+  }
+
+  const toggleBookmark = () => {
+    if (!story || !chapter || !scene) return
+    const existing = bookmarks.find(b =>
+      b.chapterIdx === chapterIdx && b.sceneIdx === sceneIdx && b.blockIdx === blockIdx
+    )
+    if (existing) {
+      removeBookmark(story.id, existing.id)
+      return
+    }
+
+    addBookmark({
+      storyId: story.id,
+      chapterIdx,
+      sceneIdx,
+      blockIdx,
+      label: `${chapter.title} - ${scene.title} - Beat ${blockIdx + 1}`,
+    })
   }
 
   if (story === undefined) return (
@@ -609,6 +784,16 @@ export default function ReaderPage() {
     }
     return total > 0 ? (done / total) * 100 : 0
   })()
+  const totalBeats = story.chapters.reduce((a, c) => a + c.scenes.reduce((b, s) => b + s.blocks.length, 0), 0)
+  const completedBeats = story.chapters.reduce((done, ch, ci) => {
+    if (ci < chapterIdx) return done + ch.scenes.reduce((n, sc) => n + sc.blocks.length, 0)
+    if (ci > chapterIdx) return done
+    return done + ch.scenes.reduce((n, sc, si) => si < sceneIdx ? n + sc.blocks.length : n, 0) + blockIdx
+  }, 0)
+  const currentBeatNumber = totalBeats > 0 ? Math.min(totalBeats, completedBeats + 1) : 0
+  const remainingMinutes = story.durationMinutes && totalBeats > 0
+    ? Math.max(1, Math.ceil(((totalBeats - completedBeats) / totalBeats) * story.durationMinutes))
+    : null
 
   return (
     <div className={clsx(
@@ -655,29 +840,40 @@ export default function ReaderPage() {
           </div>
 
           {/* Mode pills */}
-          <div className="flex items-center gap-1 bg-bg-elevated rounded-lg p-1">
-            {MODES.map(({ id: modeId, label, icon: Icon }) => (
-              <button
-                key={modeId}
-                onClick={() => { setMode(modeId); if (modeId === 'cinematic') setCinemaMode(true) }}
-                className={clsx(
-                  'flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all',
-                  prefs.mode === modeId
-                    ? 'bg-accent text-white shadow-sm'
-                    : 'text-text-muted hover:text-text-primary'
-                )}
-                title={label}
-              >
-                <Icon size={11} />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
+          {!childMode && (
+            <div className="flex items-center gap-1 bg-bg-elevated rounded-lg p-1">
+              {MODES.map(({ id: modeId, label, icon: Icon }) => (
+                <button
+                  key={modeId}
+                  onClick={() => { setMode(modeId); if (modeId === 'cinematic') setCinemaMode(true) }}
+                  className={clsx(
+                    'flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all',
+                    prefs.mode === modeId
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-text-muted hover:text-text-primary'
+                  )}
+                  title={label}
+                >
+                  <Icon size={11} />
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex items-center gap-1">
             <button onClick={() => setShowTOC(true)}
               className="btn-ghost px-2 py-1.5 text-text-muted" title="Table of contents">
               <List size={15} />
+            </button>
+            <button onClick={() => setShowBookmarks(true)}
+              className="btn-ghost px-2 py-1.5 text-text-muted" title="Bookmarks">
+              <Bookmark size={15} />
+            </button>
+            <button onClick={toggleBookmark}
+              className={clsx('btn-ghost px-2 py-1.5', currentIsBookmarked ? 'text-accent' : 'text-text-muted')}
+              title={currentIsBookmarked ? 'Remove bookmark' : 'Bookmark this beat'}>
+              {currentIsBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
             </button>
             <button onClick={() => setShowSettings(s => !s)}
               className="btn-ghost px-2 py-1.5 text-text-muted" title="Settings">
@@ -688,14 +884,75 @@ export default function ReaderPage() {
         </>
       )}
 
-      {/* ── Progress bar — fixed just below header ── */}
-      {!cinemaMode && (
-        <div className="fixed top-12 left-0 right-0 z-40 h-0.5 bg-bg-elevated">
-          <div className="h-full bg-accent transition-all duration-500" style={{ width: `${progressPct}%` }} />
+      {/* ── Settings panel ── */}
+      {/* Resume prompt */}
+      {showResumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 pb-4 sm:pb-0">
+          <div className="card-elevated w-full max-w-sm p-5 shadow-elevated animate-slide-up space-y-4">
+            <div>
+              <p className="text-text-primary font-semibold">Continue reading?</p>
+              <p className="text-text-muted text-xs mt-1">
+                You have a saved position in this story.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={startOver} className="btn-secondary text-sm justify-center">
+                <RotateCcw size={13} /> Start over
+              </button>
+              <button onClick={continueFromLastStop} className="btn-primary text-sm justify-center">
+                <Play size={13} /> Continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ── Settings panel ── */}
+      {/* Chapter complete */}
+      {chapterComplete && !bookComplete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
+          <div className="card-elevated w-full max-w-sm p-5 shadow-elevated animate-slide-up space-y-4">
+            <div>
+              <p className="text-text-primary font-semibold">Chapter complete</p>
+              <p className="text-text-muted text-xs mt-1">{chapterComplete.chapterTitle}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => { setPlaying(false); setChapterComplete(null) }}
+                className="btn-secondary text-sm justify-center"
+              >
+                Take a break
+              </button>
+              <button
+                onClick={() => { setChapterComplete(null); setPlaying(true) }}
+                className="btn-primary text-sm justify-center"
+              >
+                <Play size={13} /> Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Book complete */}
+      {bookComplete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 pb-4 sm:pb-0">
+          <div className="card-elevated w-full max-w-sm p-5 shadow-elevated animate-slide-up space-y-4">
+            <div>
+              <p className="text-text-primary font-semibold">Book completed</p>
+              <p className="text-text-muted text-xs mt-1">You reached the end of {story.title}.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={startOver} className="btn-secondary text-sm justify-center">
+                <RotateCcw size={13} /> Start over
+              </button>
+              <Link href="/library" className="btn-primary text-sm justify-center">
+                <BookOpen size={13} /> Library
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSettings && (
         <div className="fixed top-12 right-4 z-50 w-72 card-elevated p-5 shadow-elevated animate-slide-down">
           <div className="flex items-center justify-between mb-4">
@@ -817,6 +1074,69 @@ export default function ReaderPage() {
                 )} />
               </div>
             </label>
+
+            {/* Auto-advance */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-text-secondary flex items-center gap-1.5">
+                <FastForward size={11} /> Auto-advance beats
+              </span>
+              <div onClick={() => setPref('autoAdvance', !autoAdvance)}
+                className={clsx(
+                  'w-10 h-5 rounded-full transition-colors relative cursor-pointer',
+                  autoAdvance ? 'bg-accent' : 'bg-bg-elevated border border-bg-border'
+                )}>
+                <span className={clsx(
+                  'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                  autoAdvance ? 'translate-x-5' : 'translate-x-0.5'
+                )} />
+              </div>
+            </label>
+
+            {/* Child mode */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-text-secondary flex items-center gap-1.5">
+                <Users size={11} /> Child mode
+              </span>
+              <div onClick={() => setPref('childMode', !childMode)}
+                className={clsx(
+                  'w-10 h-5 rounded-full transition-colors relative cursor-pointer',
+                  childMode ? 'bg-accent' : 'bg-bg-elevated border border-bg-border'
+                )}>
+                <span className={clsx(
+                  'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                  childMode ? 'translate-x-5' : 'translate-x-0.5'
+                )} />
+              </div>
+            </label>
+
+            {/* Sleep timer */}
+            <div>
+              <label className="text-text-secondary mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><Timer size={11} /> Sleep timer</span>
+                <span className="text-text-primary">{sleepTimerMinutesLeft ? `${sleepTimerMinutesLeft}m` : 'Off'}</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: 'Off', value: null },
+                  { label: '5m', value: 5 },
+                  { label: '10m', value: 10 },
+                  { label: '15m', value: 15 },
+                ].map(option => (
+                  <button
+                    key={option.label}
+                    onClick={() => setSleepTimer(option.value)}
+                    className={clsx(
+                      'py-1.5 rounded-lg border text-[11px] transition-colors',
+                      sleepTimerDuration === option.value
+                        ? 'border-accent/40 text-accent bg-accent/10'
+                        : 'border-bg-border text-text-muted hover:text-text-primary'
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -827,7 +1147,10 @@ export default function ReaderPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowTOC(false)} />
           <div className="relative w-80 max-w-[90vw] bg-bg-secondary h-full ml-0 shadow-elevated flex flex-col animate-slide-down overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-bg-border">
-              <span className="text-text-primary font-semibold">Contents</span>
+              <div>
+                <span className="text-text-primary font-semibold">Start anywhere</span>
+                <p className="text-text-muted text-[10px] mt-0.5">Choose a chapter, scene, or exact beat.</p>
+              </div>
               <button onClick={() => setShowTOC(false)} className="text-text-muted hover:text-text-primary">
                 <X size={16} />
               </button>
@@ -840,19 +1163,54 @@ export default function ReaderPage() {
                   </div>
                   {ch.scenes.map((sc, si) => {
                     const isCurrent = ci === chapterIdx && si === sceneIdx
+                    const expanded = expandedTocScenes.has(sc.id)
                     return (
-                      <button
-                        key={sc.id}
-                        onClick={() => jumpTo(ci, si)}
-                        className={clsx(
-                          'w-full text-left px-6 py-2.5 text-sm transition-colors flex items-center gap-2',
-                          isCurrent
-                            ? 'text-accent bg-accent/10'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
+                      <div key={sc.id}>
+                        <div className={clsx(
+                          'flex items-center gap-1 px-5 py-1.5',
+                          isCurrent && 'bg-accent/5'
                         )}>
-                        {isCurrent && <ChevronRight size={11} />}
-                        {sc.title}
-                      </button>
+                          <button
+                            onClick={() => toggleTocScene(sc.id)}
+                            className="text-text-muted hover:text-text-primary p-1"
+                            title={expanded ? 'Hide beats' : 'Show beats'}
+                          >
+                            <ChevronRight size={11} className={clsx('transition-transform', expanded && 'rotate-90')} />
+                          </button>
+                          <button
+                            onClick={() => pointStartAt(ci, si, 0)}
+                            className={clsx(
+                              'flex-1 text-left text-sm transition-colors truncate',
+                              isCurrent ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
+                            )}
+                          >
+                            {sc.title}
+                          </button>
+                        </div>
+                        {expanded && (
+                          <div className="pb-1">
+                            {sc.blocks.map((tocBlock, bi) => {
+                              const isActiveBeat = ci === chapterIdx && si === sceneIdx && bi === blockIdx
+                              return (
+                                <button
+                                  key={tocBlock.id}
+                                  onClick={() => pointStartAt(ci, si, bi)}
+                                  className={clsx(
+                                    'w-full text-left pl-12 pr-4 py-1.5 text-xs transition-colors flex items-center gap-2',
+                                    isActiveBeat
+                                      ? 'text-accent bg-accent/10'
+                                      : 'text-text-muted hover:text-text-secondary hover:bg-bg-elevated'
+                                  )}
+                                  title="Start from this beat"
+                                >
+                                  {isActiveBeat && <Play size={10} />}
+                                  <span className="truncate">{blockSummary(tocBlock, bi)}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -863,10 +1221,59 @@ export default function ReaderPage() {
       )}
 
       {/* ── Main content ── */}
+      {/* Bookmarks drawer */}
+      {showBookmarks && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowBookmarks(false)} />
+          <div className="relative w-80 max-w-[90vw] bg-bg-secondary h-full ml-0 shadow-elevated flex flex-col animate-slide-down overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-bg-border">
+              <span className="text-text-primary font-semibold">Bookmarks</span>
+              <button onClick={() => setShowBookmarks(false)} className="text-text-muted hover:text-text-primary">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 py-2">
+              {bookmarks.length === 0 ? (
+                <div className="px-5 py-8 text-center">
+                  <Bookmark size={24} className="text-text-muted mx-auto mb-2" />
+                  <p className="text-text-secondary text-sm">No bookmarks yet</p>
+                  <p className="text-text-muted text-xs mt-1">Use the bookmark button in the top bar to save the current beat.</p>
+                </div>
+              ) : (
+                bookmarks.map(bookmark => {
+                  const bookmarkChapter = story.chapters[bookmark.chapterIdx]
+                  const bookmarkScene = bookmarkChapter?.scenes[bookmark.sceneIdx]
+                  return (
+                    <div key={bookmark.id} className="group flex items-start gap-2 px-5 py-3 hover:bg-bg-elevated transition-colors">
+                      <button
+                        onClick={() => pointStartAt(bookmark.chapterIdx, bookmark.sceneIdx, bookmark.blockIdx)}
+                        className="flex-1 min-w-0 text-left"
+                      >
+                        <p className="text-text-primary text-sm font-medium truncate">{bookmark.label}</p>
+                        <p className="text-text-muted text-[11px] mt-0.5 truncate">
+                          {bookmarkChapter?.title ?? 'Chapter'} - {bookmarkScene?.title ?? 'Scene'}
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => removeBookmark(story.id, bookmark.id)}
+                        className="text-text-muted hover:text-danger opacity-60 group-hover:opacity-100 transition-opacity p-1"
+                        title="Remove bookmark"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className={clsx(
         'flex-1 overflow-y-auto transition-all duration-500',
         cinemaMode ? 'pb-0' : 'pb-32',
-        !cinemaMode && 'pt-[52px]'   // clear fixed header (h-12 = 48px) + progress bar (2px) + 2px gap
+        !cinemaMode && 'pt-12'
       )}>
         {cinemaMode ? (
           // ── Cinematic mode ──
@@ -979,11 +1386,15 @@ export default function ReaderPage() {
             {/* Blocks */}
             <div className="space-y-1">
               {blocks.map((b, i) => (
-                <div key={b.id} onClick={() => {
-                  setBlockIdx(i)
-                  setCurrentBlock(b.id)
-                  persistProgress(chapterIdx, sceneIdx, i)
-                }}>
+                <div
+                  key={b.id}
+                  onClick={() => pointStartAt(chapterIdx, sceneIdx, i)}
+                  className={clsx(
+                    'rounded-lg transition-colors cursor-pointer',
+                    i !== blockIdx && 'hover:bg-bg-elevated/50'
+                  )}
+                  title={isPlaying ? 'Restart playback from this beat' : 'Start from this beat'}
+                >
                   <BlockView
                     block={b}
                     chars={story.characters}
@@ -1033,7 +1444,11 @@ export default function ReaderPage() {
             {/* Block info */}
             <div className="flex-1 min-w-0">
               <p className="text-text-muted text-[10px] truncate">
-                {scene?.title} · {blockIdx + 1} / {blocks.length}
+                {scene?.title}
+              </p>
+              <p className="text-text-muted text-[10px] truncate">
+                {Math.round(progressPct)}% complete - {currentBeatNumber} / {totalBeats} beats
+                {remainingMinutes ? ` - about ${remainingMinutes} min left` : ''}
               </p>
             </div>
 
@@ -1046,11 +1461,20 @@ export default function ReaderPage() {
                 <Rewind size={16} />
               </button>
               <button
+                onClick={replayCurrentBeat}
+                className="btn-ghost p-1.5 text-text-muted hover:text-text-primary"
+                title="Replay current beat">
+                <RotateCcw size={15} />
+              </button>
+              <button
                 onClick={() => setPlaying(!isPlaying)}
-                className="w-9 h-9 rounded-full bg-accent hover:bg-accent/80 flex items-center justify-center shadow-accent transition-all">
+                className={clsx(
+                  'rounded-full bg-accent hover:bg-accent/80 flex items-center justify-center shadow-accent transition-all',
+                  childMode ? 'w-12 h-12' : 'w-9 h-9'
+                )}>
                 {isPlaying
-                  ? <Pause size={15} className="text-white" />
-                  : <Play  size={15} className="text-white fill-white" />
+                  ? <Pause size={childMode ? 20 : 15} className="text-white" />
+                  : <Play  size={childMode ? 20 : 15} className="text-white fill-white" />
                 }
               </button>
               <button
@@ -1061,8 +1485,30 @@ export default function ReaderPage() {
               </button>
             </div>
 
+            {/* Advance mode */}
+            <button
+              onClick={() => setPref('autoAdvance', !autoAdvance)}
+              className={clsx(
+                'hidden sm:flex items-center gap-1 shrink-0 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors',
+                autoAdvance
+                  ? 'border-accent/40 bg-accent/10 text-accent'
+                  : 'border-bg-border text-text-muted hover:text-text-primary'
+              )}
+              title={autoAdvance ? 'Auto-advance is on' : 'Manual beat mode is on'}
+            >
+              <FastForward size={11} />
+              {autoAdvance ? 'Auto' : 'Manual'}
+            </button>
+
+            {sleepTimerMinutesLeft && (
+              <div className="hidden sm:flex items-center gap-1 shrink-0 text-[10px] text-text-muted">
+                <Timer size={11} />
+                {sleepTimerMinutesLeft}m
+              </div>
+            )}
+
             {/* Speed */}
-            <div className="flex items-center gap-1 shrink-0">
+            <div className={clsx('items-center gap-1 shrink-0', childMode ? 'hidden' : 'flex')}>
               <button onClick={() => setPref('playbackSpeed', Math.max(0.5, prefs.playbackSpeed - 0.25))}
                 className="btn-ghost p-1 text-text-muted text-xs">
                 <Minus size={11} />

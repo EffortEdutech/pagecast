@@ -61,7 +61,13 @@ function dbContentToBlock(
     case 'pause':
       return { ...base, type: 'pause', duration: Number(content.duration_ms ?? 2000) / 1000 }
     case 'sfx':
-      return { ...base, type: 'sfx', label: String(content.label ?? ''), sfxFile: String(content.sfx_file ?? '') }
+      return {
+        ...base,
+        type: 'sfx',
+        label: String(content.label ?? ''),
+        sfxFile: String(content.sfx_file ?? ''),
+        duration: Number(content.duration_ms ?? 1000) / 1000,
+      }
     default:
       return { ...base, type: 'narration', text: '' }
   }

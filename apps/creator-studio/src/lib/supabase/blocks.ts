@@ -3,7 +3,7 @@
  * Sprint 3: full story content CRUD
  */
 import { createClient } from './client'
-import type { Chapter, Scene, StoryBlock, BlockType, DialogueBlock, QuoteBlock } from '@/types'
+import type { Chapter, Scene, Story, StoryBlock, BlockType, DialogueBlock, QuoteBlock } from '@/types'
 
 // Types
 
@@ -63,7 +63,13 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
     case 'pause':
       return { ...base, type: 'pause', duration: Number(c.duration_ms ?? 2000) / 1000 }
     case 'sfx':
-      return { ...base, type: 'sfx', label: String(c.label ?? ''), sfxFile: String(c.sfx_file ?? '') }
+      return {
+        ...base,
+        type: 'sfx',
+        label: String(c.label ?? ''),
+        sfxFile: String(c.sfx_file ?? ''),
+        duration: Number(c.duration_ms ?? 1000) / 1000,
+      }
     default:
       return { ...base, type: 'narration', text: '' }
   }
@@ -81,7 +87,11 @@ function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
     case 'pause':
       return { duration_ms: block.duration * 1000 }
     case 'sfx':
-      return { label: block.label, sfx_file: block.sfxFile }
+      return {
+        label: block.label,
+        sfx_file: block.sfxFile,
+        duration_ms: typeof block.duration === 'number' ? block.duration * 1000 : undefined,
+      }
     default:
       return {}
   }
@@ -120,6 +130,7 @@ function storyBlockToDbContentPatch(
     case 'sfx':
       if ('label' in block) next.label = block.label
       if ('sfxFile' in block) next.sfx_file = block.sfxFile
+      if ('duration' in block && typeof block.duration === 'number') next.duration_ms = block.duration * 1000
       break
   }
 
@@ -184,6 +195,16 @@ export async function updateChapter(chapterId: string, updates: { title?: string
   const supabase = createClient()
   const { error } = await supabase.from('chapters').update(updates).eq('id', chapterId)
   return !error
+}
+
+export async function reorderChapters(chapters: { id: string; sort_order: number }[]): Promise<boolean> {
+  const supabase = createClient()
+  const results = await Promise.all(
+    chapters.map(({ id, sort_order }) =>
+      supabase.from('chapters').update({ sort_order }).eq('id', id)
+    )
+  )
+  return results.every(r => !r.error)
 }
 
 export async function deleteChapter(chapterId: string): Promise<boolean> {
@@ -274,4 +295,87 @@ export async function reorderBlocks(blocks: { id: string; sort_order: number }[]
     )
   )
   return results.every(r => !r.error)
+}
+
+export async function replaceBookContent(bookId: string, story: Story): Promise<boolean> {
+  const supabase = createClient()
+
+  const desiredChapterIds = new Set(story.chapters.map(ch => ch.id))
+  const desiredSceneIds = new Set(story.chapters.flatMap(ch => ch.scenes.map(sc => sc.id)))
+  const desiredBlockIds = new Set(story.chapters.flatMap(ch => ch.scenes.flatMap(sc => sc.blocks.map(b => b.id))))
+
+  const [{ data: existingChapters }, { data: existingScenes }, { data: existingBlocks }] = await Promise.all([
+    supabase.from('chapters').select('id').eq('book_id', bookId),
+    supabase.from('scenes').select('id').eq('book_id', bookId),
+    supabase.from('blocks').select('id').eq('book_id', bookId),
+  ])
+
+  const blocksToDelete = (existingBlocks ?? []).map(b => b.id).filter(id => !desiredBlockIds.has(id))
+  const scenesToDelete = (existingScenes ?? []).map(s => s.id).filter(id => !desiredSceneIds.has(id))
+  const chaptersToDelete = (existingChapters ?? []).map(ch => ch.id).filter(id => !desiredChapterIds.has(id))
+
+  if (blocksToDelete.length) {
+    const { error } = await supabase.from('blocks').delete().in('id', blocksToDelete)
+    if (error) return false
+  }
+  if (scenesToDelete.length) {
+    const { error } = await supabase.from('scenes').delete().in('id', scenesToDelete)
+    if (error) return false
+  }
+  if (chaptersToDelete.length) {
+    const { error } = await supabase.from('chapters').delete().in('id', chaptersToDelete)
+    if (error) return false
+  }
+
+  const chapterRows = story.chapters.map((chapter, index) => ({
+    id: chapter.id,
+    book_id: bookId,
+    title: chapter.title,
+    sort_order: index,
+  }))
+  if (chapterRows.length) {
+    const { error } = await supabase.from('chapters').upsert(chapterRows, { onConflict: 'id' })
+    if (error) return false
+  }
+
+  const sceneRows = story.chapters.flatMap(chapter =>
+    chapter.scenes.map((scene, index) => ({
+      id: scene.id,
+      chapter_id: chapter.id,
+      book_id: bookId,
+      title: scene.title,
+      sort_order: index,
+      ambience_url: scene.ambienceUrl ?? null,
+      music_url: scene.musicUrl ?? null,
+      ambience_volume: scene.ambienceVolume ?? null,
+      music_volume: scene.musicVolume ?? null,
+      ambience_loop: scene.ambienceLoop ?? null,
+      music_loop: scene.musicLoop ?? null,
+      scene_image: scene.sceneImage ?? null,
+    }))
+  )
+  if (sceneRows.length) {
+    const { error } = await supabase.from('scenes').upsert(sceneRows, { onConflict: 'id' })
+    if (error) return false
+  }
+
+  const blockRows = story.chapters.flatMap(chapter =>
+    chapter.scenes.flatMap(scene =>
+      scene.blocks.map((block, index) => ({
+        id: block.id,
+        scene_id: scene.id,
+        book_id: bookId,
+        type: block.type,
+        content: storyBlockToDbContent(block),
+        audio_url: block.audioUrl ?? null,
+        sort_order: index,
+      }))
+    )
+  )
+  if (blockRows.length) {
+    const { error } = await supabase.from('blocks').upsert(blockRows, { onConflict: 'id' })
+    if (error) return false
+  }
+
+  return true
 }

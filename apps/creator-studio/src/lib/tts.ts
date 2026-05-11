@@ -33,11 +33,17 @@ export interface TtsGenerateOpts {
   bookId:  string
   blockId: string
   speed?:  number
+  blockType?: string
+  emotion?: string
+  style?: string
+  voiceLabel?: string
 }
 
 export interface TtsResult {
   url:   string | null
   error: string | null
+  provider?: string | null
+  providerVoice?: string | null
 }
 
 /**
@@ -45,7 +51,9 @@ export interface TtsResult {
  * Returns the public URL on success, or an error string on failure.
  */
 export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult> {
-  const { apiKey, provider } = getTtsSettings()
+  const settings = getTtsSettings()
+  const apiKey = settings.apiKey
+  const provider = opts.voiceId.startsWith('elevenlabs:') ? 'elevenlabs' : settings.provider
 
   if (!apiKey) {
     return {
@@ -69,7 +77,11 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
         voiceId: opts.voiceId,
         provider,
         apiKey,
-        speed:   opts.speed ?? 1.0,
+        speed:   opts.speed ?? 0.95,
+        blockType: opts.blockType,
+        emotion: opts.emotion,
+        style: opts.style,
+        voiceLabel: opts.voiceLabel,
       }),
     })
   } catch (e: any) {
@@ -82,6 +94,8 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
   }
 
   // 2 — Upload audio buffer to Supabase Storage
+  const providerName = res.headers.get('X-TTS-Provider')
+  const providerVoice = res.headers.get('X-TTS-Voice')
   const blob = await res.blob()
   const file = new File([blob], `${opts.blockId}.mp3`, { type: 'audio/mpeg' })
 
@@ -90,5 +104,5 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
     return { url: null, error: 'Audio generated but upload to storage failed.' }
   }
 
-  return { url, error: null }
+  return { url, error: null, provider: providerName, providerVoice }
 }

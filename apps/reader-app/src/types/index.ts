@@ -48,7 +48,7 @@ export interface ReaderPrefs {
   narratorVolume: number; characterVolume: number
   musicVolume: number; sfxVolume: number
   playbackSpeed: number; fontSize: 'sm'|'base'|'lg'|'xl'
-  autoScroll: boolean; dyslexiaFont: boolean
+  autoScroll: boolean; autoAdvance: boolean; childMode: boolean; dyslexiaFont: boolean
 }
 
 export interface ReadingProgress {
@@ -56,4 +56,16 @@ export interface ReadingProgress {
   chapterIdx: number; sceneIdx: number; blockIdx: number
   timestamp: number
   lastReadAt?: string   // ISO date string, optional for backwards compat
+  completedAt?: string | null
+}
+
+export interface ReaderBookmark {
+  id: string
+  storyId: string
+  chapterIdx: number
+  sceneIdx: number
+  blockIdx: number
+  label: string
+  note?: string
+  createdAt: string
 }

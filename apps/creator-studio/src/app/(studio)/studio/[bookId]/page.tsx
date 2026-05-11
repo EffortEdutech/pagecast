@@ -48,6 +48,70 @@ function InlineEdit({ value, onSave, className }: { value: string; onSave: (v: s
   )
 }
 
+function ChapterInsertDialog({
+  chapters,
+  activeChapterId,
+  onAdd,
+  onClose,
+}: {
+  chapters: Chapter[]
+  activeChapterId: string | null
+  onAdd: (title: string, index: number) => Promise<void>
+  onClose: () => void
+}) {
+  const activeIndex = chapters.findIndex(ch => ch.id === activeChapterId)
+  const defaultIndex = chapters.length === 0 ? 0 : Math.max(0, activeIndex) + 1
+  const [title, setTitle] = useState(`Chapter ${chapters.length + 1}`)
+  const [position, setPosition] = useState(String(defaultIndex))
+  const [saving, setSaving] = useState(false)
+  const options = chapters.length === 0
+    ? [{ label: 'At beginning', index: 0 }]
+    : [
+        { label: 'At beginning', index: 0 },
+        ...chapters.flatMap((chapter, idx) => [
+          { label: `Before ${chapter.title}`, index: idx },
+          { label: `After ${chapter.title}`, index: idx + 1 },
+        ]),
+        { label: 'At end', index: chapters.length },
+      ]
+
+  const handleAdd = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    await onAdd(title.trim(), Number(position))
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="card-elevated w-full max-w-sm p-5 space-y-4">
+        <div>
+          <h3 className="text-text-primary font-semibold">Add chapter</h3>
+          <p className="text-text-muted text-xs mt-1">Choose where this chapter should be inserted.</p>
+        </div>
+        <input
+          className="input text-sm"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          autoFocus
+          placeholder="Chapter title"
+        />
+        <select className="input text-sm" value={position} onChange={e => setPosition(e.target.value)}>
+          {options.map((option, idx) => (
+            <option key={`${option.label}-${idx}`} value={option.index}>{option.label}</option>
+          ))}
+        </select>
+        <div className="flex justify-end gap-2">
+          <button className="btn-secondary text-sm" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn-primary text-sm min-w-24 justify-center" onClick={handleAdd} disabled={saving || !title.trim()}>
+            {saving ? <><Loader2 size={13} className="animate-spin" /> Adding</> : 'Add chapter'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Studio Page ─────────────────────────────────────────────────────────
 
 export default function StudioPage() {
@@ -65,6 +129,7 @@ export default function StudioPage() {
   const [showImport,    setShowImport]    = useState(false)
   const [showSettings, setShowSettings]   = useState(false)
   const [showPublishQA, setShowPublishQA] = useState(false)
+  const [showChapterInsert, setShowChapterInsert] = useState(false)
   const [chaptersWidth, setChaptersWidth] = useState(260)
 
   useEffect(() => {
@@ -108,11 +173,12 @@ export default function StudioPage() {
 
   // ── Handlers ──
 
-  const handleAddChapter = async () => {
-    const ch = await editor.addChapter(`Chapter ${story.chapters.length + 1}`)
+  const handleAddChapter = async (title = `Chapter ${story.chapters.length + 1}`, insertIndex?: number) => {
+    const ch = await editor.addChapter(title, insertIndex)
     if (!ch) return
     setActiveChapterId(ch.id)
     setExpandedChapters(prev => new Set(Array.from(prev).concat(ch.id)))
+    setShowChapterInsert(false)
   }
 
   const handleAddScene = async (chapterId: string) => {
@@ -121,7 +187,7 @@ export default function StudioPage() {
     if (sc) setActiveSceneId(sc.id)
   }
 
-  const handleAddBlock = async (type: BlockType) => {
+  const handleAddBlock = async (type: BlockType, insertIndex?: number) => {
     if (!activeChapterId || !activeSceneId) return
     const id = uuid()
     const defaultChar = story.characters.find(c => c.role === 'character')?.id ?? story.characters[0]?.id ?? ''
@@ -134,10 +200,22 @@ export default function StudioPage() {
       case 'pause':    block = { id, type: 'pause',    duration: 2 }; break
       case 'sfx':      block = { id, type: 'sfx',      sfxFile: '', label: '' }; break
     }
-    await editor.addBlock(activeChapterId, activeSceneId, block)
+    await editor.addBlock(activeChapterId, activeSceneId, block, insertIndex)
   }
 
-  const handleSave = () => {
+  const handleMoveBlock = async (fromIndex: number, direction: -1 | 1) => {
+    if (!activeChapterId || !activeSceneId || !activeScene) return
+    const toIndex = fromIndex + direction
+    if (toIndex < 0 || toIndex >= activeScene.blocks.length) return
+    const blocks = [...activeScene.blocks]
+    const [moved] = blocks.splice(fromIndex, 1)
+    blocks.splice(toIndex, 0, moved)
+    await editor.reorderBlocks(activeChapterId, activeSceneId, blocks)
+  }
+
+  const handleSave = async () => {
+    const ok = await editor.saveContent()
+    if (!ok) return
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -280,8 +358,21 @@ export default function StudioPage() {
         >
           {story.status === 'published' ? <><Film size={13} /> Unpublish</> : <><Film size={13} /> Publish</>}
         </button>
-        <button className={clsx('text-xs', saved ? 'btn-secondary text-success' : 'btn-primary')} onClick={handleSave}>
-          {saved ? <><Check size={13} /> Saved</> : <><Save size={13} /> Save</>}
+        <button
+          className={clsx('text-xs', saved ? 'btn-secondary text-success' : editor.isDirty ? 'btn-primary' : 'btn-secondary')}
+          onClick={handleSave}
+          disabled={editor.saving || (!editor.isDirty && !saved)}
+          title={editor.isDirty ? 'Save story content to database' : 'No unsaved story content changes'}
+        >
+          {editor.saving ? (
+            <><Loader2 size={13} className="animate-spin" /> Saving</>
+          ) : saved ? (
+            <><Check size={13} /> Saved</>
+          ) : editor.isDirty ? (
+            <><Save size={13} /> Save changes</>
+          ) : (
+            <><Check size={13} /> Saved</>
+          )}
         </button>
       </Header>
 
@@ -294,7 +385,7 @@ export default function StudioPage() {
         >
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-bg-border">
             <span className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">Chapters</span>
-            <button onClick={handleAddChapter} className="text-text-muted hover:text-accent transition-colors p-0.5">
+            <button onClick={() => setShowChapterInsert(true)} className="text-text-muted hover:text-accent transition-colors p-0.5">
               <Plus size={13} />
             </button>
           </div>
@@ -304,7 +395,7 @@ export default function StudioPage() {
               <div className="text-center py-8 px-3 space-y-2">
                 <Layers size={24} className="text-text-muted mx-auto" />
                 <p className="text-text-muted text-xs">No chapters yet</p>
-                <button onClick={handleAddChapter} className="btn-secondary text-xs w-full justify-center">
+                <button onClick={() => setShowChapterInsert(true)} className="btn-secondary text-xs w-full justify-center">
                   <Plus size={11} /> Add chapter
                 </button>
               </div>
@@ -390,7 +481,15 @@ export default function StudioPage() {
         </aside>
 
         {/* ── CENTER: Block Editor Canvas ── */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="relative flex-1 flex flex-col overflow-hidden">
+          {editor.saving && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg-primary/70 backdrop-blur-sm">
+              <div className="card-elevated flex items-center gap-2 px-4 py-3 text-sm text-text-secondary">
+                <Loader2 size={15} className="animate-spin text-accent" />
+                Saving story content...
+              </div>
+            </div>
+          )}
           {activeScene ? (
             <>
               {/* Scene header bar */}
@@ -431,6 +530,11 @@ export default function StudioPage() {
                       characters={story.characters}
                       onUpdate={updates => editor.editBlock(activeChapterId!, activeSceneId!, block.id, updates)}
                       onDelete={() => editor.removeBlock(activeChapterId!, activeSceneId!, block.id)}
+                      onMoveUp={() => handleMoveBlock(idx, -1)}
+                      onMoveDown={() => handleMoveBlock(idx, 1)}
+                      onInsertAbove={type => handleAddBlock(type, idx)}
+                      canMoveUp={idx > 0}
+                      canMoveDown={idx < activeScene.blocks.length - 1}
                       dragHandleProps={{}}
                     />
                   ))
@@ -438,7 +542,7 @@ export default function StudioPage() {
 
                 {/* Add block */}
                 <div className="pt-2">
-                  <AddBlockMenu onAdd={handleAddBlock} />
+                  <AddBlockMenu onAdd={type => handleAddBlock(type)} />
                 </div>
               </div>
             </>
@@ -455,7 +559,7 @@ export default function StudioPage() {
                   </p>
                 </div>
                 {story.chapters.length === 0 && (
-                  <button className="btn-primary mx-auto" onClick={handleAddChapter}>
+                  <button className="btn-primary mx-auto" onClick={() => setShowChapterInsert(true)}>
                     <Plus size={14} /> Add First Chapter
                   </button>
                 )}
@@ -481,6 +585,15 @@ export default function StudioPage() {
         <TextImportModal
           onImport={handleImport}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {showChapterInsert && (
+        <ChapterInsertDialog
+          chapters={story.chapters}
+          activeChapterId={activeChapterId}
+          onAdd={handleAddChapter}
+          onClose={() => setShowChapterInsert(false)}
         />
       )}
 

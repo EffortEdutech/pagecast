@@ -20,6 +20,7 @@ export function useSync() {
   const store = useReaderStore()
   const syncedRef = useRef(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bookmarkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── One-time boot sync ──
   useEffect(() => {
@@ -68,6 +69,40 @@ export function useSync() {
           return { progress: merged }
         })
       }
+
+      // Load bookmarks
+      const bookmarkMap = await ProgressApi.fetchAllBookmarks()
+      if (Object.keys(bookmarkMap).length > 0) {
+        useReaderStore.setState(s => ({
+          bookmarks: {
+            ...s.bookmarks,
+            ...Object.fromEntries(
+              Object.entries(bookmarkMap).map(([bookId, list]) => [
+                bookId,
+                [
+                  ...(s.bookmarks[bookId] ?? []),
+                  ...list.map(b => ({
+                    id: b.id ?? crypto.randomUUID(),
+                    storyId: bookId,
+                    chapterIdx: b.chapterIdx,
+                    sceneIdx: b.sceneIdx,
+                    blockIdx: b.blockIdx,
+                    label: b.label,
+                    note: b.note ?? undefined,
+                    createdAt: b.createdAt ?? new Date().toISOString(),
+                  })),
+                ].filter((bookmark, index, all) =>
+                  all.findIndex(item =>
+                    item.chapterIdx === bookmark.chapterIdx &&
+                    item.sceneIdx === bookmark.sceneIdx &&
+                    item.blockIdx === bookmark.blockIdx
+                  ) === index
+                ),
+              ])
+            ),
+          },
+        }))
+      }
     }
 
     boot()
@@ -92,6 +127,8 @@ export function useSync() {
             chapterIdx: p.chapterIdx,
             sceneIdx: p.sceneIdx,
             blockIdx: p.blockIdx,
+            lastReadAt: p.lastReadAt,
+            completedAt: p.completedAt,
           })
         )
       )
@@ -101,4 +138,35 @@ export function useSync() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
   }, [store.progress]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Debounced bookmark write-back ──
+  useEffect(() => {
+    const bookmarks = store.bookmarks
+    if (!Object.keys(bookmarks).length) return
+
+    if (bookmarkTimerRef.current) clearTimeout(bookmarkTimerRef.current)
+    bookmarkTimerRef.current = setTimeout(async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await Promise.all(
+        Object.entries(bookmarks).map(([bookId, list]) =>
+          ProgressApi.saveBookmarks(bookId, list.map(b => ({
+            bookId,
+            chapterIdx: b.chapterIdx,
+            sceneIdx: b.sceneIdx,
+            blockIdx: b.blockIdx,
+            label: b.label,
+            note: b.note,
+            createdAt: b.createdAt,
+          })))
+        )
+      )
+    }, 3000)
+
+    return () => {
+      if (bookmarkTimerRef.current) clearTimeout(bookmarkTimerRef.current)
+    }
+  }, [store.bookmarks]) // eslint-disable-line react-hooks/exhaustive-deps
 }

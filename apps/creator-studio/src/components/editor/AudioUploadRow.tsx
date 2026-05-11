@@ -1,63 +1,11 @@
 'use client'
-import { useRef, useState, useEffect, useCallback } from 'react'
-import { Upload, Play, Pause, Trash2, Loader2, AlertCircle, Wand2, RefreshCw, Mic } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { Upload, Play, Pause, Trash2, Loader2, AlertCircle, Wand2, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { uploadBlockAudio, deleteBlockAudio } from '@/lib/supabase/storage'
 import { generateBlockTts, getTtsSettings } from '@/lib/tts'
+import { getOpenAiVoiceForVoiceId, getPageCastVoice } from '@/lib/voiceLibrary'
 import type { StoryBlock } from '@/types'
-
-// Maps internal voiceId → browser speech characteristics
-const VOICE_META: Record<string, { pitch: number; rate: number; female: boolean }> = {
-  ai_narrator_warm: { pitch: 1.0,  rate: 0.88, female: false },
-  ai_narrator_deep: { pitch: 0.8,  rate: 0.85, female: false },
-  ai_female_soft:   { pitch: 1.2,  rate: 0.9,  female: true  },
-  ai_female_warm:   { pitch: 1.1,  rate: 1.0,  female: true  },
-  ai_male_deep:     { pitch: 0.7,  rate: 0.9,  female: false },
-  ai_male_calm:     { pitch: 0.9,  rate: 0.95, female: false },
-  ai_male_gruff:    { pitch: 0.65, rate: 0.92, female: false },
-  ai_child_female:  { pitch: 1.4,  rate: 1.05, female: true  },
-  ai_child_male:    { pitch: 1.3,  rate: 1.05, female: false },
-  ai_elder_female:  { pitch: 1.0,  rate: 0.85, female: true  },
-  ai_elder_male:    { pitch: 0.75, rate: 0.85, female: false },
-  ai_villain:       { pitch: 0.6,  rate: 0.88, female: false },
-  ai_whisper:       { pitch: 1.0,  rate: 0.75, female: false },
-  ai_dramatic:      { pitch: 0.85, rate: 0.9,  female: false },
-  ai_cartoon:       { pitch: 1.3,  rate: 1.1,  female: false },
-  ai_robot:         { pitch: 0.7,  rate: 1.15, female: false },
-  ai_fantasy:       { pitch: 1.15, rate: 0.88, female: true  },
-}
-
-const OPENAI_VOICE_MAP: Record<string, string> = {
-  ai_narrator_warm: 'fable',  ai_narrator_deep: 'onyx',
-  ai_female_soft:   'nova',   ai_female_warm:   'shimmer',
-  ai_male_deep:     'onyx',   ai_male_calm:     'echo',
-  ai_male_gruff:    'onyx',   ai_child_female:  'nova',
-  ai_child_male:    'echo',   ai_elder_female:  'shimmer',
-  ai_elder_male:    'fable',  ai_villain:       'onyx',
-  ai_whisper:       'echo',   ai_dramatic:      'fable',
-  ai_cartoon:       'alloy',  ai_robot:         'alloy',
-  ai_fantasy:       'nova',
-}
-
-// Female/male name hints for browser voice matching
-const FEMALE_HINTS = ['female','woman','samantha','victoria','karen','moira','fiona',
-  'allison','ava','susan','nicky','tessa','veena','zira','hazel','linda',
-  'aria','jenny','emma','nora','nara','siri','serena','kyoko','mei']
-const MALE_HINTS   = ['male','man','daniel','david','mark','alex','fred','junior',
-  'reed','thomas','rishi','guy','ryan','steffan','james','liam','lee','bruce']
-
-function pickVoice(voices: SpeechSynthesisVoice[], voiceId: string | undefined): SpeechSynthesisVoice | null {
-  const en = voices.filter(v => v.lang.startsWith('en'))
-  const pool = en.length ? en : voices
-  if (!pool.length) return null
-
-  const meta      = voiceId ? VOICE_META[voiceId] : undefined
-  const wantFemale = meta?.female ?? true  // default female when unknown
-
-  const hints   = wantFemale ? FEMALE_HINTS : MALE_HINTS
-  const matched = pool.filter(v => hints.some(h => v.name.toLowerCase().includes(h)))
-  return matched[0] ?? pool[0]
-}
 
 interface AudioUploadRowProps {
   block:       StoryBlock
@@ -87,17 +35,6 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   const [duration,     setDuration]     = useState(0)
   const [userId,       setUserId]       = useState<string | null>(null)
   const [hasTtsKey,    setHasTtsKey]    = useState(false)
-  const [isSpeaking,   setIsSpeaking]   = useState(false)
-
-  // ── Load browser voices asynchronously (fixes: always plays Nara) ──────────
-  const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([])
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    const load = () => setBrowserVoices(window.speechSynthesis.getVoices())
-    load()
-    window.speechSynthesis.addEventListener('voiceschanged', load)
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', load)
-  }, [])
 
   // ── Freeze badge info at generation time ────────────────────────────────────
   // Shows which voice was actually used, independent of current dropdown state
@@ -107,36 +44,6 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
     setHasTtsKey(!!getTtsSettings().apiKey)
   }, [])
-
-  // ── Browser preview — uses loaded voices + gender matching ─────────────────
-  const speakPreview = useCallback(() => {
-    if (!('speechSynthesis' in window)) return
-    const text = getBlockText(block)
-    if (!text.trim()) return
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel()
-      setIsSpeaking(false)
-      return
-    }
-
-    window.speechSynthesis.cancel()
-    const utt = new SpeechSynthesisUtterance(text)
-
-    const meta = voiceId ? VOICE_META[voiceId] : undefined
-    utt.rate   = meta?.rate  ?? 0.95
-    utt.pitch  = meta?.pitch ?? 1.0
-    utt.volume = 1
-
-    // Use the pre-loaded voice list (empty list = API not ready yet)
-    const picked = pickVoice(browserVoices, voiceId)
-    if (picked) utt.voice = picked
-
-    utt.onend   = () => setIsSpeaking(false)
-    utt.onerror = () => setIsSpeaking(false)
-    setIsSpeaking(true)
-    window.speechSynthesis.speak(utt)
-  }, [block, voiceId, isSpeaking, browserVoices])
 
   useEffect(() => { return () => { audioRef.current?.pause() } }, [block.audioUrl])
 
@@ -163,17 +70,26 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
     setHasTtsKey(!!fresh.apiKey)
 
     const effectiveVoiceId    = voiceId    ?? 'ai_female_soft'
-    const effectiveOpenAi     = OPENAI_VOICE_MAP[effectiveVoiceId] ?? 'nova'
+    const effectiveOpenAi     = getOpenAiVoiceForVoiceId(effectiveVoiceId)
     const effectiveVoiceLabel = voiceLabel ?? effectiveOpenAi
 
-    const { url, error } = await generateBlockTts({
-      text, voiceId: effectiveVoiceId, userId, bookId, blockId: block.id,
+    const { url, error, provider, providerVoice } = await generateBlockTts({
+      text,
+      voiceId: effectiveVoiceId,
+      userId,
+      bookId,
+      blockId: block.id,
+      speed: getPageCastVoice(effectiveVoiceId).rate,
+      blockType: block.type,
+      emotion: 'emotion' in block ? (block as any).emotion : undefined,
+      style: 'style' in block ? (block as any).style : undefined,
+      voiceLabel: effectiveVoiceLabel,
     })
 
     if (url) {
       onUpdate({ audioUrl: url } as Partial<StoryBlock>)
       // Freeze the badge at the voice used for this generation
-      setGenInfo({ label: effectiveVoiceLabel, openai: effectiveOpenAi })
+      setGenInfo({ label: effectiveVoiceLabel, openai: providerVoice ? `${provider ?? 'TTS'} ${providerVoice}` : effectiveOpenAi })
     } else {
       setActionError(error ?? 'Generation failed.')
     }
@@ -210,10 +126,11 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   const progress    = duration > 0 ? (currentTime / duration) * 100 : 0
   const blockText   = getBlockText(block)
   const canGenerate = !!blockText.trim() && !!userId
-  const openaiVoice = OPENAI_VOICE_MAP[voiceId ?? ''] ?? 'nova'
+  const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') ?? false
+  const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
+  const providerBadge = isElevenLabsVoice ? 'ElevenLabs exact voice' : `OpenAI ${openaiVoice}`
 
   // Voices not loaded yet?
-  const voicesReady = browserVoices.length > 0
 
   // ── No audio yet ──────────────────────────────────────────────────────────
   if (!block.audioUrl && !uploading && !generating) {
@@ -231,26 +148,6 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
           </button>
 
           <button
-            className={`btn-ghost text-xs px-2 py-1 border transition-colors ${
-              isSpeaking
-                ? 'border-info/60 text-info'
-                : 'border-bg-border hover:border-info/50 hover:text-info'
-            }`}
-            onClick={speakPreview}
-            disabled={!blockText.trim()}
-            title={
-              !voicesReady
-                ? 'Browser voices still loading…'
-                : isSpeaking
-                  ? 'Stop preview'
-                  : `Preview · ${voiceLabel ?? openaiVoice} (browser voice approximation)`
-            }
-          >
-            {isSpeaking ? <Pause size={11} /> : <Mic size={11} />}
-            {isSpeaking ? 'Stop' : voicesReady ? 'Preview' : 'Preview…'}
-          </button>
-
-          <button
             className="btn-ghost text-xs px-2 py-1 border border-bg-border hover:border-gold/50 hover:text-gold disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={handleGenerate}
             disabled={!canGenerate}
@@ -259,7 +156,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
                 ? 'Add your OpenAI / ElevenLabs key in Settings'
                 : !blockText.trim()
                   ? 'Add text first'
-                  : `Generate AI voice · OpenAI "${openaiVoice}"${voiceLabel ? ` · ${voiceLabel}` : ''}`
+                  : `Generate AI voice · ${providerBadge}${voiceLabel ? ` · ${voiceLabel}` : ''}`
             }
           >
             <Wand2 size={11} /> Generate
@@ -268,7 +165,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
           {/* Pre-generation voice badge — shows what WILL be used */}
           {voiceLabel && (
             <span className="text-[10px] text-text-muted bg-bg-elevated px-1.5 py-0.5 rounded border border-bg-border">
-              {voiceLabel} <span className="opacity-40">→ {openaiVoice}</span>
+              {voiceLabel} <span className="opacity-40">→ {providerBadge}</span>
             </span>
           )}
 
@@ -281,6 +178,10 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
             </p>
           )}
         </div>
+
+        <p className="text-[10px] text-text-muted">
+          Generate audio to hear this beat with the selected cast voice.
+        </p>
 
         {!hasTtsKey && !!blockText.trim() && (
           <p className="text-[10px] text-text-muted">
@@ -303,7 +204,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
     <div className="flex items-center gap-2 pt-1 text-text-muted text-xs">
       <Loader2 size={12} className="animate-spin text-gold" />
       <span className="text-gold">
-        Generating · OpenAI "{openaiVoice}"{voiceLabel ? ` · ${voiceLabel}` : ''}…
+        Generating · {providerBadge}{voiceLabel ? ` · ${voiceLabel}` : ''}…
       </span>
     </div>
   )
@@ -317,11 +218,11 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
         <p className="text-[10px] text-text-muted flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />
           Generated with: <span className="text-text-secondary">{genInfo.label}</span>
-          <span className="opacity-40">· OpenAI {genInfo.openai}</span>
+          <span className="opacity-40">· {genInfo.openai}</span>
         </p>
       ) : block.audioUrl && voiceLabel ? (
         <p className="text-[10px] text-text-muted">
-          {voiceLabel} <span className="opacity-40">· OpenAI {openaiVoice}</span>
+          {voiceLabel} <span className="opacity-40">· {providerBadge}</span>
         </p>
       ) : null}
 
@@ -357,7 +258,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
             className="btn-ghost text-[10px] px-1.5 py-0.5 border border-bg-border hover:border-gold/40 hover:text-gold disabled:opacity-40"
             onClick={handleGenerate}
             disabled={!canGenerate || generating}
-            title={`Re-generate · OpenAI "${openaiVoice}"${voiceLabel ? ` · ${voiceLabel}` : ''}`}
+            title={`Re-generate · ${providerBadge}${voiceLabel ? ` · ${voiceLabel}` : ''}`}
           >
             <RefreshCw size={9} /> Re-gen
           </button>

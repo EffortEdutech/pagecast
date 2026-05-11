@@ -19,7 +19,7 @@ import type {
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-export type ParseFormat = 'auto' | 'prose' | 'script' | 'markdown'
+export type ParseFormat = 'auto' | 'prose' | 'script' | 'markdown' | 'pagecast'
 
 export interface ParsedScene {
   title:  string
@@ -48,17 +48,20 @@ export interface ParsedImport {
 const SCRIPT_TAG     = /^([A-Z][A-Z\s'\-\.]{1,30}):\s*(.*)/
 const MD_HEADER      = /^#{1,3}\s+\S/
 
-function detectFormat(text: string): 'prose' | 'script' | 'markdown' {
+function detectFormat(text: string): 'prose' | 'script' | 'markdown' | 'pagecast' {
   const lines = text.split('\n')
   let scriptTags = 0, mdHeaders = 0
+  let pageCastTags = 0
 
   for (const line of lines) {
     const t = line.trim()
     if (SCRIPT_TAG.test(t)) scriptTags++
     if (MD_HEADER.test(t))  mdHeaders++
+    if (/^::PAGECAST_|^::CAST\b/i.test(t) || /^\[(NARRATION|DIALOGUE|THOUGHT|PAUSE|SFX|TRANSITION)\b/i.test(t)) pageCastTags++
   }
 
   const total = lines.filter(l => l.trim()).length || 1
+  if (pageCastTags > 0) return 'pagecast'
   if (scriptTags / total > 0.08) return 'script'
   if (mdHeaders > 0)             return 'markdown'
   return 'prose'
@@ -104,6 +107,10 @@ function pause(duration: number): PauseBlock {
 }
 function sfx(label: string): SfxBlock {
   return { id: uuid(), type: 'sfx', sfxFile: label.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.mp3', label }
+}
+
+function dialogueWithEmotion(text: string, emotion?: string): DialogueBlock {
+  return { ...dialogue(text), emotion: emotion?.trim() || 'neutral' }
 }
 
 // ── Text helpers ──────────────────────────────────────────────────────────────
@@ -218,6 +225,128 @@ function trySpecialDirective(line: string): StoryBlock | null {
   const pauseM = line.trim().match(PAUSE_RE)
   if (pauseM) return pause(parseFloat(pauseM[1] ?? '2'))
   return null
+}
+
+// -- PageCast tagged parser --------------------------------------------------
+
+const PAGECAST_TAG_RE = /^\[(NARRATION|DIALOGUE|THOUGHT|PAUSE|SFX|TRANSITION)(?::\s*([^\]|]+))?(?:\s*\|\s*(.+))?\]$/i
+const SCENE_META_RE = /^(Ambience|Music|Location|Time):\s*/i
+
+function optionValue(options: string | undefined, key: string): string | undefined {
+  if (!options) return undefined
+  for (const part of options.split('|')) {
+    const [rawKey, ...rest] = part.split('=')
+    if (rawKey?.trim().toLowerCase() === key.toLowerCase()) {
+      return rest.join('=').trim()
+    }
+  }
+  return undefined
+}
+
+function titleFromHash(line: string): string {
+  return line.replace(/^#{1,6}\s*/, '').trim()
+}
+
+function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: string | undefined, options: string | undefined, body: string[]) {
+  const text = body.join('\n').trim()
+  const name = tag.toUpperCase()
+
+  if (name === 'NARRATION') {
+    if (text) pushBlock(chapters, narration(text))
+    return
+  }
+
+  if (name === 'DIALOGUE') {
+    if (text) pushBlock(chapters, dialogueWithEmotion(stripQuotes(text), optionValue(options, 'emotion')))
+    return
+  }
+
+  if (name === 'THOUGHT') {
+    if (text) pushBlock(chapters, thought(stripThoughtMarkers(stripQuotes(text))))
+    return
+  }
+
+  if (name === 'PAUSE') {
+    const durationText = target ?? optionValue(options, 'duration') ?? '1'
+    const duration = parseFloat(durationText.replace(/s$/i, ''))
+    pushBlock(chapters, pause(Number.isFinite(duration) ? duration : 1))
+    return
+  }
+
+  if (name === 'SFX') {
+    pushBlock(chapters, sfx((target ?? text ?? 'Sound effect').trim()))
+    return
+  }
+
+  if (name === 'TRANSITION') {
+    pushBlock(chapters, pause(1))
+  }
+}
+
+function parsePageCast(text: string): ParsedChapter[] {
+  const chapters: ParsedChapter[] = []
+  const lines = text.split('\n')
+  let skipMetadata = false
+  let activeTag: { name: string; target?: string; options?: string; body: string[] } | null = null
+
+  const flush = () => {
+    if (!activeTag) return
+    pushPageCastBlock(chapters, activeTag.name, activeTag.target, activeTag.options, activeTag.body)
+    activeTag = null
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+
+    if (/^::PAGECAST_|^::CAST\b/i.test(line)) {
+      flush()
+      skipMetadata = true
+      continue
+    }
+    if (skipMetadata) {
+      if (line === '::') skipMetadata = false
+      continue
+    }
+    if (!line) {
+      if (activeTag) activeTag.body.push('')
+      continue
+    }
+
+    if (/^#\s+/.test(line)) {
+      flush()
+      chapters.push(freshChapter(titleFromHash(line)))
+      continue
+    }
+
+    if (/^#{2,6}\s+/.test(line)) {
+      flush()
+      const ch = ensureChapter(chapters)
+      const title = titleFromHash(line)
+      if (ensureScene(ch).blocks.length > 0) ch.scenes.push(freshScene(title))
+      else ensureScene(ch).title = title
+      continue
+    }
+
+    if (SCENE_META_RE.test(line)) continue
+
+    const tagMatch = line.match(PAGECAST_TAG_RE)
+    if (tagMatch) {
+      flush()
+      activeTag = { name: tagMatch[1], target: tagMatch[2]?.trim(), options: tagMatch[3]?.trim(), body: [] }
+      if (/^(PAUSE|SFX|TRANSITION)$/i.test(tagMatch[1])) flush()
+      continue
+    }
+
+    if (activeTag) {
+      activeTag.body.push(rawLine.trimEnd())
+      continue
+    }
+
+    pushBlock(chapters, narration(line))
+  }
+
+  flush()
+  return chapters
 }
 
 // ── Novel / prose parser ──────────────────────────────────────────────────────
@@ -425,6 +554,7 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
   let chapters: ParsedChapter[]
   if      (usedFormat === 'script')   chapters = parseScript(clean)
   else if (usedFormat === 'markdown') chapters = parseMarkdown(clean)
+  else if (usedFormat === 'pagecast') chapters = parsePageCast(clean)
   else                                chapters = parseProse(clean)
 
   // Ensure structure is never empty
@@ -459,4 +589,48 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
       narrations,
     },
   }
+}
+
+export function formatParsedImportAsPageCastText(result: ParsedImport): string {
+  const out: string[] = [
+    '::PAGECAST_BOOK',
+    'Title:',
+    'Author:',
+    'Language: en',
+    'Version: 1.0',
+    'Default Narrator: narrator',
+    '::',
+    '',
+    '::CAST',
+    'Narrator: narrator | role=narrator | voice=calm_female',
+    '::',
+    '',
+  ]
+
+  for (const chapter of result.chapters) {
+    out.push(`# ${chapter.title}`, '')
+
+    for (const scene of chapter.scenes) {
+      out.push(`## ${scene.title}`, '')
+
+      for (const block of scene.blocks) {
+        if (block.type === 'narration') {
+          out.push('[NARRATION]', block.text.trim(), '')
+        } else if (block.type === 'dialogue') {
+          const emotion = block.emotion && block.emotion !== 'neutral' ? ` | emotion=${block.emotion}` : ''
+          out.push(`[DIALOGUE${emotion}]`, `"${block.text.trim()}"`, '')
+        } else if (block.type === 'thought') {
+          out.push('[THOUGHT]', block.text.trim(), '')
+        } else if (block.type === 'quote') {
+          out.push('[NARRATION]', block.attribution ? `${block.text.trim()}\n- ${block.attribution}` : block.text.trim(), '')
+        } else if (block.type === 'pause') {
+          out.push(`[PAUSE: ${block.duration}s]`, '')
+        } else if (block.type === 'sfx') {
+          out.push(`[SFX: ${block.label || block.sfxFile || 'Sound effect'}]`, '')
+        }
+      }
+    }
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }

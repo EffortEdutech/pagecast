@@ -3,10 +3,11 @@ import { useState, useRef, useCallback } from 'react'
 import {
   X, Upload, FileText, Wand2, AlertCircle, Check,
   ChevronRight, BookOpen, Film, AlignLeft, MessageSquare,
-  Brain, Quote, Pause, Volume2, Loader2, Info, FileUp
+  Brain, Quote, Pause, Volume2, Loader2, Info, FileUp,
+  ArrowUp, ArrowDown
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { parseText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
+import { parseText, formatParsedImportAsPageCastText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
 import type { StoryBlock } from '@/types'
 
 // ── PDF extraction (pdfjs-dist, browser-side) ─────────────────────────────────
@@ -51,9 +52,22 @@ const FORMAT_LABELS: Record<string, string> = {
   prose:    'Novel / Prose',
   script:   'Script / Screenplay',
   markdown: 'Markdown',
+  pagecast: 'PageCast Format',
 }
 
-function BlockPreviewRow({ block }: { block: StoryBlock }) {
+function BlockPreviewRow({
+  block,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+}: {
+  block: StoryBlock
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+}) {
   const d = BLOCK_DISPLAY[block.type]
   const Icon = d.icon
   const previewText = 'text' in block
@@ -74,11 +88,39 @@ function BlockPreviewRow({ block }: { block: StoryBlock }) {
         )}
         <span className="text-text-secondary text-xs truncate">{previewText}</span>
       </div>
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          title="Move beat up"
+          className="p-0.5 text-text-muted hover:text-accent disabled:opacity-25 disabled:hover:text-text-muted"
+        >
+          <ArrowUp size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          title="Move beat down"
+          className="p-0.5 text-text-muted hover:text-accent disabled:opacity-25 disabled:hover:text-text-muted"
+        >
+          <ArrowDown size={11} />
+        </button>
+      </div>
     </div>
   )
 }
 
-function ChapterPreview({ chapter, idx }: { chapter: ParsedChapter; idx: number }) {
+function ChapterPreview({
+  chapter,
+  idx,
+  onMoveBlock,
+}: {
+  chapter: ParsedChapter
+  idx: number
+  onMoveBlock: (sceneIndex: number, blockIndex: number, direction: -1 | 1) => void
+}) {
   const [expanded, setExpanded] = useState(idx === 0)
   const totalBlocks = chapter.scenes.reduce((n, s) => n + s.blocks.length, 0)
 
@@ -106,14 +148,16 @@ function ChapterPreview({ chapter, idx }: { chapter: ParsedChapter; idx: number 
                 <span className="text-text-muted text-[10px] ml-auto">{scene.blocks.length} blocks</span>
               </div>
               <div className="space-y-0.5 pl-1">
-                {scene.blocks.slice(0, 5).map((block, bi) => (
-                  <BlockPreviewRow key={bi} block={block} />
+                {scene.blocks.map((block, bi) => (
+                  <BlockPreviewRow
+                    key={block.id}
+                    block={block}
+                    canMoveUp={bi > 0}
+                    canMoveDown={bi < scene.blocks.length - 1}
+                    onMoveUp={() => onMoveBlock(si, bi, -1)}
+                    onMoveDown={() => onMoveBlock(si, bi, 1)}
+                  />
                 ))}
-                {scene.blocks.length > 5 && (
-                  <p className="text-[10px] text-text-muted px-2 py-1">
-                    + {scene.blocks.length - 5} more blocks…
-                  </p>
-                )}
               </div>
             </div>
           ))}
@@ -174,6 +218,43 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     }
   }, [text, format])
 
+  const handleArrange = useCallback(() => {
+    if (!text.trim()) return
+    setError(null)
+    try {
+      const firstPass = parseText(text, format === 'pagecast' ? 'auto' : format)
+      const arranged = formatParsedImportAsPageCastText(firstPass)
+      const arrangedResult = parseText(arranged, 'pagecast')
+      setText(arranged)
+      setFormat('pagecast')
+      setParsed(arrangedResult)
+    } catch (e: any) {
+      setError('Arrange error: ' + e.message)
+    }
+  }, [text, format])
+
+  const moveParsedBlock = useCallback((chapterIndex: number, sceneIndex: number, blockIndex: number, direction: -1 | 1) => {
+    setParsed(prev => {
+      if (!prev) return prev
+      const chapters = prev.chapters.map((chapter, ci) => {
+        if (ci !== chapterIndex) return chapter
+        return {
+          ...chapter,
+          scenes: chapter.scenes.map((scene, si) => {
+            if (si !== sceneIndex) return scene
+            const nextIndex = blockIndex + direction
+            if (nextIndex < 0 || nextIndex >= scene.blocks.length) return scene
+            const blocks = [...scene.blocks]
+            const [moved] = blocks.splice(blockIndex, 1)
+            blocks.splice(nextIndex, 0, moved)
+            return { ...scene, blocks }
+          }),
+        }
+      })
+      return { ...prev, chapters }
+    })
+  }, [])
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -233,7 +314,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="card-elevated w-full max-w-3xl max-h-[90vh] flex flex-col animate-slide-up mx-4">
+      <div className="card-elevated w-full max-w-6xl max-h-[90vh] flex flex-col animate-slide-up mx-4">
 
         {/* ── Header ── */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-bg-border shrink-0">
@@ -263,6 +344,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                 <option value="prose">Novel / Prose</option>
                 <option value="script">Script / Screenplay</option>
                 <option value="markdown">Markdown</option>
+                <option value="pagecast">PageCast Format</option>
               </select>
 
               <input ref={fileRef} type="file" accept=".txt,.md,.fountain,.pdf" className="hidden" onChange={handleFileUpload} />
@@ -302,7 +384,15 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
               )}
             </div>
 
-            <div className="px-4 py-3 border-t border-bg-border shrink-0">
+            <div className="px-4 py-3 border-t border-bg-border shrink-0 space-y-2">
+              <button
+                onClick={handleArrange}
+                disabled={!text.trim() || extracting}
+                className="btn-secondary w-full justify-center text-sm disabled:opacity-40"
+                title="Convert raw text into editable PageCast beat tags before importing"
+              >
+                <FileText size={14} /> Arrange to PageCast format
+              </button>
               <button
                 onClick={handleParse}
                 disabled={!text.trim() || extracting}
@@ -327,7 +417,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                   <Wand2 size={28} className="text-text-muted mx-auto" />
                   <p className="text-text-secondary text-sm">Paste your text and click Parse</p>
                   <p className="text-text-muted text-xs">
-                    Supports .pdf, .txt, .md, novel prose, screenplay, and markdown
+                    Supports .pdf, .txt, .md, PageCast tags, novel prose, screenplay, and markdown
                   </p>
                 </div>
               </div>
@@ -364,7 +454,12 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {parsed.chapters.map((ch, i) => (
-                    <ChapterPreview key={i} chapter={ch} idx={i} />
+                    <ChapterPreview
+                      key={i}
+                      chapter={ch}
+                      idx={i}
+                      onMoveBlock={(sceneIndex, blockIndex, direction) => moveParsedBlock(i, sceneIndex, blockIndex, direction)}
+                    />
                   ))}
                 </div>
               </>
