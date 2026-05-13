@@ -73,7 +73,8 @@ export function useEditor(bookId: string) {
   // ── Chapter ops ──
 
   const addChapter = useCallback(async (title: string, insertIndex?: number): Promise<Chapter | null> => {
-    const currentChapters = story?.chapters ?? []
+    const currentStory = useStudioStore.getState().stories.find(s => s.id === bookId)
+    const currentChapters = currentStory?.chapters ?? []
     const targetIndex = Math.max(0, Math.min(insertIndex ?? currentChapters.length, currentChapters.length))
     const chapter: Chapter = { id: crypto.randomUUID(), title, order: targetIndex + 1, scenes: [] }
 
@@ -88,7 +89,7 @@ export function useEditor(bookId: string) {
     })
     store.markStoryDirty(bookId)
     return chapter
-  }, [bookId, story?.chapters, store])
+  }, [bookId, store])
 
   const renameChapter = useCallback(async (chapterId: string, title: string) => {
     store.updateChapter(bookId, chapterId, { title })
@@ -100,10 +101,16 @@ export function useEditor(bookId: string) {
     store.markStoryDirty(bookId)
   }, [bookId, store])
 
+  const reorderChapters = useCallback(async (chapters: Chapter[]) => {
+    store.reorderChapters(bookId, chapters)
+    store.markStoryDirty(bookId)
+  }, [bookId, store])
+
   // ── Scene ops ──
 
   const addScene = useCallback(async (chapterId: string, title: string): Promise<Scene | null> => {
-    const chapter = story?.chapters.find(c => c.id === chapterId)
+    const currentStory = useStudioStore.getState().stories.find(s => s.id === bookId)
+    const chapter = currentStory?.chapters.find(c => c.id === chapterId)
     const sortOrder = chapter?.scenes.length ?? 0
     const scene: Scene = { id: crypto.randomUUID(), title, blocks: [] }
     store.addScene(bookId, chapterId, title)
@@ -118,7 +125,7 @@ export function useEditor(bookId: string) {
     }))
     store.markStoryDirty(bookId)
     return scene
-  }, [bookId, story?.chapters, store])
+  }, [bookId, store])
 
   const renameScene = useCallback(async (chapterId: string, sceneId: string, title: string) => {
     store.updateScene(bookId, chapterId, sceneId, { title })
@@ -130,6 +137,11 @@ export function useEditor(bookId: string) {
     store.markStoryDirty(bookId)
   }, [bookId, store])
 
+  const reorderScenes = useCallback(async (chapterId: string, scenes: Scene[]) => {
+    store.reorderScenes(bookId, chapterId, scenes)
+    store.markStoryDirty(bookId)
+  }, [bookId, store])
+
   // ── Block ops ──
 
   const addBlock = useCallback(async (
@@ -138,7 +150,8 @@ export function useEditor(bookId: string) {
     tempBlock: StoryBlock,
     insertIndex?: number
   ): Promise<StoryBlock | null> => {
-    const chapter = story?.chapters.find(c => c.id === chapterId)
+    const currentStory = useStudioStore.getState().stories.find(s => s.id === bookId)
+    const chapter = currentStory?.chapters.find(c => c.id === chapterId)
     const scene = chapter?.scenes.find(s => s.id === sceneId)
     const currentBlocks = scene?.blocks ?? []
     const targetIndex = Math.max(0, Math.min(insertIndex ?? currentBlocks.length, currentBlocks.length))
@@ -149,6 +162,16 @@ export function useEditor(bookId: string) {
     store.markStoryDirty(bookId)
     return tempBlock
   }, [bookId, story?.chapters, store])
+
+  const insertBlocks = useCallback(async (
+    chapterId: string,
+    sceneId: string,
+    blocks: StoryBlock[],
+    insertIndex: number
+  ): Promise<void> => {
+    store.insertBlocks(bookId, chapterId, sceneId, blocks, insertIndex)
+    store.markStoryDirty(bookId)
+  }, [bookId, store])
 
   const editBlock = useCallback(async (
     chapterId: string,
@@ -198,12 +221,15 @@ export function useEditor(bookId: string) {
     addChapter,
     renameChapter,
     removeChapter,
+    reorderChapters,
     // Scene
     addScene,
     renameScene,
     removeScene,
+    reorderScenes,
     // Block
     addBlock,
+    insertBlocks,
     editBlock,
     removeBlock,
     reorderBlocks,

@@ -8,12 +8,13 @@ import { BlockItem } from '@/components/editor/BlockItem'
 import { AddBlockMenu } from '@/components/editor/AddBlockMenu'
 import { SceneAtmospherePanel } from '@/components/editor/SceneAtmospherePanel'
 import { TextImportModal } from '@/components/editor/TextImportModal'
+import type { ImportDestination } from '@/components/editor/TextImportModal'
 import { Header } from '@/components/layout/Header'
 import { BookSettingsPanel } from '@/components/editor/BookSettingsPanel'
 import {
   Plus, ChevronRight, ChevronDown, Settings2, Eye,
   BookOpen, Layers, Save, FileText,
-  ArrowLeft, Trash2, Edit3, Check, X, Film, Loader2
+  ArrowLeft, Trash2, Edit3, Check, X, Film, Loader2, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { v4 as uuid } from 'uuid'
@@ -129,6 +130,7 @@ export default function StudioPage() {
   const [showImport,    setShowImport]    = useState(false)
   const [showSettings, setShowSettings]   = useState(false)
   const [showPublishQA, setShowPublishQA] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [showChapterInsert, setShowChapterInsert] = useState(false)
   const [chaptersWidth, setChaptersWidth] = useState(260)
 
@@ -213,11 +215,54 @@ export default function StudioPage() {
     await editor.reorderBlocks(activeChapterId, activeSceneId, blocks)
   }
 
+  const handleMoveChapter = async (chapterIndex: number, direction: -1 | 1) => {
+    const toIndex = chapterIndex + direction
+    if (toIndex < 0 || toIndex >= story.chapters.length) return
+    const chapters = [...story.chapters]
+    const [moved] = chapters.splice(chapterIndex, 1)
+    chapters.splice(toIndex, 0, moved)
+    await editor.reorderChapters(chapters)
+    setActiveChapterId(moved.id)
+  }
+
+  const handleMoveScene = async (chapter: Chapter, sceneIndex: number, direction: -1 | 1) => {
+    const toIndex = sceneIndex + direction
+    if (toIndex < 0 || toIndex >= chapter.scenes.length) return
+    const scenes = [...chapter.scenes]
+    const [moved] = scenes.splice(sceneIndex, 1)
+    scenes.splice(toIndex, 0, moved)
+    await editor.reorderScenes(chapter.id, scenes)
+    setActiveChapterId(chapter.id)
+    setActiveSceneId(moved.id)
+  }
+
   const handleSave = async () => {
     const ok = await editor.saveContent()
     if (!ok) return
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const updatePublishStatus = async (newStatus: 'draft' | 'published') => {
+    setPublishing(true)
+
+    if (newStatus === 'published') {
+      const ok = await editor.saveContent()
+      if (!ok) {
+        setPublishing(false)
+        return
+      }
+    }
+
+    await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus))
+    useStudioStore.setState(state => ({
+      stories: state.stories.map(s =>
+        s.id === bookId ? { ...s, status: newStatus } : s
+      ),
+    }))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    setPublishing(false)
   }
 
   const getUncoveredCount = (): number => {
@@ -243,9 +288,20 @@ export default function StudioPage() {
     setShowSettings(false)
   }
 
-  const handleImport = async (parsed: ParsedImport) => {
+  const handleImport = async (parsed: ParsedImport, destination: ImportDestination) => {
     let firstChapterId: string | null = null
     let firstSceneId:   string | null = null
+
+    if (destination.mode === 'current-beat') {
+      const blocks = parsed.chapters.flatMap(parsedCh =>
+        parsedCh.scenes.flatMap(parsedSc => parsedSc.blocks)
+      )
+      await editor.insertBlocks(destination.chapterId, destination.sceneId, blocks, destination.insertIndex)
+      setActiveChapterId(destination.chapterId)
+      setActiveSceneId(destination.sceneId)
+      setShowImport(false)
+      return
+    }
 
     for (const parsedCh of parsed.chapters) {
       const ch = await editor.addChapter(parsedCh.title)
@@ -274,13 +330,7 @@ export default function StudioPage() {
 
   const handlePublishAnyway = async () => {
     setShowPublishQA(false)
-    const newStatus = 'published' as const
-    await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus))
-    useStudioStore.setState(state => ({
-      stories: state.stories.map(s =>
-        s.id === bookId ? { ...s, status: newStatus } : s
-      ),
-    }))
+    await updatePublishStatus('published')
   }
 
   const toggleChapter = (id: string) => {
@@ -342,21 +392,21 @@ export default function StudioPage() {
         </button>
         <button
           className={clsx('text-xs', story.status === 'published' ? 'btn-secondary text-success' : 'btn-secondary')}
+          disabled={publishing || editor.saving}
           onClick={async () => {
             if (story.status !== 'published') {
               const uncovered = getUncoveredCount()
               if (uncovered > 0) { setShowPublishQA(true); return }
             }
             const newStatus = story.status === 'published' ? 'draft' : 'published'
-            await import('@/lib/supabase/books').then(m => m.publishBook(bookId, newStatus as 'draft' | 'published'))
-            useStudioStore.setState(state => ({
-              stories: state.stories.map(s =>
-                s.id === bookId ? { ...s, status: newStatus as 'draft' | 'published' } : s
-              )
-            }))
+            await updatePublishStatus(newStatus as 'draft' | 'published')
           }}
         >
-          {story.status === 'published' ? <><Film size={13} /> Unpublish</> : <><Film size={13} /> Publish</>}
+          {publishing
+            ? <><Loader2 size={13} className="animate-spin" /> Publishing</>
+            : story.status === 'published'
+              ? <><Film size={13} /> Unpublish</>
+              : <><Film size={13} /> Publish</>}
         </button>
         <button
           className={clsx('text-xs', saved ? 'btn-secondary text-success' : editor.isDirty ? 'btn-primary' : 'btn-secondary')}
@@ -374,6 +424,11 @@ export default function StudioPage() {
             <><Check size={13} /> Saved</>
           )}
         </button>
+        {editor.isDirty && !editor.saving && !saved && (
+          <span className="text-[11px] text-gold border border-gold/30 bg-gold/10 rounded-full px-2 py-1">
+            Unsaved edits
+          </span>
+        )}
       </Header>
 
       <div className="flex-1 flex overflow-hidden">
@@ -400,7 +455,7 @@ export default function StudioPage() {
                 </button>
               </div>
             ) : (
-              story.chapters.map(chapter => (
+              story.chapters.map((chapter, chapterIndex) => (
                 <div key={chapter.id}>
                   {/* Chapter row */}
                   <div
@@ -420,6 +475,22 @@ export default function StudioPage() {
                       className="text-xs flex-1 min-w-0 truncate"
                     />
                     <button
+                      className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent transition-all disabled:opacity-20"
+                      disabled={chapterIndex === 0}
+                      title="Move chapter up"
+                      onClick={e => { e.stopPropagation(); handleMoveChapter(chapterIndex, -1) }}
+                    >
+                      <ArrowUp size={10} />
+                    </button>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent transition-all disabled:opacity-20"
+                      disabled={chapterIndex === story.chapters.length - 1}
+                      title="Move chapter down"
+                      onClick={e => { e.stopPropagation(); handleMoveChapter(chapterIndex, 1) }}
+                    >
+                      <ArrowDown size={10} />
+                    </button>
+                    <button
                       className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
                       onClick={e => { e.stopPropagation(); editor.removeChapter(chapter.id) }}
                     >
@@ -430,7 +501,7 @@ export default function StudioPage() {
                   {/* Scenes */}
                   {expandedChapters.has(chapter.id) && (
                     <div className="pl-5 pb-1">
-                      {chapter.scenes.map(scene => (
+                      {chapter.scenes.map((scene, sceneIndex) => (
                         <div
                           key={scene.id}
                           className={clsx(
@@ -450,6 +521,22 @@ export default function StudioPage() {
                           <span className="opacity-0 group-hover:opacity-100 text-[10px] text-text-muted">
                             {scene.blocks.length}
                           </span>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent transition-all disabled:opacity-20"
+                            disabled={sceneIndex === 0}
+                            title="Move scene up"
+                            onClick={e => { e.stopPropagation(); handleMoveScene(chapter, sceneIndex, -1) }}
+                          >
+                            <ArrowUp size={9} />
+                          </button>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent transition-all disabled:opacity-20"
+                            disabled={sceneIndex === chapter.scenes.length - 1}
+                            title="Move scene down"
+                            onClick={e => { e.stopPropagation(); handleMoveScene(chapter, sceneIndex, 1) }}
+                          >
+                            <ArrowDown size={9} />
+                          </button>
                           <button
                             className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger transition-all"
                             onClick={e => { e.stopPropagation(); editor.removeScene(chapter.id, scene.id) }}
@@ -585,6 +672,12 @@ export default function StudioPage() {
         <TextImportModal
           onImport={handleImport}
           onClose={() => setShowImport(false)}
+          activeChapterId={activeChapterId}
+          activeSceneId={activeSceneId}
+          activeChapterTitle={activeChapter?.title}
+          activeSceneTitle={activeScene?.title}
+          activeBeatCount={activeScene?.blocks.length ?? 0}
+          canInsertAtActiveBeat={Boolean(activeChapterId && activeSceneId)}
         />
       )}
 
@@ -629,8 +722,9 @@ export default function StudioPage() {
               <button
                 className="btn-primary text-sm"
                 onClick={handlePublishAnyway}
+                disabled={publishing || editor.saving}
               >
-                Publish anyway
+                {publishing ? 'Publishing...' : 'Publish anyway'}
               </button>
             </div>
           </div>

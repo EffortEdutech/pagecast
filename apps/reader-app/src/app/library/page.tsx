@@ -72,7 +72,7 @@ function LibraryCard({ story }: { story: Story }) {
             <div>
               <div className="flex gap-2 mb-1 flex-wrap">
                 {story.genre && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-accent">{story.genre}</span>}
-                {isFinished && <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success">Finished</span>}
+                {isFinished && <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success">Cast Completed</span>}
               </div>
               <h3 className="text-text-primary font-bold text-base leading-tight">{story.title}</h3>
               <p className="text-text-secondary text-xs leading-relaxed mt-1 line-clamp-2">{story.description}</p>
@@ -93,7 +93,7 @@ function LibraryCard({ story }: { story: Story }) {
             <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
             {isStarted && !isFinished && (
               <span className="text-text-secondary">
-                Ch {(progress!.chapterIdx + 1)} of {story.chapters.length}
+                Chapter {(progress!.chapterIdx + 1)} of {story.chapters.length}
               </span>
             )}
           </div>
@@ -106,11 +106,11 @@ function LibraryCard({ story }: { story: Story }) {
             className="btn-primary text-xs px-4 py-2"
           >
             <Play size={12} className="fill-white" />
-            {isFinished ? 'Read Again' : isStarted ? 'Continue' : 'Start Reading'}
+            {isFinished ? 'Begin Again' : isStarted ? 'Resume Cast' : 'Begin Cast'}
           </Link>
           {isStarted && !isFinished && (
             <Link href={`/book/${story.id}`} className="btn-ghost text-xs px-3 py-2">
-              <ChevronRight size={12} /> Story Info
+              <ChevronRight size={12} /> Cast Details
             </Link>
           )}
         </div>
@@ -136,10 +136,10 @@ export default function LibraryPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-text-primary font-bold text-2xl flex items-center gap-2">
-              <Library size={22} className="text-accent" /> My Library
+              <Library size={22} className="text-accent" /> My Casts
             </h1>
             <p className="text-text-secondary text-sm mt-1">
-              {ownedStories.length} {ownedStories.length === 1 ? 'story' : 'stories'} owned
+              {ownedStories.length} {ownedStories.length === 1 ? 'Cast' : 'Casts'} unlocked
             </p>
           </div>
         </div>
@@ -151,11 +151,11 @@ export default function LibraryPage() {
               <BookOpen size={28} className="text-text-muted" />
             </div>
             <div>
-              <p className="text-text-primary font-semibold">Your library is empty</p>
-              <p className="text-text-secondary text-sm mt-1">Browse the store to find your first story.</p>
+              <p className="text-text-primary font-semibold">Your Casts are waiting for their first Tale.</p>
+              <p className="text-text-secondary text-sm mt-1">Explore the TaleVerse to begin a Cast.</p>
             </div>
             <Link href="/store" className="btn-primary mt-2">
-              <ShoppingBag size={14} /> Browse Store
+              <ShoppingBag size={14} /> Explore TaleVerse
             </Link>
           </div>
         ) : (
@@ -167,11 +167,11 @@ export default function LibraryPage() {
             {/* Store CTA */}
             <div className="mt-8 p-5 card border-dashed flex items-center justify-between gap-4">
               <div>
-                <p className="text-text-primary font-medium text-sm">Looking for more stories?</p>
-                <p className="text-text-muted text-xs mt-0.5">{allPublished.length - ownedStories.length} more available in the store.</p>
+                <p className="text-text-primary font-medium text-sm">Looking for more Tales?</p>
+                <p className="text-text-muted text-xs mt-0.5">{allPublished.length - ownedStories.length} more Casts waiting in the TaleVerse.</p>
               </div>
               <Link href="/store" className="btn-secondary text-xs shrink-0">
-                <ShoppingBag size={13} /> Visit Store
+                <ShoppingBag size={13} /> Visit TaleVerse
               </Link>
             </div>
           </div>

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
+import { formatUsd } from '@/lib/format'
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>()
@@ -22,6 +23,7 @@ export default function BookPage() {
   const [story,    setStory]    = useState<Story | null | undefined>(undefined)
   const [buying,   setBuying]   = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
+  const [serverAccess, setServerAccess] = useState(false)
 
   // Load story — Supabase first, fall back to demo data
   useEffect(() => {
@@ -31,6 +33,14 @@ export default function BookPage() {
     }).catch(() => {
       setStory(getStory(id) ?? null)
     })
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/books/${id}/access`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setServerAccess(Boolean(data?.hasAccess)))
+      .catch(() => setServerAccess(false))
   }, [id])
 
   // Handle ?purchased=1 redirect from Stripe success_url.
@@ -59,14 +69,14 @@ export default function BookPage() {
       <div className="text-center space-y-3">
         <BookOpen size={40} className="text-text-muted mx-auto" />
         <p className="text-text-secondary">Story not found.</p>
-        <Link href="/store" className="btn-primary inline-flex"><ArrowLeft size={14} /> Back to Store</Link>
+        <Link href="/store" className="btn-primary inline-flex"><ArrowLeft size={14} /> Back to TaleVerse</Link>
       </div>
     </div>
   )
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const owned = hydrated && isOwned(story.id)
+  const owned = serverAccess || (hydrated && isOwned(story.id))
 
   const handleBuy = async () => {
     if (!story) return
@@ -111,7 +121,7 @@ export default function BookPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/60 to-transparent" />
         <div className="max-w-5xl mx-auto px-6 py-16 relative z-10">
           <Link href="/store" className="inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm mb-6 transition-colors">
-            <ArrowLeft size={14} /> Store
+            <ArrowLeft size={14} /> TaleVerse
           </Link>
           <div className="flex flex-col sm:flex-row items-start gap-8">
             {/* Cover tile */}
@@ -123,6 +133,7 @@ export default function BookPage() {
               <div className="flex gap-2 mb-3 flex-wrap">
                 {story.genre && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.genre}</span>}
                 {story.ageRating && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.ageRating}</span>}
+                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.language.toUpperCase()}</span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">{story.title}</h1>
               <p className="text-white/70 mt-3 max-w-lg leading-relaxed">{story.description}</p>
@@ -140,7 +151,7 @@ export default function BookPage() {
               <div className="flex items-center gap-3 mt-6 flex-wrap">
                 {owned ? (
                   <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
-                    <Play size={18} className="fill-white" /> Continue Reading
+                    <Play size={18} className="fill-white" /> Resume Cast
                   </Link>
                 ) : (
                   <>
@@ -152,11 +163,16 @@ export default function BookPage() {
                       {buying
                         ? <><Loader2 size={18} className="animate-spin" /> Processing&hellip;</>
                         : story.price === 0
-                          ? <><Play size={18} className="fill-white" /> Read Free</>
-                          : <><ShoppingCart size={18} /> Get for ${story.price.toFixed(2)}</>
+                          ? <><Play size={18} className="fill-white" /> Begin Starter Cast</>
+                          : <><ShoppingCart size={18} /> Unlock Cast for {formatUsd(story.price)}</>
                       }
                     </button>
                     {buyError && <p className="text-danger text-sm">{buyError}</p>}
+                    {story.price > 0 && (
+                      <Link href="/pricing" className="btn-secondary text-base px-6 py-3">
+                        Get Cast Pass
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
@@ -172,7 +188,7 @@ export default function BookPage() {
           {/* Preview excerpt */}
           <section className="card p-5">
             <h2 className="text-text-primary font-semibold mb-4 flex items-center gap-2">
-              <BookOpen size={15} className="text-accent" /> Story Preview
+              <BookOpen size={15} className="text-accent" /> Starter Moment
             </h2>
             {story.chapters[0]?.scenes[0]?.blocks.slice(0, 3).map(block => {
               const char = story.characters.find(c =>
@@ -197,8 +213,8 @@ export default function BookPage() {
             })}
             <div className={clsx('mt-4 p-3 rounded-lg text-center text-sm', owned ? 'bg-success/10 text-success' : 'bg-bg-elevated text-text-muted')}>
               {owned
-                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> You own this story — read the full version</span>
-                : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Purchase to read the full story</span>
+                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> This Cast is unlocked - enjoy the full Journey</span>
+                : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Unlock this Cast to continue the Journey</span>
               }
             </div>
           </section>
@@ -271,22 +287,22 @@ export default function BookPage() {
           <div className="card p-4 text-center space-y-3">
             <div className="text-2xl font-bold text-text-primary">
               {owned
-                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> In your library</span>
-                : story.price === 0 ? 'Free' : `$${story.price.toFixed(2)}`
+                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> In My Casts</span>
+                : story.price === 0 ? 'Starter Cast' : formatUsd(story.price)
               }
             </div>
             {owned ? (
               <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center">
-                <Play size={14} className="fill-white" /> Open Reader
+                <Play size={14} className="fill-white" /> Open Cast
               </Link>
             ) : (
               <button onClick={handleBuy} className="btn-primary w-full justify-center">
                 <Play size={14} className="fill-white" />
-                {story.price === 0 ? 'Read Free' : `Get for $${story.price.toFixed(2)}`}
+                {story.price === 0 ? 'Begin Starter Cast' : `Unlock for ${formatUsd(story.price)}`}
               </button>
             )}
             {!owned && (
-              <p className="text-text-muted text-[10px]">Instant access &middot; No app required</p>
+              <p className="text-text-muted text-[10px]">Instant unlock &middot; No app required</p>
             )}
           </div>
         </div>

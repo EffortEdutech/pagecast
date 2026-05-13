@@ -4,9 +4,10 @@ import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
 import { usePublishedBooks } from '@/hooks/usePublishedBooks'
 import { Navbar } from '@/components/layout/Navbar'
-import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check } from 'lucide-react'
+import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check, Languages } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
+import { formatUsd } from '@/lib/format'
 
 function StoryCard({ story }: { story: Story }) {
   const hydrated   = useHydrated()
@@ -20,6 +21,7 @@ function StoryCard({ story }: { story: Story }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="relative z-10">
           <div className="flex gap-2 mb-2 flex-wrap">
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.language.toUpperCase()}</span>
             {story.genre && (
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.genre}</span>
             )}
@@ -44,7 +46,7 @@ function StoryCard({ story }: { story: Story }) {
           {story.hasMusic && <span className="flex items-center gap-1"><Music size={10} /> Music</span>}
           <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
           <span className="ml-auto font-semibold text-text-primary text-xs">
-            {isOwned ? <span className="text-success">Owned</span> : story.price === 0 ? 'Free' : `$${story.price.toFixed(2)}`}
+            {isOwned ? <span className="text-success">Unlocked</span> : story.price === 0 ? 'Starter Cast' : formatUsd(story.price)}
           </span>
         </div>
       </div>
@@ -79,20 +81,21 @@ export default function StorePage() {
         <div className="max-w-5xl mx-auto px-6 py-16 relative z-10">
           <div className="flex items-center gap-2 text-accent text-sm font-medium mb-4">
             <Sparkles size={14} />
-            <span>New storytelling format</span>
+            <span>Fresh from the TaleVerse</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight max-w-2xl">
-            Stories you can<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-info">read and hear.</span>
+            Casts you can<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-info">read, hear, and feel.</span>
           </h1>
           <p className="text-text-secondary text-lg mt-4 max-w-xl leading-relaxed">
-            PageCast combines reading, listening, and cinematic atmosphere — all in your browser. No app. No download.
+            Begin multilingual Casts with voices, scenes, and Dream Music. No app. No download.
           </p>
           <div className="flex gap-3 mt-6 flex-wrap">
             {[
-              { icon: BookOpen,   label: 'Text + Audio sync' },
+              { icon: BookOpen,   label: 'Page + Voice sync' },
               { icon: Headphones, label: 'Character voices' },
-              { icon: Music,      label: 'Cinematic sound design' },
+              { icon: Music,      label: 'Dream Music' },
+              { icon: Languages,  label: 'Multilingual Casts' },
             ].map(({ icon: Icon, label }) => (
               <div key={label} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-bg-elevated border border-bg-border text-text-secondary text-sm">
                 <Icon size={13} className="text-accent" />
@@ -107,13 +110,13 @@ export default function StorePage() {
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-text-primary font-bold text-xl">All Stories</h2>
+            <h2 className="text-text-primary font-bold text-xl">Explore Casts</h2>
             <p className="text-text-secondary text-sm mt-0.5">
               {loading
-                ? 'Loading stories…'
+                ? 'Opening the TaleVerse...'
                 : usingDemo
-                  ? `${stories.length} demo stories · Publish a story in Creator Studio to see it here`
-                  : `${stories.length} ${stories.length === 1 ? 'story' : 'stories'} available`
+                  ? `${stories.length} demo Casts - Publish a Cast in Creator Studio to see it here`
+                  : `${stories.length} ${stories.length === 1 ? 'Cast' : 'Casts'} in the TaleVerse`
               }
             </p>
           </div>
@@ -122,7 +125,7 @@ export default function StorePage() {
         {usingDemo && !loading && (
           <div className="mb-5 px-4 py-3 rounded-lg bg-gold/10 border border-gold/20 text-gold text-xs flex items-center gap-2">
             <Sparkles size={13} />
-            Showing demo stories. Once you publish a book in Creator Studio, it will appear here instead.
+            Showing demo Casts. Once you publish a Cast in Creator Studio, it will appear here.
           </div>
         )}
 

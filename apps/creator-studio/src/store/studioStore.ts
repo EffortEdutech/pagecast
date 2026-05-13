@@ -42,16 +42,19 @@ interface StudioStore {
   addChapter: (storyId: string, title: string) => Chapter
   updateChapter: (storyId: string, chapterId: string, updates: Partial<Chapter>) => void
   deleteChapter: (storyId: string, chapterId: string) => void
+  reorderChapters: (storyId: string, chapters: Chapter[]) => void
   setActiveChapter: (id: string | null) => void
 
   // Scene CRUD
   addScene: (storyId: string, chapterId: string, title: string) => Scene
   updateScene: (storyId: string, chapterId: string, sceneId: string, updates: Partial<Scene>) => void
   deleteScene: (storyId: string, chapterId: string, sceneId: string) => void
+  reorderScenes: (storyId: string, chapterId: string, scenes: Scene[]) => void
   setActiveScene: (id: string | null) => void
 
   // Block CRUD
   addBlock: (storyId: string, chapterId: string, sceneId: string, block: StoryBlock) => void
+  insertBlocks: (storyId: string, chapterId: string, sceneId: string, blocks: StoryBlock[], insertIndex: number) => void
   updateBlock: (storyId: string, chapterId: string, sceneId: string, blockId: string, updates: Partial<StoryBlock>) => void
   deleteBlock: (storyId: string, chapterId: string, sceneId: string, blockId: string) => void
   reorderBlocks: (storyId: string, chapterId: string, sceneId: string, blocks: StoryBlock[]) => void
@@ -150,6 +153,11 @@ export const useStudioStore = create<StudioStore>()(
           ...st, chapters: st.chapters.filter(ch => ch.id !== chapterId)
         } : st)
       })),
+      reorderChapters: (storyId, chapters) => set(s => ({
+        stories: s.stories.map(st => st.id === storyId
+          ? { ...st, chapters: chapters.map((ch, i) => ({ ...ch, order: i + 1 })), updatedAt: new Date().toISOString() }
+          : st)
+      })),
       setActiveChapter: (id) => set({ activeChapterId: id }),
 
       // ── Scenes ──
@@ -182,6 +190,13 @@ export const useStudioStore = create<StudioStore>()(
           } : ch)
         } : st)
       })),
+      reorderScenes: (storyId, chapterId, scenes) => set(s => ({
+        stories: s.stories.map(st => st.id === storyId ? {
+          ...st,
+          chapters: st.chapters.map(ch => ch.id === chapterId ? { ...ch, scenes } : ch),
+          updatedAt: new Date().toISOString(),
+        } : st)
+      })),
       setActiveScene: (id) => set({ activeSceneId: id }),
 
       // ── Blocks ──
@@ -193,6 +208,22 @@ export const useStudioStore = create<StudioStore>()(
             scenes: ch.scenes.map(sc => sc.id === sceneId
               ? { ...sc, blocks: [...sc.blocks, block] }
               : sc)
+          } : ch)
+        } : st)
+      })),
+      insertBlocks: (storyId, chapterId, sceneId, blocks, insertIndex) => set(s => ({
+        stories: s.stories.map(st => st.id === storyId ? {
+          ...st,
+          updatedAt: new Date().toISOString(),
+          chapters: st.chapters.map(ch => ch.id === chapterId ? {
+            ...ch,
+            scenes: ch.scenes.map(sc => {
+              if (sc.id !== sceneId) return sc
+              const nextBlocks = [...sc.blocks]
+              const targetIndex = Math.max(0, Math.min(insertIndex, nextBlocks.length))
+              nextBlocks.splice(targetIndex, 0, ...blocks)
+              return { ...sc, blocks: nextBlocks }
+            })
           } : ch)
         } : st)
       })),

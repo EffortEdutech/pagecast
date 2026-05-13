@@ -15,7 +15,16 @@ import {
   deleteCharacter as dbDeleteCharacter,
 } from '@/lib/supabase/characters'
 import * as BooksApi from '@/lib/supabase/books'
-import { CATEGORIES, VOICE_LIBRARY, type PageCastVoiceProfile } from '@/lib/voiceLibrary'
+import {
+  CATEGORIES,
+  LANGUAGE_FILTERS,
+  VOICE_LIBRARY,
+  getLanguageLabel,
+  getSampleTextForLanguage,
+  isStoryLanguageCode,
+  type PageCastVoiceProfile,
+  type StoryLanguageCode,
+} from '@/lib/voiceLibrary'
 import { getTtsSettings } from '@/lib/tts'
 import type { Character } from '@/types'
 
@@ -33,7 +42,28 @@ interface ProviderVoice {
   previewUrl?: string | null
 }
 
-const ELEVENLABS_SAMPLE_TEXT = 'PageCast premium voice sample. Every character deserves a voice that feels truly alive.'
+type VoiceLanguageTag = StoryLanguageCode | 'multi'
+type VoiceLanguageTags = Record<string, VoiceLanguageTag>
+
+const VOICE_LANGUAGE_TAGS_KEY = 'pagecast-elevenlabs-language-tags'
+
+function sampleKey(voiceId: string, language: string) {
+  return `${voiceId}:${language}`
+}
+
+function normalizeVoiceLanguageTag(value?: string): VoiceLanguageTag {
+  if (value === 'multi') return 'multi'
+  if (isStoryLanguageCode(value)) return value
+  return 'multi'
+}
+
+function getElevenLabsVoiceLanguage(voice: ProviderVoice, tags: VoiceLanguageTags): VoiceLanguageTag {
+  return tags[voice.id] ?? normalizeVoiceLanguageTag(voice.labels?.language ?? voice.labels?.Language)
+}
+
+function languageMatchesStory(tag: VoiceLanguageTag, storyLanguage: string) {
+  return tag === 'multi' || tag === storyLanguage
+}
 
 // ── TTS preview parameters ─────────────────────────────────────────────────────
 
@@ -113,7 +143,7 @@ function VoiceCard({ voice, selected, onSelect }: { voice: PageCastVoiceProfile;
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
-        <div className="text-text-muted text-[10px] capitalize">{voice.category} / OpenAI {voice.openAiVoice}</div>
+        <div className="text-text-muted text-[10px] capitalize">{voice.category} / OpenAI {voice.openAiVoice} / {getLanguageLabel(voice.language)}</div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
@@ -137,15 +167,19 @@ function ElevenLabsVoiceCard({
   selected,
   sampleUrl,
   loading,
+  language,
   onSelect,
   onSample,
+  onLanguageChange,
 }: {
   voice: ProviderVoice
   selected: boolean
   sampleUrl?: string
   loading: boolean
+  language: VoiceLanguageTag
   onSelect: () => void
   onSample: () => void
+  onLanguageChange: (language: VoiceLanguageTag) => void
 }) {
   const [playing, setPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -192,7 +226,22 @@ function ElevenLabsVoiceCard({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
-        <div className="text-text-muted text-[10px] truncate">ElevenLabs / {labelText || voice.category}</div>
+        <div className="text-text-muted text-[10px] truncate">ElevenLabs / {getLanguageLabel(language)} / {labelText || voice.category}</div>
+        <select
+          className="input mt-2 h-7 text-[11px] py-0"
+          value={language}
+          onClick={e => e.stopPropagation()}
+          onChange={e => {
+            e.stopPropagation()
+            onLanguageChange(normalizeVoiceLanguageTag(e.target.value))
+          }}
+          title="Manual language tag"
+        >
+          <option value="multi">Multilingual</option>
+          {LANGUAGE_FILTERS.filter(lang => lang.code !== 'all' && lang.code !== 'multi').map(lang => (
+            <option key={lang.code} value={lang.code}>{lang.label}</option>
+          ))}
+        </select>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
@@ -218,11 +267,13 @@ function ElevenLabsVoiceCard({
 interface AddModalProps {
   storyId: string
   existingCount: number
+  bookLanguage: string
   elevenVoices: ProviderVoice[]
+  elevenVoiceTags: VoiceLanguageTags
   sampleUrls: Record<string, string>
   syncingVoices: boolean
   onSyncElevenLabsVoices: () => void
-  onGenerateElevenLabsSample: (voice: ProviderVoice) => void
+  onGenerateElevenLabsSample: (voice: ProviderVoice, language?: string) => void
   onAdd: (char: Character) => void
   onClose: () => void
 }
@@ -230,7 +281,9 @@ interface AddModalProps {
 function AddCharacterModal({
   storyId,
   existingCount,
+  bookLanguage,
   elevenVoices,
+  elevenVoiceTags,
   sampleUrls,
   syncingVoices,
   onSyncElevenLabsVoices,
@@ -252,14 +305,18 @@ function AddCharacterModal({
   const voiceLabel = elevenLabsVoice
     ? `ElevenLabs - ${elevenLabsVoice.label}`
     : pageCastVoice?.label ?? ''
+  const matchingElevenVoices = elevenVoices.filter(voice => languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
+  const otherElevenVoices = elevenVoices.filter(voice => !languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
 
   const handlePreviewVoice = () => {
     if (elevenLabsVoice) {
-      const sampleUrl = sampleUrls[elevenLabsVoice.id] ?? elevenLabsVoice.previewUrl
+      const language = getElevenLabsVoiceLanguage(elevenLabsVoice, elevenVoiceTags)
+      const previewLanguage = language === 'multi' ? bookLanguage : language
+      const sampleUrl = sampleUrls[sampleKey(elevenLabsVoice.id, previewLanguage)] ?? elevenLabsVoice.previewUrl
       if (sampleUrl) {
         new Audio(sampleUrl).play().catch(() => {})
       } else {
-        onGenerateElevenLabsSample(elevenLabsVoice)
+        onGenerateElevenLabsSample(elevenLabsVoice, previewLanguage)
       }
       return
     }
@@ -331,10 +388,17 @@ function AddCharacterModal({
                 <optgroup label="PageCast / OpenAI presets">
                   {VOICE_LIBRARY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </optgroup>
-                {elevenVoices.length > 0 && (
-                  <optgroup label="ElevenLabs real voices">
-                    {elevenVoices.map(v => (
+                {matchingElevenVoices.length > 0 && (
+                  <optgroup label={`ElevenLabs - ${getLanguageLabel(bookLanguage)} / multilingual`}>
+                    {matchingElevenVoices.map(v => (
                       <option key={v.id} value={`elevenlabs:${v.id}`}>ElevenLabs - {v.label}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {otherElevenVoices.length > 0 && (
+                  <optgroup label="ElevenLabs - other tagged languages">
+                    {otherElevenVoices.map(v => (
+                      <option key={v.id} value={`elevenlabs:${v.id}`}>ElevenLabs - {v.label} ({getLanguageLabel(getElevenLabsVoiceLanguage(v, elevenVoiceTags))})</option>
                     ))}
                   </optgroup>
                 )}
@@ -384,6 +448,7 @@ export default function VoicesPage() {
   const { stories, updateCharacter: storeUpdate, deleteCharacter: storeDelete, addCharacter: storeAdd } = useStudioStore()
   const [selectedStoryId, setSelectedStoryId] = useState('')
   const [categoryFilter,  setCategoryFilter]  = useState('all')
+  const [languageFilter,  setLanguageFilter]  = useState('all')
   const [showAddModal,    setShowAddModal]     = useState(false)
   const [editingCharId,   setEditingCharId]    = useState<string | null>(null)
   const [loadingChars,    setLoadingChars]     = useState(false)
@@ -395,6 +460,7 @@ export default function VoicesPage() {
   const [voiceSyncError,  setVoiceSyncError]   = useState<string | null>(null)
   const [sampleUrls,      setSampleUrls]       = useState<Record<string, string>>({})
   const [samplingVoiceId, setSamplingVoiceId]  = useState<string | null>(null)
+  const [elevenVoiceTags, setElevenVoiceTags]  = useState<VoiceLanguageTags>({})
 
   // Select first story once books load
   useEffect(() => {
@@ -409,9 +475,25 @@ export default function VoicesPage() {
     }
   }, [sampleUrls])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VOICE_LANGUAGE_TAGS_KEY)
+      if (raw) setElevenVoiceTags(JSON.parse(raw))
+    } catch {}
+  }, [])
+
   const story = stories.find(s => s.id === selectedStoryId)
-  const filteredVoices = VOICE_LIBRARY.filter(v => categoryFilter === 'all' || v.category === categoryFilter)
-  const providerFilteredVoices = categoryFilter === 'all' ? elevenVoices : []
+  const storyLanguage = story?.language ?? 'en'
+  const filteredVoices = VOICE_LIBRARY.filter(v =>
+    (categoryFilter === 'all' || v.category === categoryFilter) &&
+    (languageFilter === 'all' || v.language === 'multi' || v.language === languageFilter)
+  )
+  const providerFilteredVoices = categoryFilter === 'all'
+    ? elevenVoices.filter(v => {
+      const language = getElevenLabsVoiceLanguage(v, elevenVoiceTags)
+      return languageFilter === 'all' || language === 'multi' || language === languageFilter
+    })
+    : []
 
   // Narrator character for narrator-only mode
   const narratorChar = story?.characters.find(c => c.role === 'narrator')
@@ -454,6 +536,16 @@ export default function VoicesPage() {
     setSavingVoice(null)
   }, [selectedStoryId, storeUpdate])
 
+  const handleElevenLabsLanguageChange = useCallback((voiceId: string, language: VoiceLanguageTag) => {
+    setElevenVoiceTags(prev => {
+      const next = { ...prev, [voiceId]: language }
+      try {
+        localStorage.setItem(VOICE_LANGUAGE_TAGS_KEY, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }, [])
+
   const syncElevenLabsVoices = useCallback(async () => {
     const { apiKey, provider } = getTtsSettings()
     setVoiceSyncError(null)
@@ -480,7 +572,7 @@ export default function VoicesPage() {
     }
   }, [])
 
-  const generateElevenLabsSample = useCallback(async (voice: ProviderVoice) => {
+  const generateElevenLabsSample = useCallback(async (voice: ProviderVoice, language = storyLanguage) => {
     const { apiKey } = getTtsSettings()
     setVoiceSyncError(null)
 
@@ -489,7 +581,9 @@ export default function VoicesPage() {
       return
     }
 
-    setSamplingVoiceId(voice.id)
+    const sampleLanguage = language === 'multi' ? storyLanguage : language
+    const key = sampleKey(voice.id, sampleLanguage)
+    setSamplingVoiceId(key)
     try {
       const res = await fetch('/api/tts/generate', {
         method: 'POST',
@@ -499,7 +593,7 @@ export default function VoicesPage() {
           apiKey,
           voiceId: `elevenlabs:${voice.id}`,
           voiceLabel: `ElevenLabs - ${voice.label}`,
-          text: ELEVENLABS_SAMPLE_TEXT,
+          text: getSampleTextForLanguage(sampleLanguage),
           speed: 0.95,
         }),
       })
@@ -509,15 +603,15 @@ export default function VoicesPage() {
       }
       const blob = await res.blob()
       setSampleUrls(prev => {
-        if (prev[voice.id]) URL.revokeObjectURL(prev[voice.id])
-        return { ...prev, [voice.id]: URL.createObjectURL(blob) }
+        if (prev[key]) URL.revokeObjectURL(prev[key])
+        return { ...prev, [key]: URL.createObjectURL(blob) }
       })
     } catch (e: any) {
       setVoiceSyncError(e.message ?? 'Could not generate sample.')
     } finally {
       setSamplingVoiceId(null)
     }
-  }, [])
+  }, [storyLanguage])
 
   const previewCastVoice = useCallback((voiceId?: string) => {
     if (!voiceId) return
@@ -530,17 +624,19 @@ export default function VoicesPage() {
         return
       }
 
-      const sampleUrl = sampleUrls[voice.id] ?? voice.previewUrl
+      const language = getElevenLabsVoiceLanguage(voice, elevenVoiceTags)
+      const previewLanguage = language === 'multi' ? storyLanguage : language
+      const sampleUrl = sampleUrls[sampleKey(voice.id, previewLanguage)] ?? voice.previewUrl
       if (sampleUrl) {
         new Audio(sampleUrl).play().catch(() => {})
       } else {
-        generateElevenLabsSample(voice)
+        generateElevenLabsSample(voice, previewLanguage)
       }
       return
     }
 
     previewVoice(voiceId)
-  }, [elevenVoices, sampleUrls, generateElevenLabsSample])
+  }, [elevenVoices, sampleUrls, generateElevenLabsSample, elevenVoiceTags, storyLanguage])
 
   const handleDelete = useCallback(async (charId: string) => {
     storeDelete(selectedStoryId, charId)
@@ -725,6 +821,7 @@ export default function VoicesPage() {
                             <p className="px-2 pb-1 text-[9px] uppercase tracking-wide text-gold font-medium">ElevenLabs</p>
                             {elevenVoices.map(v => {
                               const id = `elevenlabs:${v.id}`
+                              const language = getElevenLabsVoiceLanguage(v, elevenVoiceTags)
                               return (
                                 <button key={v.id}
                                   className={clsx(
@@ -742,6 +839,7 @@ export default function VoicesPage() {
                                       : <span className="w-2.5 shrink-0" />
                                   }
                                   <span className="truncate flex-1">{v.label}</span>
+                                  <span className="text-[9px] opacity-70">{getLanguageLabel(language)}</span>
                                 </button>
                               )
                             })}
@@ -875,6 +973,19 @@ export default function VoicesPage() {
             ))}
           </div>
 
+          <div className="flex gap-1.5 flex-wrap">
+            {LANGUAGE_FILTERS.map(lang => (
+              <button key={lang.code} onClick={() => setLanguageFilter(lang.code)}
+                className={clsx('px-3 py-1 rounded-full text-xs font-medium transition-all',
+                  languageFilter === lang.code
+                    ? 'bg-gold/20 text-gold border border-gold/30'
+                    : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-bg-border'
+                )}>
+                {lang.label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredVoices.map(voice => {
               const assignedChar = story?.characters.find(c => c.voiceId === voice.id)
@@ -910,14 +1021,18 @@ export default function VoicesPage() {
                 {providerFilteredVoices.map(voice => {
                   const id = `elevenlabs:${voice.id}`
                   const assignedChar = story?.characters.find(c => c.voiceId === id)
+                  const language = getElevenLabsVoiceLanguage(voice, elevenVoiceTags)
+                  const previewLanguage = language === 'multi' ? storyLanguage : language
                   return (
                     <div key={voice.id} className="relative">
                       <ElevenLabsVoiceCard
                         voice={voice}
                         selected={!!assignedChar}
-                        sampleUrl={sampleUrls[voice.id]}
-                        loading={samplingVoiceId === voice.id}
-                        onSample={() => generateElevenLabsSample(voice)}
+                        sampleUrl={sampleUrls[sampleKey(voice.id, previewLanguage)]}
+                        loading={samplingVoiceId === sampleKey(voice.id, previewLanguage)}
+                        language={language}
+                        onLanguageChange={nextLanguage => handleElevenLabsLanguageChange(voice.id, nextLanguage)}
+                        onSample={() => generateElevenLabsSample(voice, previewLanguage)}
                         onSelect={() => {
                           if (editingCharId) {
                             handleVoiceChange(editingCharId, id, `ElevenLabs - ${voice.label}`)
@@ -943,7 +1058,9 @@ export default function VoicesPage() {
         <AddCharacterModal
           storyId={story.id}
           existingCount={story.characters.length}
+          bookLanguage={storyLanguage}
           elevenVoices={elevenVoices}
+          elevenVoiceTags={elevenVoiceTags}
           sampleUrls={sampleUrls}
           syncingVoices={syncingVoices}
           onSyncElevenLabsVoices={syncElevenLabsVoices}

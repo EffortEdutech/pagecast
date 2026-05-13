@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { X, Save, Loader2, Palette } from 'lucide-react'
 import { clsx } from 'clsx'
+import { STORY_LANGUAGES } from '@/lib/voiceLibrary'
 import type { Story } from '@/types'
 
 const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Thriller', 'Horror',
@@ -31,6 +32,7 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
   const [estTime,   setEstTime]   = useState(story.durationMinutes?.toString() ?? '')
   const [gradient,  setGradient]  = useState(story.coverGradient ?? GRADIENTS[0].value)
   const [emoji,     setEmoji]     = useState((story as any).coverImage ?? '📖')
+  const [language,  setLanguage]  = useState(story.language ?? 'en')
   const [desc,      setDesc]      = useState(story.description ?? '')
   const [saving,    setSaving]    = useState(false)
 
@@ -43,6 +45,7 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
       coverGradient:   gradient,
       coverImage:      emoji,
       description:     desc,
+      language,
     })
     setSaving(false)
     onClose()
@@ -87,6 +90,15 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
                 {AGE_RATINGS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="label">Story Language</label>
+            <select className="input text-sm" value={language} onChange={e => setLanguage(e.target.value)}>
+              {STORY_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Estimated reading time */}

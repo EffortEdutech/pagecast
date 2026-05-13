@@ -25,6 +25,9 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
+    const searchParams = new URLSearchParams(window.location.search)
+    const next = searchParams.get('next') || '/library'
+    const signupSource = searchParams.get('utm_source') || localStorage.getItem('pagecast_signup_source') || undefined
 
     if (tab === 'login') {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
@@ -33,14 +36,14 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
-      router.push('/library')
+      router.push(next)
       router.refresh()
     } else {
       const { error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { display_name: name || email.split('@')[0], role: 'reader' },
+          data: { display_name: name || email.split('@')[0], role: 'reader', signup_source: signupSource },
         },
       })
       if (authError) {
@@ -69,7 +72,7 @@ export default function LoginPage() {
           </div>
           <div>
             <div className="text-text-primary font-bold text-xl tracking-tight">PageCast</div>
-            <div className="text-text-muted text-xs">Cinematic storytelling</div>
+            <div className="text-text-muted text-xs">A world of Tales with voices</div>
           </div>
         </div>
 
@@ -88,7 +91,7 @@ export default function LoginPage() {
                     : 'text-text-muted hover:text-text-secondary',
                 ].join(' ')}
               >
-                {t === 'login' ? 'Sign In' : 'Sign Up'}
+                {t === 'login' ? 'Enter' : 'Join'}
               </button>
             ))}
           </div>
@@ -96,13 +99,13 @@ export default function LoginPage() {
           <form onSubmit={handleAuth} className="space-y-4">
             {tab === 'signup' && (
               <div>
-                <label className="label">Display Name</label>
+                <label className="label">Explorer Name</label>
                 <input
                   type="text"
                   className="input"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Your Explorer name"
                   autoComplete="name"
                 />
               </div>
@@ -162,7 +165,7 @@ export default function LoginPage() {
             >
               {loading
                 ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {tab === 'login' ? 'Signing in…' : 'Creating account…'}</>
-                : tab === 'login' ? 'Sign In' : 'Create Account'
+                : tab === 'login' ? 'Enter PageCast' : 'Begin Exploring'
               }
             </button>
           </form>
@@ -172,8 +175,8 @@ export default function LoginPage() {
             <p className="text-text-muted text-xs text-center mb-3">Test accounts (pw: test123)</p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Reader 1', email: 'reader1@pagecast.test' },
-                { label: 'Reader 2', email: 'reader2@pagecast.test' },
+                { label: 'Explorer 1', email: 'reader1@pagecast.test' },
+                { label: 'Explorer 2', email: 'reader2@pagecast.test' },
               ].map(({ label, email: testEmail }) => (
                 <button
                   key={testEmail}
@@ -192,7 +195,7 @@ export default function LoginPage() {
         <p className="text-center mt-6">
           <Link href="/" className="text-text-muted text-sm hover:text-text-secondary transition-colors flex items-center gap-1.5 justify-center">
             <Headphones size={13} />
-            Browse stories without signing in
+            Explore Casts as a Visitor
           </Link>
         </p>
       </div>

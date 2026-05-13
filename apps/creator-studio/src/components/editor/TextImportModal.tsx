@@ -7,34 +7,27 @@ import {
   ArrowUp, ArrowDown
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { parseText, formatParsedImportAsPageCastText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
+import { parseText, formatParsedImportAsPageCastText, normalizeImportedText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
 import type { StoryBlock } from '@/types'
+
+export type ImportDestination =
+  | { mode: 'new-chapter' }
+  | { mode: 'current-beat'; chapterId: string; sceneId: string; insertIndex: number }
 
 // ── PDF extraction (pdfjs-dist, browser-side) ─────────────────────────────────
 
 async function extractPdfText(file: File): Promise<{ text: string; pages: number }> {
-  // Dynamic import to avoid SSR issues
-  const pdfjs = await import('pdfjs-dist')
-  // Use unpkg CDN for the worker — avoids Next.js bundler complexity
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch('/api/pdf/extract', { method: 'POST', body: form })
+  const body = await res.json().catch(() => ({}))
 
-  const arrayBuffer = await file.arrayBuffer()
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
-  const pdf = await loadingTask.promise
-
-  const pageParts: string[] = []
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    const pageText = content.items
-      .filter((item: any) => 'str' in item)
-      .map((item: any) => (item.str as string))
-      .join(' ')
-    if (pageText.trim()) pageParts.push(pageText.trim())
+  if (!res.ok) {
+    throw new Error(body.error ?? 'Could not extract text from this PDF.')
   }
 
-  return { text: pageParts.join('\n\n'), pages: pdf.numPages }
+  return { text: String(body.text ?? ''), pages: Number(body.pages ?? 0) }
+
 }
 
 // ── Block type display ────────────────────────────────────────────────────────
@@ -170,8 +163,14 @@ function ChapterPreview({
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 interface TextImportModalProps {
-  onImport: (result: ParsedImport) => Promise<void>
+  onImport: (result: ParsedImport, destination: ImportDestination) => Promise<void>
   onClose:  () => void
+  activeChapterTitle?: string
+  activeSceneTitle?: string
+  activeChapterId?: string | null
+  activeSceneId?: string | null
+  activeBeatCount?: number
+  canInsertAtActiveBeat?: boolean
 }
 
 const PLACEHOLDER = `# Chapter 1: The Beginning
@@ -195,7 +194,16 @@ She stepped forward, heart pounding.
 
 NARRATOR: The night grew darker still.`
 
-export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
+export function TextImportModal({
+  onImport,
+  onClose,
+  activeChapterTitle,
+  activeSceneTitle,
+  activeChapterId,
+  activeSceneId,
+  activeBeatCount = 0,
+  canInsertAtActiveBeat = false,
+}: TextImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [text,        setText]        = useState('')
@@ -206,10 +214,16 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
   const [pdfPages,    setPdfPages]    = useState<number | null>(null)
   const [error,       setError]       = useState<string | null>(null)
   const [importDone,  setImportDone]  = useState(false)
+  const [showDestination, setShowDestination] = useState(false)
+  const [destinationMode, setDestinationMode] = useState<'new-chapter' | 'current-beat'>(
+    canInsertAtActiveBeat ? 'current-beat' : 'new-chapter'
+  )
+  const [insertPosition, setInsertPosition] = useState('end')
 
   const handleParse = useCallback(() => {
     if (!text.trim()) return
     setError(null)
+    setShowDestination(false)
     try {
       const result = parseText(text, format)
       setParsed(result)
@@ -221,6 +235,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
   const handleArrange = useCallback(() => {
     if (!text.trim()) return
     setError(null)
+    setShowDestination(false)
     try {
       const firstPass = parseText(text, format === 'pagecast' ? 'auto' : format)
       const arranged = formatParsedImportAsPageCastText(firstPass)
@@ -232,6 +247,13 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
       setError('Arrange error: ' + e.message)
     }
   }, [text, format])
+
+  const handleCleanText = useCallback(() => {
+    if (!text.trim()) return
+    setError(null)
+    setText(normalizeImportedText(text))
+    setParsed(null)
+  }, [text])
 
   const moveParsedBlock = useCallback((chapterIndex: number, sceneIndex: number, blockIndex: number, direction: -1 | 1) => {
     setParsed(prev => {
@@ -271,7 +293,7 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
         if (!extracted.trim()) {
           setError('Could not extract text from this PDF. It may be a scanned image. Try exporting as .txt first.')
         } else {
-          setText(extracted)
+          setText(normalizeImportedText(extracted))
           setPdfPages(pages)
         }
       } catch (err: any) {
@@ -286,17 +308,34 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
     const reader = new FileReader()
     reader.onload = ev => {
       const content = ev.target?.result as string
-      setText(content)
+      setText(normalizeImportedText(content))
     }
     reader.readAsText(file)
   }
 
   const handleImport = async () => {
     if (!parsed) return
+    if (!showDestination) {
+      setShowDestination(true)
+      return
+    }
     setImporting(true)
     setError(null)
     try {
-      await onImport(parsed)
+      const canUseActiveDestination = destinationMode === 'current-beat' && canInsertAtActiveBeat && activeChapterId && activeSceneId
+      const destination: ImportDestination = canUseActiveDestination
+        ? {
+            mode: 'current-beat',
+            chapterId: activeChapterId ?? '',
+            sceneId: activeSceneId ?? '',
+            insertIndex: insertPosition === 'start'
+              ? 0
+              : insertPosition === 'end'
+                ? activeBeatCount
+                : Number(insertPosition),
+          }
+        : { mode: 'new-chapter' }
+      await onImport(parsed, destination)
       setImportDone(true)
       setTimeout(onClose, 1200)
     } catch (e: any) {
@@ -386,6 +425,14 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
 
             <div className="px-4 py-3 border-t border-bg-border shrink-0 space-y-2">
               <button
+                onClick={handleCleanText}
+                disabled={!text.trim() || extracting}
+                className="btn-ghost w-full justify-center text-sm border border-bg-border hover:border-accent/40 disabled:opacity-40"
+                title="Clean PDF/text export spacing before arranging or parsing"
+              >
+                <AlignLeft size={14} /> Clean pasted text
+              </button>
+              <button
                 onClick={handleArrange}
                 disabled={!text.trim() || extracting}
                 className="btn-secondary w-full justify-center text-sm disabled:opacity-40"
@@ -470,6 +517,53 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                 <AlertCircle size={13} className="shrink-0 mt-0.5" /> {error}
               </div>
             )}
+
+            {parsed && showDestination && (
+              <div className="mx-4 mb-4 p-3 rounded-xl bg-bg-elevated border border-bg-border space-y-3">
+                <div>
+                  <p className="text-text-primary text-xs font-semibold">Import destination</p>
+                  <p className="text-text-muted text-[11px] mt-0.5">Choose where the parsed text should be inserted.</p>
+                </div>
+                <label className="flex items-start gap-2 text-xs text-text-secondary cursor-pointer">
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    checked={destinationMode === 'new-chapter'}
+                    onChange={() => setDestinationMode('new-chapter')}
+                  />
+                  <span>
+                    <span className="text-text-primary font-medium">Create new chapter(s)</span>
+                    <span className="block text-text-muted text-[11px]">Import each parsed chapter at the end of the book.</span>
+                  </span>
+                </label>
+                <label className={clsx('flex items-start gap-2 text-xs cursor-pointer', canInsertAtActiveBeat ? 'text-text-secondary' : 'text-text-muted opacity-60')}>
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    checked={destinationMode === 'current-beat'}
+                    onChange={() => setDestinationMode('current-beat')}
+                    disabled={!canInsertAtActiveBeat}
+                  />
+                  <span>
+                    <span className="text-text-primary font-medium">Insert into active scene</span>
+                    <span className="block text-text-muted text-[11px]">
+                      {canInsertAtActiveBeat
+                        ? `${activeChapterTitle ?? 'Active chapter'} / ${activeSceneTitle ?? 'Active scene'}`
+                        : 'Select a chapter and scene first.'}
+                    </span>
+                  </span>
+                </label>
+                {destinationMode === 'current-beat' && canInsertAtActiveBeat && (
+                  <select className="input text-xs" value={insertPosition} onChange={e => setInsertPosition(e.target.value)}>
+                    <option value="start">At beginning of active scene</option>
+                    <option value="end">At end of active scene</option>
+                    {Array.from({ length: activeBeatCount }, (_, idx) => (
+                      <option key={idx} value={idx}>Before beat {idx + 1}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -492,6 +586,8 @@ export function TextImportModal({ onImport, onClose }: TextImportModalProps) {
                 <><Check size={14} /> Imported!</>
               ) : importing ? (
                 <><Loader2 size={14} className="animate-spin" /> Importing…</>
+              ) : showDestination ? (
+                'Confirm import'
               ) : (
                 'Import into book'
               )}

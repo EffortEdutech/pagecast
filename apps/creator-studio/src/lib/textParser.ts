@@ -88,6 +88,19 @@ function splitIntoParagraphs(text: string): string[] {
   return text.split('\n').map(p => p.trim()).filter(Boolean)
 }
 
+export function normalizeImportedText(text: string): string {
+  return text
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/([A-Za-z])-\n([A-Za-z])/g, '$1$2')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim()
+}
+
 // ── Block factories ───────────────────────────────────────────────────────────
 
 function narration(text: string): NarrationBlock {
@@ -546,7 +559,7 @@ function parseMarkdown(text: string): ParsedChapter[] {
 // ── Main entry ────────────────────────────────────────────────────────────────
 
 export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImport {
-  const clean = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+  const clean = normalizeImportedText(text)
 
   const detected   = format === 'auto' ? detectFormat(clean) : format
   const usedFormat = detected

@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Store — PageCast',
-  description: 'Browse cinematic audio storybooks. Listen in your browser, no app required.',
+  title: 'TaleVerse - PageCast',
+  description: 'Explore multilingual Casts with voices, scenes, and gentle magic. No app required.',
   openGraph: {
-    title: 'PageCast Story Store',
-    description: 'Browse cinematic audio storybooks. Listen in your browser, no app required.',
+    title: 'PageCast TaleVerse',
+    description: 'Explore multilingual Casts with voices, scenes, and gentle magic. No app required.',
     type: 'website',
   },
 }

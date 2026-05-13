@@ -18,10 +18,131 @@ export type OpenAiVoiceName =
 export interface PageCastVoiceProfile extends VoiceProfile {
   openAiVoice: OpenAiVoiceName
   sample: string
+  language: StoryLanguageCode | 'multi'
   pitch: number
   rate: number
   browserGender: 'male' | 'female' | 'neutral'
   castingNote: string
+}
+
+export type StoryLanguageCode =
+  | 'en'
+  | 'es'
+  | 'id'
+  | 'ms'
+  | 'fr'
+  | 'zh'
+  | 'ko'
+  | 'ja'
+  | 'nl'
+  | 'de'
+  | 'ta'
+  | 'hi'
+  | 'ar'
+  | 'bn'
+  | 'ur'
+  | 'ne'
+
+export const STORY_LANGUAGES: Array<{ code: StoryLanguageCode; label: string; sample: string }> = [
+  {
+    code: 'en',
+    label: 'English',
+    sample: 'PageCast premium voice sample. Every character deserves a voice that feels truly alive.',
+  },
+  {
+    code: 'es',
+    label: 'Spanish',
+    sample: 'Muestra de voz premium de PageCast. Cada personaje merece una voz viva y memorable.',
+  },
+  {
+    code: 'id',
+    label: 'Indonesian',
+    sample: 'Contoh suara premium PageCast. Setiap karakter layak memiliki suara yang hidup dan berkesan.',
+  },
+  {
+    code: 'ms',
+    label: 'Malay',
+    sample: 'Contoh suara premium PageCast. Setiap watak layak memiliki suara yang hidup dan berkesan.',
+  },
+  {
+    code: 'fr',
+    label: 'French',
+    sample: 'Exemple de voix premium PageCast. Chaque personnage merite une voix vivante et memorable.',
+  },
+  {
+    code: 'zh',
+    label: 'Chinese',
+    sample: 'PageCast 高级语音示例。每个角色都值得拥有鲜活而难忘的声音。',
+  },
+  {
+    code: 'ko',
+    label: 'Korean',
+    sample: 'PageCast 프리미엄 음성 샘플입니다. 모든 캐릭터는 생생하고 기억에 남는 목소리를 가질 자격이 있습니다.',
+  },
+  {
+    code: 'ja',
+    label: 'Japanese',
+    sample: 'PageCast プレミアム音声サンプルです。すべてのキャラクターには、生き生きと記憶に残る声がふさわしいです。',
+  },
+  {
+    code: 'nl',
+    label: 'Dutch',
+    sample: 'PageCast premium stemvoorbeeld. Elk personage verdient een levendige en onvergetelijke stem.',
+  },
+  {
+    code: 'de',
+    label: 'German',
+    sample: 'PageCast Premium-Stimmprobe. Jede Figur verdient eine lebendige und unvergessliche Stimme.',
+  },
+  {
+    code: 'ta',
+    label: 'Tamil',
+    sample: 'PageCast பிரீமியம் குரல் மாதிரி. ஒவ்வொரு கதாபாத்திரத்திற்கும் உயிரோட்டமான, நினைவில் நிற்கும் குரல் தேவை.',
+  },
+  {
+    code: 'hi',
+    label: 'Hindi',
+    sample: 'PageCast प्रीमियम आवाज़ नमूना। हर पात्र एक जीवंत और यादगार आवाज़ का हकदार है।',
+  },
+  {
+    code: 'ar',
+    label: 'Arabic',
+    sample: 'عينة صوتية مميزة من PageCast. كل شخصية تستحق صوتا حيا ولا ينسى.',
+  },
+  {
+    code: 'bn',
+    label: 'Bengali',
+    sample: 'PageCast প্রিমিয়াম ভয়েস নমুনা। প্রতিটি চরিত্রের প্রাপ্য একটি জীবন্ত ও স্মরণীয় কণ্ঠ।',
+  },
+  {
+    code: 'ur',
+    label: 'Urdu',
+    sample: 'PageCast پریمیم آواز کا نمونہ۔ ہر کردار ایک جاندار اور یادگار آواز کا حق دار ہے۔',
+  },
+  {
+    code: 'ne',
+    label: 'Nepali',
+    sample: 'PageCast प्रिमियम आवाज नमुना। हरेक पात्रले जीवन्त र सम्झनलायक आवाज पाउनुपर्छ।',
+  },
+]
+
+export const LANGUAGE_FILTERS = [
+  { code: 'all', label: 'All languages' },
+  { code: 'multi', label: 'Multilingual' },
+  ...STORY_LANGUAGES,
+] as const
+
+export function isStoryLanguageCode(code?: string): code is StoryLanguageCode {
+  return STORY_LANGUAGES.some(language => language.code === code)
+}
+
+export function getLanguageLabel(code?: string): string {
+  if (code === 'multi') return 'Multilingual'
+  return STORY_LANGUAGES.find(language => language.code === code)?.label ?? 'English'
+}
+
+export function getSampleTextForLanguage(code?: string): string {
+  return STORY_LANGUAGES.find(language => language.code === code)?.sample ?? STORY_LANGUAGES[0].sample
 }
 
 export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
@@ -30,6 +151,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Marin - Warm Premium Narrator',
     category: 'narrator',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'marin',
     pitch: 0.98,
     rate: 0.9,
@@ -42,6 +164,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Cedar - Deep Epic Narrator',
     category: 'narrator',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'cedar',
     pitch: 0.78,
     rate: 0.86,
@@ -54,6 +177,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Coral - Gentle Young Woman',
     category: 'female',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'coral',
     pitch: 1.16,
     rate: 0.94,
@@ -66,6 +190,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Nova - Warm Motherly Voice',
     category: 'female',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'nova',
     pitch: 1.08,
     rate: 0.95,
@@ -78,6 +203,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Shimmer - Bright Teen Girl',
     category: 'female',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'shimmer',
     pitch: 1.24,
     rate: 1.03,
@@ -90,6 +216,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Onyx - Deep Adult Man',
     category: 'male',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'onyx',
     pitch: 0.72,
     rate: 0.9,
@@ -102,6 +229,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Echo - Calm Young Man',
     category: 'male',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'echo',
     pitch: 0.9,
     rate: 0.95,
@@ -114,6 +242,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Ash - Gruff Protector',
     category: 'male',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'ash',
     pitch: 0.76,
     rate: 0.9,
@@ -126,6 +255,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Sage - Little Girl',
     category: 'child',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'sage',
     pitch: 1.45,
     rate: 1.08,
@@ -138,6 +268,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Alloy - Little Boy',
     category: 'child',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'alloy',
     pitch: 1.36,
     rate: 1.08,
@@ -150,6 +281,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Ballad - Elder Storyteller Woman',
     category: 'elder',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'ballad',
     pitch: 0.95,
     rate: 0.82,
@@ -162,6 +294,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Fable - Elder Storyteller Man',
     category: 'elder',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'fable',
     pitch: 0.82,
     rate: 0.82,
@@ -174,6 +307,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Verse - Elegant Villain',
     category: 'villain',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'verse',
     pitch: 0.74,
     rate: 0.84,
@@ -186,6 +320,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Sage - Secret Whisper',
     category: 'whisper',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'sage',
     pitch: 1.05,
     rate: 0.76,
@@ -198,6 +333,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Verse - Heroic Dramatic',
     category: 'dramatic',
     gender: 'male',
+    language: 'multi',
     openAiVoice: 'verse',
     pitch: 0.88,
     rate: 0.98,
@@ -210,6 +346,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Alloy - Playful Cartoon',
     category: 'cartoon',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'alloy',
     pitch: 1.52,
     rate: 1.18,
@@ -222,6 +359,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Ash - Story Robot',
     category: 'robot',
     gender: 'neutral',
+    language: 'multi',
     openAiVoice: 'ash',
     pitch: 0.62,
     rate: 0.92,
@@ -234,6 +372,7 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
     label: 'Ballad - Enchanted Fantasy',
     category: 'fantasy',
     gender: 'female',
+    language: 'multi',
     openAiVoice: 'ballad',
     pitch: 1.18,
     rate: 0.88,
@@ -271,4 +410,3 @@ export function getOpenAiVoiceForVoiceId(voiceId?: string): OpenAiVoiceName {
 export function getVoiceCastingInstruction(voiceId?: string): string {
   return getPageCastVoice(voiceId).castingNote
 }
-

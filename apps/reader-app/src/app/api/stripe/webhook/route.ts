@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,12 +33,19 @@ export async function POST(req: NextRequest) {
     const bookId   = session.metadata?.bookId
     const userId   = session.metadata?.userId
     const paid     = (session.amount_total ?? 0) / 100
+    const currency = session.currency ?? session.metadata?.currency ?? 'usd'
 
     if (bookId && userId) {
-      const supabase = createClient()
+      const supabase = createAdminClient()
       // Upsert so duplicate webhooks are safe
       await supabase.from('purchases').upsert(
-        { user_id: userId, book_id: bookId, price_paid: paid },
+        {
+          user_id: userId,
+          book_id: bookId,
+          price_paid: paid,
+          stripe_session_id: session.id,
+          currency,
+        },
         { onConflict: 'user_id,book_id', ignoreDuplicates: true }
       )
     }

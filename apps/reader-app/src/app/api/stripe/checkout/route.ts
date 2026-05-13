@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
     metadata: {
       bookId,
       userId: user.id,
+      currency: 'usd',
     },
     success_url: `${baseUrl}/book/${bookId}?purchased=1`,
     cancel_url:  `${baseUrl}/book/${bookId}?cancelled=1`,

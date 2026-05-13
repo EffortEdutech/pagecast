@@ -19,15 +19,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .single()
 
   if (!book) {
-    return { title: 'Book — PageCast' }
+    return { title: 'Cast - PageCast' }
   }
 
   return {
-    title: `${book.title} — PageCast`,
-    description: book.description ?? 'A cinematic audio storybook on PageCast.',
+    title: `${book.title} - PageCast Cast`,
+    description: book.description ?? 'A PageCast experience with voices, scenes, and gentle magic.',
     openGraph: {
-      title: `${book.title} — PageCast`,
-      description: book.description ?? 'A cinematic audio storybook on PageCast.',
+      title: `${book.title} - PageCast Cast`,
+      description: book.description ?? 'A PageCast experience with voices, scenes, and gentle magic.',
       type: 'book',
     },
   }

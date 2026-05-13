@@ -200,15 +200,15 @@ function BlockView({
 
 // ─── Mode pills ───────────────────────────────────────────────────────
 const MODES: { id: ReaderMode; label: string; icon: typeof BookOpen }[] = [
-  { id: 'reading',   label: 'Reading',   icon: BookOpen },
-  { id: 'audiobook', label: 'Audiobook', icon: Headphones },
-  { id: 'cinematic', label: 'Cinematic', icon: Film },
+  { id: 'reading',   label: 'Page Mode',  icon: BookOpen },
+  { id: 'audiobook', label: 'Voice Mode', icon: Headphones },
+  { id: 'cinematic', label: 'Dream Mode', icon: Film },
 ]
 
 const BEAT_GAP_MS = 550
 
 function blockSummary(block: StoryBlock, index: number): string {
-  const prefix = `Beat ${index + 1}`
+  const prefix = `Moment ${index + 1}`
   if (block.type === 'pause') return `${prefix} - Pause`
   if (block.type === 'sfx') return `${prefix} - ${(block as any).label ?? 'Sound effect'}`
 
@@ -252,6 +252,7 @@ export default function ReaderPage() {
   } = useReaderStore()
 
   const [story, setStory] = useState<Story | null | undefined>(undefined)
+  const [serverAccess, setServerAccess] = useState<boolean | null>(null)
 
   // Load story: Supabase first, demo fallback
   useEffect(() => {
@@ -261,14 +262,28 @@ export default function ReaderPage() {
     }).catch(() => setStory(getStory(id) ?? null))
   }, [id])
 
+  useEffect(() => {
+    if (!id) return
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
+    if (isPreview) {
+      setServerAccess(true)
+      return
+    }
+
+    fetch(`/api/books/${id}/access`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setServerAccess(Boolean(data?.hasAccess)))
+      .catch(() => setServerAccess(false))
+  }, [id])
+
   // Gate: must own (bypass with ?preview=1 for creator studio preview)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
-    if (story && !isOwned(story.id) && !isPreview) {
+    if (story && serverAccess === false && !isOwned(story.id) && !isPreview) {
       router.replace(`/book/${id}`)
     }
-  }, [story, id, isOwned, router])
+  }, [story, id, isOwned, router, serverAccess])
 
   // Apply theme to body
   useEffect(() => {
@@ -761,6 +776,12 @@ export default function ReaderPage() {
     </div>
   )
 
+  if (serverAccess === null && !isOwned(story.id)) return (
+    <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
   const isLastBlock = blockIdx >= blocks.length - 1
     && sceneIdx >= (chapter?.scenes.length ?? 1) - 1
     && chapterIdx >= story.chapters.length - 1
@@ -890,17 +911,17 @@ export default function ReaderPage() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 pb-4 sm:pb-0">
           <div className="card-elevated w-full max-w-sm p-5 shadow-elevated animate-slide-up space-y-4">
             <div>
-              <p className="text-text-primary font-semibold">Continue reading?</p>
+              <p className="text-text-primary font-semibold">Resume your Journey?</p>
               <p className="text-text-muted text-xs mt-1">
-                You have a saved position in this story.
+                You have a saved Moment in this Cast.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={startOver} className="btn-secondary text-sm justify-center">
-                <RotateCcw size={13} /> Start over
+                <RotateCcw size={13} /> Begin again
               </button>
               <button onClick={continueFromLastStop} className="btn-primary text-sm justify-center">
-                <Play size={13} /> Continue
+                <Play size={13} /> Resume
               </button>
             </div>
           </div>
@@ -920,13 +941,13 @@ export default function ReaderPage() {
                 onClick={() => { setPlaying(false); setChapterComplete(null) }}
                 className="btn-secondary text-sm justify-center"
               >
-                Take a break
+                Rest here
               </button>
               <button
                 onClick={() => { setChapterComplete(null); setPlaying(true) }}
                 className="btn-primary text-sm justify-center"
               >
-                <Play size={13} /> Continue
+                <Play size={13} /> Continue Journey
               </button>
             </div>
           </div>
@@ -938,15 +959,15 @@ export default function ReaderPage() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-4 pb-4 sm:pb-0">
           <div className="card-elevated w-full max-w-sm p-5 shadow-elevated animate-slide-up space-y-4">
             <div>
-              <p className="text-text-primary font-semibold">Book completed</p>
+              <p className="text-text-primary font-semibold">Cast completed</p>
               <p className="text-text-muted text-xs mt-1">You reached the end of {story.title}.</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={startOver} className="btn-secondary text-sm justify-center">
-                <RotateCcw size={13} /> Start over
+                <RotateCcw size={13} /> Begin again
               </button>
               <Link href="/library" className="btn-primary text-sm justify-center">
-                <BookOpen size={13} /> Library
+                <BookOpen size={13} /> My Casts
               </Link>
             </div>
           </div>

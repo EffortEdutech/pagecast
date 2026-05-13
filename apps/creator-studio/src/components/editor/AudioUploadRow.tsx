@@ -23,6 +23,12 @@ function getBlockText(block: StoryBlock): string {
   return 'text' in block ? (block as any).text ?? '' : ''
 }
 
+function getDefaultTtsSpeed(block: StoryBlock, voiceId: string): number {
+  if (typeof block.voiceSpeed === 'number') return block.voiceSpeed
+  if (voiceId.startsWith('elevenlabs:') && block.type === 'dialogue') return 0.88
+  return getPageCastVoice(voiceId).rate
+}
+
 export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }: AudioUploadRowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef     = useRef<HTMLAudioElement | null>(null)
@@ -46,6 +52,14 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   }, [])
 
   useEffect(() => { return () => { audioRef.current?.pause() } }, [block.audioUrl])
+
+  useEffect(() => {
+    audioRef.current?.pause()
+    audioRef.current = null
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
+  }, [block.audioUrl])
 
   // ── Upload ──────────────────────────────────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,7 +93,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
       userId,
       bookId,
       blockId: block.id,
-      speed: getPageCastVoice(effectiveVoiceId).rate,
+      speed: getDefaultTtsSpeed(block, effectiveVoiceId),
       blockType: block.type,
       emotion: 'emotion' in block ? (block as any).emotion : undefined,
       style: 'style' in block ? (block as any).style : undefined,

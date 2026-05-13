@@ -164,6 +164,66 @@ function buildStorytellingInstructions(opts: {
   return parts.join(' ')
 }
 
+function clampSpeed(value: number): number {
+  return Math.min(Math.max(value, 0.7), 1.2)
+}
+
+function getElevenLabsVoiceSettings(opts: {
+  speed: number
+  blockType?: string
+  emotion?: string
+}) {
+  let speed = clampSpeed(opts.speed)
+  let stability = 0.5
+  let style = 0.35
+
+  if (opts.blockType === 'dialogue') {
+    stability = 0.44
+    style = 0.42
+  } else if (opts.blockType === 'thought') {
+    speed -= 0.04
+    stability = 0.55
+    style = 0.3
+  } else if (opts.blockType === 'quote') {
+    speed -= 0.05
+    stability = 0.58
+    style = 0.28
+  } else {
+    stability = 0.52
+    style = 0.32
+  }
+
+  switch (opts.emotion) {
+    case 'sad':
+    case 'worried':
+    case 'scared':
+    case 'mysterious':
+      speed -= 0.04
+      stability += 0.04
+      style += 0.04
+      break
+    case 'angry':
+    case 'excited':
+    case 'surprised':
+      speed += 0.02
+      stability -= 0.04
+      style += 0.08
+      break
+    case 'happy':
+      speed += 0.01
+      style += 0.04
+      break
+  }
+
+  return {
+    stability: Math.min(Math.max(stability, 0.25), 0.75),
+    similarity_boost: 0.8,
+    style: Math.min(Math.max(style, 0), 0.65),
+    use_speaker_boost: true,
+    speed: clampSpeed(speed),
+  }
+}
+
 export async function POST(req: NextRequest) {
   let body: {
     text: string
@@ -282,12 +342,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           text: text.trim(),
           model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability:        0.38,
-            similarity_boost: 0.8,
-            style:            0.65,
-            use_speaker_boost: true,
-          },
+          voice_settings: getElevenLabsVoiceSettings({ speed, blockType, emotion }),
         }),
       })
     } catch (e: any) {

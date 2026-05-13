@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, Library, ShoppingBag, LogIn, LogOut, User } from 'lucide-react'
+import { BookOpen, CreditCard, Library, ShoppingBag, LogIn, LogOut, Rocket, User } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
@@ -40,12 +40,14 @@ export function Navbar() {
 
   const displayName = user?.user_metadata?.display_name
     ?? user?.email?.split('@')[0]
-    ?? 'Reader'
+    ?? 'Explorer'
   const initials = displayName.charAt(0).toUpperCase()
 
   const links = [
-    { href: '/store',   label: 'Store',   icon: ShoppingBag },
-    { href: '/library', label: 'Library', icon: Library, badge: library.length },
+    { href: '/start',   label: 'Begin',     icon: Rocket },
+    { href: '/store',   label: 'TaleVerse', icon: ShoppingBag },
+    { href: '/pricing', label: 'Cast Pass', icon: CreditCard },
+    { href: '/library', label: 'My Casts',  icon: Library, badge: library.length },
   ]
 
   return (
@@ -56,7 +58,7 @@ export function Navbar() {
         </div>
         <div>
           <span className="text-text-primary font-bold text-sm tracking-tight">PageCast</span>
-          <span className="text-text-muted text-[10px] ml-1.5 hidden sm:inline">Where stories find their voice</span>
+          <span className="text-text-muted text-[10px] ml-1.5 hidden sm:inline">A world of Tales with voices</span>
         </div>
       </Link>
 
@@ -105,7 +107,7 @@ export function Navbar() {
                     onClick={() => { router.push('/library'); setShowUserMenu(false) }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
                   >
-                    <User size={12} /> My Library
+                    <User size={12} /> My Casts
                   </button>
                   <button
                     onClick={handleSignOut}
@@ -123,7 +125,7 @@ export function Navbar() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-all ml-1"
           >
             <LogIn size={15} />
-            <span className="hidden sm:inline">Sign In</span>
+            <span className="hidden sm:inline">Enter</span>
           </Link>
         )}
       </nav>

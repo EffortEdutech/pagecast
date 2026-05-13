@@ -79,6 +79,7 @@ interface DbBook {
   id: string; author_id: string; title: string; description: string | null
   cover_gradient: string; cover_emoji: string; genre: string | null
   age_rating: string; status: string; price: number; is_free: boolean
+  language: string | null
   estimated_time: string | null; created_at: string
   narrator_only_mode: boolean | null; narrator_voice_id: string | null
 }
@@ -123,7 +124,7 @@ function dbToStory(book: DbBook, chars: DbCharacter[], chapters: Chapter[] = [])
     title: book.title,
     description: book.description ?? '',
     coverGradient: book.cover_gradient || pickGradient(book.id),
-    language: 'en',
+    language: book.language ?? 'en',
     price: book.price,
     hasMusic: false,
     hasSfx: false,

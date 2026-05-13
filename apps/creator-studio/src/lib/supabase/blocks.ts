@@ -5,6 +5,10 @@
 import { createClient } from './client'
 import type { Chapter, Scene, Story, StoryBlock, BlockType, DialogueBlock, QuoteBlock } from '@/types'
 
+const DEFAULT_AMBIENCE_VOLUME = 0.4
+const DEFAULT_MUSIC_VOLUME = 0.3
+const DEFAULT_SCENE_LOOP = true
+
 // Types
 
 export interface DbChapter {
@@ -50,7 +54,8 @@ export interface DbBlock {
 function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
   const c = b.content
   const audioUrl = b.audio_url ?? undefined
-  const base = { id: b.id, type: b.type as BlockType, audioUrl }
+  const voiceSpeed = typeof c.voice_speed === 'number' ? c.voice_speed : undefined
+  const base = { id: b.id, type: b.type as BlockType, audioUrl, voiceSpeed }
   switch (b.type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(c.text ?? ''), characterId: c.character_id as string | undefined }
@@ -78,12 +83,12 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
 function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
   switch (block.type) {
     case 'narration':
-      return { text: block.text, character_id: block.characterId }
+      return { text: block.text, character_id: block.characterId, voice_speed: block.voiceSpeed }
     case 'dialogue':
     case 'thought':
-      return { character_id: block.characterId, text: block.text, emotion: (block as DialogueBlock).emotion }
+      return { character_id: block.characterId, text: block.text, emotion: (block as DialogueBlock).emotion, voice_speed: block.voiceSpeed }
     case 'quote':
-      return { text: block.text, attribution: block.attribution, style: block.style, character_id: block.characterId }
+      return { text: block.text, attribution: block.attribution, style: block.style, character_id: block.characterId, voice_speed: block.voiceSpeed }
     case 'pause':
       return { duration_ms: block.duration * 1000 }
     case 'sfx':
@@ -133,6 +138,8 @@ function storyBlockToDbContentPatch(
       if ('duration' in block && typeof block.duration === 'number') next.duration_ms = block.duration * 1000
       break
   }
+
+  if ('voiceSpeed' in block) next.voice_speed = block.voiceSpeed
 
   return next
 }
@@ -219,7 +226,16 @@ export async function createScene(bookId: string, chapterId: string, title: stri
   const supabase = createClient()
   const { data, error } = await supabase
     .from('scenes')
-    .insert({ book_id: bookId, chapter_id: chapterId, title, sort_order: sortOrder })
+    .insert({
+      book_id: bookId,
+      chapter_id: chapterId,
+      title,
+      sort_order: sortOrder,
+      ambience_volume: DEFAULT_AMBIENCE_VOLUME,
+      music_volume: DEFAULT_MUSIC_VOLUME,
+      ambience_loop: DEFAULT_SCENE_LOOP,
+      music_loop: DEFAULT_SCENE_LOOP,
+    })
     .select().single()
   if (error || !data) return null
   return dbSceneToScene(data, [])
@@ -310,23 +326,6 @@ export async function replaceBookContent(bookId: string, story: Story): Promise<
     supabase.from('blocks').select('id').eq('book_id', bookId),
   ])
 
-  const blocksToDelete = (existingBlocks ?? []).map(b => b.id).filter(id => !desiredBlockIds.has(id))
-  const scenesToDelete = (existingScenes ?? []).map(s => s.id).filter(id => !desiredSceneIds.has(id))
-  const chaptersToDelete = (existingChapters ?? []).map(ch => ch.id).filter(id => !desiredChapterIds.has(id))
-
-  if (blocksToDelete.length) {
-    const { error } = await supabase.from('blocks').delete().in('id', blocksToDelete)
-    if (error) return false
-  }
-  if (scenesToDelete.length) {
-    const { error } = await supabase.from('scenes').delete().in('id', scenesToDelete)
-    if (error) return false
-  }
-  if (chaptersToDelete.length) {
-    const { error } = await supabase.from('chapters').delete().in('id', chaptersToDelete)
-    if (error) return false
-  }
-
   const chapterRows = story.chapters.map((chapter, index) => ({
     id: chapter.id,
     book_id: bookId,
@@ -335,7 +334,10 @@ export async function replaceBookContent(bookId: string, story: Story): Promise<
   }))
   if (chapterRows.length) {
     const { error } = await supabase.from('chapters').upsert(chapterRows, { onConflict: 'id' })
-    if (error) return false
+    if (error) {
+      console.error('replaceBookContent chapters upsert error:', error)
+      return false
+    }
   }
 
   const sceneRows = story.chapters.flatMap(chapter =>
@@ -347,16 +349,19 @@ export async function replaceBookContent(bookId: string, story: Story): Promise<
       sort_order: index,
       ambience_url: scene.ambienceUrl ?? null,
       music_url: scene.musicUrl ?? null,
-      ambience_volume: scene.ambienceVolume ?? null,
-      music_volume: scene.musicVolume ?? null,
-      ambience_loop: scene.ambienceLoop ?? null,
-      music_loop: scene.musicLoop ?? null,
+      ambience_volume: scene.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME,
+      music_volume: scene.musicVolume ?? DEFAULT_MUSIC_VOLUME,
+      ambience_loop: scene.ambienceLoop ?? DEFAULT_SCENE_LOOP,
+      music_loop: scene.musicLoop ?? DEFAULT_SCENE_LOOP,
       scene_image: scene.sceneImage ?? null,
     }))
   )
   if (sceneRows.length) {
     const { error } = await supabase.from('scenes').upsert(sceneRows, { onConflict: 'id' })
-    if (error) return false
+    if (error) {
+      console.error('replaceBookContent scenes upsert error:', error)
+      return false
+    }
   }
 
   const blockRows = story.chapters.flatMap(chapter =>
@@ -374,7 +379,36 @@ export async function replaceBookContent(bookId: string, story: Story): Promise<
   )
   if (blockRows.length) {
     const { error } = await supabase.from('blocks').upsert(blockRows, { onConflict: 'id' })
-    if (error) return false
+    if (error) {
+      console.error('replaceBookContent blocks upsert error:', error)
+      return false
+    }
+  }
+
+  const blocksToDelete = (existingBlocks ?? []).map(b => b.id).filter(id => !desiredBlockIds.has(id))
+  const scenesToDelete = (existingScenes ?? []).map(s => s.id).filter(id => !desiredSceneIds.has(id))
+  const chaptersToDelete = (existingChapters ?? []).map(ch => ch.id).filter(id => !desiredChapterIds.has(id))
+
+  if (blocksToDelete.length) {
+    const { error } = await supabase.from('blocks').delete().in('id', blocksToDelete)
+    if (error) {
+      console.error('replaceBookContent blocks delete error:', error)
+      return false
+    }
+  }
+  if (scenesToDelete.length) {
+    const { error } = await supabase.from('scenes').delete().in('id', scenesToDelete)
+    if (error) {
+      console.error('replaceBookContent scenes delete error:', error)
+      return false
+    }
+  }
+  if (chaptersToDelete.length) {
+    const { error } = await supabase.from('chapters').delete().in('id', chaptersToDelete)
+    if (error) {
+      console.error('replaceBookContent chapters delete error:', error)
+      return false
+    }
   }
 
   return true

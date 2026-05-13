@@ -63,9 +63,9 @@ function Nav() {
           <a href="#how-it-works"  className="text-[#9896A8] hover:text-white text-sm transition-colors">How It Works</a>
           <a href="#for-creators"  className="text-[#9896A8] hover:text-white text-sm transition-colors">For Creators</a>
           <a href="#compare"       className="text-[#9896A8] hover:text-white text-sm transition-colors">Why PageCast</a>
-          <Link href="/login"      className="text-[#9896A8] hover:text-white text-sm transition-colors">Sign In</Link>
+          <Link href="/login"      className="text-[#9896A8] hover:text-white text-sm transition-colors">Enter</Link>
           <Link href="/store"      className="flex items-center gap-1.5 bg-[#7C5CFC] hover:bg-[#9374FD] text-white text-sm font-medium px-4 py-2 rounded-lg transition-all shadow-[0_0_16px_rgba(124,92,252,0.3)]">
-            Try a Story <ArrowRight size={13} />
+            Begin a Cast <ArrowRight size={13} />
           </Link>
         </div>
         <button className="md:hidden text-[#9896A8] hover:text-white" onClick={() => setOpen(!open)}>
@@ -77,8 +77,8 @@ function Nav() {
           <a href="#how-it-works" onClick={() => setOpen(false)} className="block text-[#9896A8] hover:text-white text-sm py-1">How It Works</a>
           <a href="#for-creators" onClick={() => setOpen(false)} className="block text-[#9896A8] hover:text-white text-sm py-1">For Creators</a>
           <a href="#compare"      onClick={() => setOpen(false)} className="block text-[#9896A8] hover:text-white text-sm py-1">Why PageCast</a>
-          <Link href="/login"     onClick={() => setOpen(false)} className="block text-[#9896A8] hover:text-white text-sm py-1">Sign In</Link>
-          <Link href="/store"     onClick={() => setOpen(false)} className="block w-full text-center bg-[#7C5CFC] hover:bg-[#9374FD] text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors mt-2">Try a Story</Link>
+          <Link href="/login"     onClick={() => setOpen(false)} className="block text-[#9896A8] hover:text-white text-sm py-1">Enter</Link>
+          <Link href="/store"     onClick={() => setOpen(false)} className="block w-full text-center bg-[#7C5CFC] hover:bg-[#9374FD] text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors mt-2">Begin a Cast</Link>
         </div>
       )}
     </nav>
@@ -116,7 +116,7 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6" style={{animation:'fadeIn 0.7s ease 0.2s both'}}>
-            Stories that{' '}
+            Tales that{' '}
             <span className="bg-gradient-to-r from-[#7C5CFC] via-[#A98BFF] to-[#F5C842] bg-clip-text text-transparent">
               speak to you
             </span>
@@ -137,7 +137,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-7 text-[#5C5A6A] text-xs" style={{animation:'fadeIn 0.7s ease 0.65s both'}}>
-            Free stories available · No credit card needed · Works on any device
+            Starter Casts available. No credit card needed. Works on any device.
           </p>
         </div>
 
@@ -187,10 +187,10 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto">
           <FadeIn className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Books are flat.{' '}
-              <span className="bg-gradient-to-r from-[#7C5CFC] to-[#A98BFF] bg-clip-text text-transparent">Stories are alive.</span>
+              Pages are quiet.{' '}
+              <span className="bg-gradient-to-r from-[#7C5CFC] to-[#A98BFF] bg-clip-text text-transparent">Casts are alive.</span>
             </h2>
-            <p className="text-[#9896A8] text-lg max-w-xl mx-auto">Reading gives you words. Audiobooks give you one voice. PageCast gives you the full world.</p>
+            <p className="text-[#9896A8] text-lg max-w-xl mx-auto">Pages give you words. Audio gives you one voice. PageCast opens the full TaleVerse.</p>
           </FadeIn>
           <div className="grid md:grid-cols-3 gap-6">
             {[
@@ -221,7 +221,7 @@ export default function LandingPage() {
           <FadeIn className="text-center mb-16">
             <span className="text-[#7C5CFC] text-xs font-semibold uppercase tracking-widest">How It Works</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-3 mb-4">A new kind of reading</h2>
-            <p className="text-[#9896A8] text-lg max-w-xl mx-auto">Three modes. One story. Read at your pace, or let it perform for you.</p>
+            <p className="text-[#9896A8] text-lg max-w-xl mx-auto">Three modes. One Cast. Move at your pace, or let the Tale speak.</p>
           </FadeIn>
           <div className="grid md:grid-cols-3 gap-8">
             {[
@@ -263,7 +263,7 @@ export default function LandingPage() {
             <FadeIn>
               <span className="text-[#F5C842] text-xs font-semibold uppercase tracking-widest">For Creators</span>
               <h2 className="text-3xl md:text-4xl font-bold mt-3 mb-5">
-                Your story,{' '}
+                Your Cast,{' '}
                 <span className="bg-gradient-to-r from-[#F5C842] to-[#F5C842]/60 bg-clip-text text-transparent">fully produced</span>
               </h2>
               <p className="text-[#9896A8] leading-relaxed mb-6">
@@ -387,13 +387,13 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <FadeIn>
             <h2 className="text-4xl md:text-5xl font-bold mb-5">
-              Your first story is free.{' '}
+              Your first Cast is ready.{' '}
               <span className="bg-gradient-to-r from-[#7C5CFC] to-[#F5C842] bg-clip-text text-transparent">Start now.</span>
             </h2>
             <p className="text-[#9896A8] text-lg mb-10 max-w-xl mx-auto">No account required to browse. Sign up to save your progress and unlock the full library.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/store" className="flex items-center gap-2 bg-[#7C5CFC] hover:bg-[#9374FD] text-white font-semibold px-8 py-4 rounded-xl transition-all shadow-[0_0_30px_rgba(124,92,252,0.4)] hover:shadow-[0_0_40px_rgba(124,92,252,0.55)] text-base">
-                Browse Free Stories <ArrowRight size={16} />
+                Explore Starter Casts <ArrowRight size={16} />
               </Link>
               <Link href="/login" className="flex items-center gap-2 text-[#9896A8] hover:text-white font-medium px-6 py-4 rounded-xl border border-[#2E2E38] hover:border-[#3D3D4A] transition-all text-sm">
                 Sign in to your account
@@ -407,7 +407,7 @@ export default function LandingPage() {
       <section className="py-20 px-6 border-t border-[#1A1A1E]">
         <div className="max-w-xl mx-auto text-center">
           <FadeIn>
-            <h3 className="text-xl font-semibold mb-2">Get notified when new stories drop</h3>
+            <h3 className="text-xl font-semibold mb-2">Get notified when new Tales arrive</h3>
             <p className="text-[#9896A8] text-sm mb-6">New titles, creator spotlights, and early access to features — straight to your inbox.</p>
             {submitted ? (
               <div className="flex items-center justify-center gap-2 text-[#3DD68C] text-sm font-medium py-3">
@@ -441,12 +441,12 @@ export default function LandingPage() {
                 </div>
                 <span className="text-white font-semibold">PageCast</span>
               </div>
-              <p className="text-[#5C5A6A] text-xs leading-relaxed">Immersive story experiences for readers and creators. Every character has a voice.</p>
+              <p className="text-[#5C5A6A] text-xs leading-relaxed">Immersive Casts for Explorers and Creators. Every character has a voice.</p>
             </div>
             <div>
               <h4 className="text-[#9896A8] text-xs font-semibold uppercase tracking-wider mb-3">Read</h4>
               <ul className="space-y-2">
-                {[['Browse Stories','/store'],['My Library','/library'],['Sign Up','/login']].map(([l,h]) => (
+                {[['Explore Casts','/store'],['My Casts','/library'],['Begin Exploring','/login']].map(([l,h]) => (
                   <li key={h}><Link href={h} className="text-[#5C5A6A] hover:text-[#9896A8] text-sm transition-colors">{l}</Link></li>
                 ))}
               </ul>

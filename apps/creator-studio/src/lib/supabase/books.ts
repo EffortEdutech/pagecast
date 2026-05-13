@@ -16,6 +16,7 @@ export interface DbBook {
   description: string | null
   cover_gradient: string
   cover_emoji: string
+  language: string | null
   genre: string | null
   age_rating: string
   status: 'draft' | 'published' | 'archived'
@@ -53,7 +54,7 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     description: book.description ?? '',
     coverImage: book.cover_emoji,
     coverGradient: book.cover_gradient,
-    language: 'en',
+    language: book.language ?? 'en',
     status: book.status,
     price: book.price,
     hasMusic: false,
@@ -87,6 +88,7 @@ function storyToDbInsert(story: Partial<Story>, authorId: string): Partial<DbBoo
     description: story.description ?? null,
     cover_gradient: 'from-accent/30 to-accent/10',
     cover_emoji: story.coverImage ?? '📖',
+    language: story.language ?? 'en',
     status: story.status ?? 'draft',
     price: story.price ?? 0,
     is_free: (story.price ?? 0) === 0,
@@ -162,6 +164,7 @@ export async function updateBook(bookId: string, updates: Partial<Story>): Promi
     ...(updates.description !== undefined && { description: updates.description }),
     ...(updates.status      !== undefined && { status: updates.status }),
     ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
+    ...(updates.language    !== undefined && { language: updates.language }),
     ...(updates.coverImage        !== undefined && { cover_emoji:          updates.coverImage }),
     ...(updates.coverGradient     !== undefined && { cover_gradient:       updates.coverGradient }),
     ...(updates.genre             !== undefined && { genre:                updates.genre }),
@@ -204,6 +207,7 @@ export async function duplicateBook(sourceBookId: string): Promise<Story | null>
       description:    srcBook.description,
       cover_gradient: srcBook.cover_gradient,
       cover_emoji:    srcBook.cover_emoji,
+      language:       srcBook.language ?? 'en',
       genre:          srcBook.genre,
       age_rating:     srcBook.age_rating,
       status:         'draft',

@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import { SyncProvider } from '@/components/SyncProvider'
+import { UtmCapture } from '@/components/UtmCapture'
 
 export const metadata: Metadata = {
-  title: 'PageCast — Where stories find their voice',
-  description: 'Read and listen to cinematic audio storybooks in your browser.',
+  title: 'PageCast - A world of Tales with voices',
+  description: 'Begin multilingual Casts with voices, scenes, and gentle magic in your browser.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className="bg-bg-primary text-text-primary antialiased">
         <SyncProvider>
+          <Suspense fallback={null}>
+            <UtmCapture />
+          </Suspense>
           {children}
         </SyncProvider>
       </body>

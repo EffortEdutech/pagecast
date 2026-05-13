@@ -22,6 +22,9 @@ const BLOCK_META = {
 }
 
 const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'scared', 'surprised', 'worried', 'excited', 'mysterious']
+const DIALOGUE_SPEED_MIN = 0.72
+const DIALOGUE_SPEED_MAX = 1.08
+const DIALOGUE_SPEED_DEFAULT = 0.88
 
 // ─── Auto-expanding textarea ──────────────────────────────────────────────────
 
@@ -98,6 +101,10 @@ function defaultCharacterId(characters: Character[]): string {
   return characters.find(c => c.role === 'character')?.id ?? characters[0]?.id ?? ''
 }
 
+function formatVoiceSpeed(value?: number): string {
+  return `${(value ?? DIALOGUE_SPEED_DEFAULT).toFixed(2)}x`
+}
+
 // ─── Block Item ───────────────────────────────────────────────────────────────
 
 interface BlockItemProps {
@@ -170,6 +177,21 @@ export function BlockItem({
       ? `${effectiveChar.displayName} · ${effectiveChar.voiceLabel}`
       : effectiveChar.displayName
   })()
+
+  const updateStoryContent = (updates: Partial<StoryBlock>) => {
+    const invalidatesAudio =
+      'text' in updates ||
+      'characterId' in updates ||
+      'emotion' in updates ||
+      'style' in updates ||
+      'attribution' in updates ||
+      'voiceSpeed' in updates
+
+    onUpdate({
+      ...updates,
+      ...(invalidatesAudio && block.audioUrl ? { audioUrl: undefined } : {}),
+    } as Partial<StoryBlock>)
+  }
 
   const handleSfxSelect = async (selection: SfxSelection) => {
     setSfxError(null)
@@ -277,12 +299,12 @@ export function BlockItem({
               <VoiceSelect
                 characters={characters}
                 value={(block as NarrationBlock).characterId ?? defaultNarratorId(characters)}
-                onChange={id => onUpdate({ characterId: id } as any)}
+                onChange={id => updateStoryContent({ characterId: id } as any)}
                 filter="all"
               />
               <AutoTextarea
                 value={(block as NarrationBlock).text}
-                onValueChange={v => onUpdate({ text: v } as any)}
+                onValueChange={v => updateStoryContent({ text: v } as any)}
                 placeholder="Write the narration text…"
                 className="italic"
                 minRows={2}
@@ -299,7 +321,7 @@ export function BlockItem({
                   <select
                     className="input"
                     value={(block as DialogueBlock).characterId}
-                    onChange={e => onUpdate({ characterId: e.target.value } as any)}
+                    onChange={e => updateStoryContent({ characterId: e.target.value } as any)}
                   >
                     {characters.filter(c => c.role === 'character').map(c => (
                       <option key={c.id} value={c.id}>{c.displayName}</option>
@@ -311,7 +333,7 @@ export function BlockItem({
                   <select
                     className="input"
                     value={(block as DialogueBlock).emotion ?? 'neutral'}
-                    onChange={e => onUpdate({ emotion: e.target.value } as any)}
+                    onChange={e => updateStoryContent({ emotion: e.target.value } as any)}
                   >
                     {EMOTIONS.map(em => <option key={em} value={em}>{em}</option>)}
                   </select>
@@ -319,10 +341,32 @@ export function BlockItem({
               </div>
               <AutoTextarea
                 value={(block as DialogueBlock).text}
-                onValueChange={v => onUpdate({ text: v } as any)}
+                onValueChange={v => updateStoryContent({ text: v } as any)}
                 placeholder={`What does ${blockChar?.displayName ?? 'the character'} say?`}
                 minRows={2}
               />
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="label">Dialogue pace</label>
+                  <span className="text-[11px] text-text-muted font-mono">
+                    {formatVoiceSpeed(block.voiceSpeed)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={DIALOGUE_SPEED_MIN}
+                  max={DIALOGUE_SPEED_MAX}
+                  step="0.01"
+                  value={block.voiceSpeed ?? DIALOGUE_SPEED_DEFAULT}
+                  onChange={e => updateStoryContent({ voiceSpeed: Number(e.target.value) } as any)}
+                  className="w-full accent-accent"
+                />
+                <div className="flex justify-between text-[10px] text-text-muted">
+                  <span>Slower</span>
+                  <span>Natural</span>
+                  <span>Quicker</span>
+                </div>
+              </div>
             </>
           )}
 
@@ -332,12 +376,12 @@ export function BlockItem({
               <VoiceSelect
                 characters={characters}
                 value={(block as ThoughtBlock).characterId ?? defaultCharacterId(characters)}
-                onChange={id => onUpdate({ characterId: id } as any)}
+                onChange={id => updateStoryContent({ characterId: id } as any)}
                 filter="all"
               />
               <AutoTextarea
                 value={(block as ThoughtBlock).text}
-                onValueChange={v => onUpdate({ text: v } as any)}
+                onValueChange={v => updateStoryContent({ text: v } as any)}
                 placeholder="Inner thought…"
                 className="italic"
                 minRows={2}
@@ -354,7 +398,7 @@ export function BlockItem({
                   <select
                     className="input"
                     value={(block as QuoteBlock).style ?? 'default'}
-                    onChange={e => onUpdate({ style: e.target.value } as any)}
+                    onChange={e => updateStoryContent({ style: e.target.value } as any)}
                   >
                     {['default', 'poem', 'letter', 'quran'].map(s => (
                       <option key={s} value={s} className="capitalize">{s}</option>
@@ -368,7 +412,7 @@ export function BlockItem({
                   <select
                     className="input"
                     value={(block as QuoteBlock).characterId ?? defaultNarratorId(characters)}
-                    onChange={e => onUpdate({ characterId: e.target.value } as any)}
+                    onChange={e => updateStoryContent({ characterId: e.target.value } as any)}
                   >
                     {characters.map(c => (
                       <option key={c.id} value={c.id}>
@@ -380,7 +424,7 @@ export function BlockItem({
               </div>
               <AutoTextarea
                 value={(block as QuoteBlock).text}
-                onValueChange={v => onUpdate({ text: v } as any)}
+                onValueChange={v => updateStoryContent({ text: v } as any)}
                 placeholder="Quote / poem / verse…"
                 className="text-center"
                 minRows={2}
@@ -389,7 +433,7 @@ export function BlockItem({
                 className="input text-sm"
                 placeholder="Attribution (optional)"
                 value={(block as QuoteBlock).attribution ?? ''}
-                onChange={e => onUpdate({ attribution: e.target.value } as any)}
+                onChange={e => updateStoryContent({ attribution: e.target.value } as any)}
               />
             </>
           )}
