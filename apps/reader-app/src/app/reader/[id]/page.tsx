@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
 import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
+import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 import type { Story, StoryBlock, Character, ReaderMode, ReaderTheme } from '@/types'
 import { clsx } from 'clsx'
 import {
@@ -85,6 +86,9 @@ function BlockView({
     dyslexia && 'font-dyslexia',
     'reader-text'
   )
+  const displayText = 'text' in block
+    ? stripPerformanceTagsForDisplay(String((block as any).text ?? ''))
+    : ''
 
   if (block.type === 'pause' || block.type === 'sfx') {
     if (block.type === 'sfx') {
@@ -111,7 +115,7 @@ function BlockView({
         past && 'block-past'
       )}>
         <p className={clsx('text-text-secondary italic', fontClass)}>
-          {(block as any).text}
+          {displayText}
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
           {active && <span className="ml-2 inline-block align-middle"><Waveform /></span>}
         </p>
@@ -134,7 +138,7 @@ function BlockView({
         )}
         <p className={clsx('text-text-secondary italic pl-3 border-l-2', fontClass)}
           style={{ borderColor: (char?.color ?? '#5C5A6A') + '50' }}>
-          {(block as any).text}
+          {displayText}
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
         </p>
       </div>
@@ -161,7 +165,7 @@ function BlockView({
           </span>
         )}
         <p className={clsx('text-text-primary pl-2', fontClass)}>
-          "{(block as any).text}"
+          "{displayText}"
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
         </p>
       </div>
@@ -179,9 +183,9 @@ function BlockView({
         past && 'block-past'
       )}>
         {isPoem ? (
-          <pre className={clsx('text-text-primary whitespace-pre-wrap font-serif', fontClass)}>{b.text}</pre>
+          <pre className={clsx('text-text-primary whitespace-pre-wrap font-serif', fontClass)}>{displayText}</pre>
         ) : (
-          <p className={clsx('text-text-primary font-serif italic', fontClass)}>"{b.text}"</p>
+          <p className={clsx('text-text-primary font-serif italic', fontClass)}>"{displayText}"</p>
         )}
         {b.attribution && (
           <p className="text-text-muted text-xs mt-3 text-right">— {b.attribution}</p>
@@ -214,7 +218,7 @@ function blockSummary(block: StoryBlock, index: number): string {
 
   const text = 'text' in block ? String((block as any).text ?? '') : ''
   if (!text.trim()) return prefix
-  const clean = text.replace(/\s+/g, ' ').trim()
+  const clean = stripPerformanceTagsForDisplay(text).replace(/\s+/g, ' ').trim()
   return `${prefix} - ${clean.slice(0, 72)}${clean.length > 72 ? '...' : ''}`
 }
 
@@ -549,10 +553,10 @@ export default function ReaderPage() {
     // ── No audio file → fall back to Web Speech API ──
     if (!synth) return
     const speakText: string =
-      block.type === 'narration' ? (block as any).text :
-      block.type === 'dialogue'  ? (block as any).text :
-      block.type === 'thought'   ? (block as any).text :
-      block.type === 'quote'     ? (block as any).text : ''
+      block.type === 'narration' ? stripPerformanceTagsForDisplay((block as any).text) :
+      block.type === 'dialogue'  ? stripPerformanceTagsForDisplay((block as any).text) :
+      block.type === 'thought'   ? stripPerformanceTagsForDisplay((block as any).text) :
+      block.type === 'quote'     ? stripPerformanceTagsForDisplay((block as any).text) : ''
 
     if (!speakText) { advanceAfterBeat(); return }
 
@@ -1316,7 +1320,7 @@ export default function ReaderPage() {
               <div className="relative z-10 max-w-2xl w-full text-center animate-fade-in">
                 {block.type === 'narration' && (
                   <p className={clsx('text-white/70 italic', `font-${prefs.fontSize}`, 'reader-text text-lg leading-loose')}>
-                    {(block as any).text}
+                    {stripPerformanceTagsForDisplay((block as any).text)}
                   </p>
                 )}
                 {(block.type === 'dialogue' || block.type === 'thought') && (() => {
@@ -1330,7 +1334,7 @@ export default function ReaderPage() {
                         </span>
                       )}
                       <p className={clsx('text-white', `font-${prefs.fontSize}`, 'reader-text text-2xl leading-loose font-serif italic')}>
-                        "{(block as any).text}"
+                        "{stripPerformanceTagsForDisplay((block as any).text)}"
                       </p>
                     </div>
                   )
@@ -1339,7 +1343,7 @@ export default function ReaderPage() {
                 {block.type === 'quote' && (
                   <div className="text-center">
                     <p className={clsx('text-white/90 font-serif italic text-xl leading-relaxed', `font-${prefs.fontSize}`, 'reader-text')}>
-                      "{(block as any).text}"
+                      "{stripPerformanceTagsForDisplay((block as any).text)}"
                     </p>
                     {(block as any).attribution && (
                       <p className="text-white/40 text-sm mt-4">— {(block as any).attribution}</p>

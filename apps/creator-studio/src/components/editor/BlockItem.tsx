@@ -22,6 +22,20 @@ const BLOCK_META = {
 }
 
 const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'scared', 'surprised', 'worried', 'excited', 'mysterious']
+const PERFORMANCE_TAGS = [
+  { value: '', label: 'Natural' },
+  { value: '[whispers]', label: 'Whisper' },
+  { value: '[laughs]', label: 'Laugh' },
+  { value: '[chuckles]', label: 'Chuckle' },
+  { value: '[sighs]', label: 'Sigh' },
+  { value: '[gasps]', label: 'Gasp' },
+  { value: '[crying]', label: 'Crying' },
+  { value: '[excited]', label: 'Excited' },
+  { value: '[curious]', label: 'Curious' },
+  { value: '[mischievously]', label: 'Mischievous' },
+  { value: '[short pause]', label: 'Short pause' },
+  { value: '[long pause]', label: 'Long pause' },
+]
 const DIALOGUE_SPEED_MIN = 0.72
 const DIALOGUE_SPEED_MAX = 1.08
 const DIALOGUE_SPEED_DEFAULT = 0.88
@@ -92,6 +106,28 @@ function VoiceSelect({
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function PerformanceSelect({
+  value,
+  onChange,
+}: {
+  value?: string
+  onChange: (tag: string | undefined) => void
+}) {
+  return (
+    <div>
+      <label className="label">Performance</label>
+      <select className="input" value={value ?? ''} onChange={e => onChange(e.target.value || undefined)}>
+        {PERFORMANCE_TAGS.map(tag => (
+          <option key={tag.value || 'natural'} value={tag.value}>{tag.label}</option>
+        ))}
+      </select>
+      <p className="mt-1 text-[10px] text-text-muted">
+        Used by Eleven v3 for expressive delivery.
+      </p>
+    </div>
+  )
+}
 
 function defaultNarratorId(characters: Character[]): string {
   return characters.find(c => c.role === 'narrator')?.id ?? characters[0]?.id ?? ''
@@ -185,7 +221,8 @@ export function BlockItem({
       'emotion' in updates ||
       'style' in updates ||
       'attribution' in updates ||
-      'voiceSpeed' in updates
+      'voiceSpeed' in updates ||
+      'performanceTag' in updates
 
     onUpdate({
       ...updates,
@@ -302,6 +339,10 @@ export function BlockItem({
                 onChange={id => updateStoryContent({ characterId: id } as any)}
                 filter="all"
               />
+              <PerformanceSelect
+                value={block.performanceTag}
+                onChange={tag => updateStoryContent({ performanceTag: tag } as any)}
+              />
               <AutoTextarea
                 value={(block as NarrationBlock).text}
                 onValueChange={v => updateStoryContent({ text: v } as any)}
@@ -315,7 +356,7 @@ export function BlockItem({
           {/* DIALOGUE — character + emotion + auto textarea */}
           {block.type === 'dialogue' && (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 <div>
                   <label className="label">Character</label>
                   <select
@@ -338,6 +379,10 @@ export function BlockItem({
                     {EMOTIONS.map(em => <option key={em} value={em}>{em}</option>)}
                   </select>
                 </div>
+                <PerformanceSelect
+                  value={block.performanceTag}
+                  onChange={tag => updateStoryContent({ performanceTag: tag } as any)}
+                />
               </div>
               <AutoTextarea
                 value={(block as DialogueBlock).text}
@@ -379,6 +424,10 @@ export function BlockItem({
                 onChange={id => updateStoryContent({ characterId: id } as any)}
                 filter="all"
               />
+              <PerformanceSelect
+                value={block.performanceTag}
+                onChange={tag => updateStoryContent({ performanceTag: tag } as any)}
+              />
               <AutoTextarea
                 value={(block as ThoughtBlock).text}
                 onValueChange={v => updateStoryContent({ text: v } as any)}
@@ -392,7 +441,7 @@ export function BlockItem({
           {/* QUOTE — style + voice + auto textarea + attribution */}
           {block.type === 'quote' && (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 <div>
                   <label className="label">Style</label>
                   <select
@@ -421,6 +470,10 @@ export function BlockItem({
                     ))}
                   </select>
                 </div>
+                <PerformanceSelect
+                  value={block.performanceTag}
+                  onChange={tag => updateStoryContent({ performanceTag: tag } as any)}
+                />
               </div>
               <AutoTextarea
                 value={(block as QuoteBlock).text}

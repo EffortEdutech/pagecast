@@ -224,6 +224,26 @@ function getElevenLabsVoiceSettings(opts: {
   }
 }
 
+const ELEVENLABS_PERFORMANCE_TAGS = new Set([
+  '[whispers]',
+  '[laughs]',
+  '[chuckles]',
+  '[sighs]',
+  '[gasps]',
+  '[crying]',
+  '[excited]',
+  '[curious]',
+  '[mischievously]',
+  '[short pause]',
+  '[long pause]',
+])
+
+function normalizeElevenLabsPerformanceTag(value?: string): string | undefined {
+  const tag = value?.trim().toLowerCase()
+  if (!tag) return undefined
+  return ELEVENLABS_PERFORMANCE_TAGS.has(tag) ? tag : undefined
+}
+
 export async function POST(req: NextRequest) {
   let body: {
     text: string
@@ -235,6 +255,7 @@ export async function POST(req: NextRequest) {
     emotion?: string
     style?: string
     voiceLabel?: string
+    performanceTag?: string
   }
 
   try {
@@ -253,6 +274,7 @@ export async function POST(req: NextRequest) {
     emotion,
     style,
     voiceLabel,
+    performanceTag,
   } = body
 
   if (!text?.trim()) {
@@ -331,6 +353,11 @@ export async function POST(req: NextRequest) {
     }
 
     let res: Response
+    const cleanPerformanceTag = normalizeElevenLabsPerformanceTag(performanceTag)
+    const elevenText = cleanPerformanceTag
+      ? `${cleanPerformanceTag} ${text.trim()}`
+      : text.trim()
+
     try {
       res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenVoice.id}`, {
         method: 'POST',
@@ -340,8 +367,8 @@ export async function POST(req: NextRequest) {
           Accept:         'audio/mpeg',
         },
         body: JSON.stringify({
-          text: text.trim(),
-          model_id: 'eleven_multilingual_v2',
+          text: elevenText,
+          model_id: 'eleven_v3',
           voice_settings: getElevenLabsVoiceSettings({ speed, blockType, emotion }),
         }),
       })

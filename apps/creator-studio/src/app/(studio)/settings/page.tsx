@@ -112,7 +112,7 @@ export default function SettingsPage() {
             <label className="label">Provider</label>
             <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value)}>
               <option value="openai">OpenAI TTS</option>
-              <option value="elevenlabs">ElevenLabs</option>
+              <option value="elevenlabs">ElevenLabs v3</option>
             </select>
           </div>
           <div>

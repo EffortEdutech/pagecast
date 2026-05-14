@@ -37,6 +37,7 @@ export interface TtsGenerateOpts {
   emotion?: string
   style?: string
   voiceLabel?: string
+  performanceTag?: string
 }
 
 export interface TtsResult {
@@ -82,6 +83,7 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
         emotion: opts.emotion,
         style: opts.style,
         voiceLabel: opts.voiceLabel,
+        performanceTag: opts.performanceTag,
       }),
     })
   } catch (e: any) {

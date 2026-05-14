@@ -12,7 +12,7 @@ export interface Character {
   defaultVolume: number
 }
 
-export interface BaseBlock { id: string; type: BlockType; audioUrl?: string; duration?: number }
+export interface BaseBlock { id: string; type: BlockType; audioUrl?: string; duration?: number; performanceTag?: string }
 export interface NarrationBlock extends BaseBlock { type: 'narration'; text: string; characterId?: string }
 export interface DialogueBlock  extends BaseBlock { type: 'dialogue'; characterId: string; text: string; emotion?: string }
 export interface ThoughtBlock   extends BaseBlock { type: 'thought';  characterId: string; text: string }

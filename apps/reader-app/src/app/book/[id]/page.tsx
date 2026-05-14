@@ -14,6 +14,7 @@ import {
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
 import { formatUsd } from '@/lib/format'
+import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>()
@@ -197,7 +198,7 @@ export default function BookPage() {
               return (
                 <div key={block.id} className="mb-3 last:mb-0">
                   {block.type === 'narration' && (
-                    <p className="text-text-secondary text-sm leading-relaxed italic">{(block as any).text}</p>
+                    <p className="text-text-secondary text-sm leading-relaxed italic">{stripPerformanceTagsForDisplay((block as any).text)}</p>
                   )}
                   {block.type === 'dialogue' && char && (
                     <div className="flex items-start gap-2.5">
@@ -205,7 +206,7 @@ export default function BookPage() {
                         style={{ backgroundColor: char.color + '25', color: char.color }}>
                         {char.displayName}
                       </span>
-                      <p className="text-text-primary text-sm leading-relaxed">"{(block as any).text}"</p>
+                      <p className="text-text-primary text-sm leading-relaxed">"{stripPerformanceTagsForDisplay((block as any).text)}"</p>
                     </div>
                   )}
                 </div>

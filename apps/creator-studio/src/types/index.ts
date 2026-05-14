@@ -31,6 +31,7 @@ export interface BaseBlock {
   audioUrl?: string
   duration?: number
   voiceSpeed?: number
+  performanceTag?: string
 }
 
 export interface NarrationBlock extends BaseBlock {

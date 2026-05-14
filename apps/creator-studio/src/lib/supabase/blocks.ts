@@ -55,7 +55,8 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
   const c = b.content
   const audioUrl = b.audio_url ?? undefined
   const voiceSpeed = typeof c.voice_speed === 'number' ? c.voice_speed : undefined
-  const base = { id: b.id, type: b.type as BlockType, audioUrl, voiceSpeed }
+  const performanceTag = typeof c.performance_tag === 'string' ? c.performance_tag : undefined
+  const base = { id: b.id, type: b.type as BlockType, audioUrl, voiceSpeed, performanceTag }
   switch (b.type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(c.text ?? ''), characterId: c.character_id as string | undefined }
@@ -83,12 +84,12 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
 function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
   switch (block.type) {
     case 'narration':
-      return { text: block.text, character_id: block.characterId, voice_speed: block.voiceSpeed }
+      return { text: block.text, character_id: block.characterId, voice_speed: block.voiceSpeed, performance_tag: block.performanceTag }
     case 'dialogue':
     case 'thought':
-      return { character_id: block.characterId, text: block.text, emotion: (block as DialogueBlock).emotion, voice_speed: block.voiceSpeed }
+      return { character_id: block.characterId, text: block.text, emotion: (block as DialogueBlock).emotion, voice_speed: block.voiceSpeed, performance_tag: block.performanceTag }
     case 'quote':
-      return { text: block.text, attribution: block.attribution, style: block.style, character_id: block.characterId, voice_speed: block.voiceSpeed }
+      return { text: block.text, attribution: block.attribution, style: block.style, character_id: block.characterId, voice_speed: block.voiceSpeed, performance_tag: block.performanceTag }
     case 'pause':
       return { duration_ms: block.duration * 1000 }
     case 'sfx':
@@ -140,6 +141,7 @@ function storyBlockToDbContentPatch(
   }
 
   if ('voiceSpeed' in block) next.voice_speed = block.voiceSpeed
+  if ('performanceTag' in block) next.performance_tag = block.performanceTag
 
   return next
 }

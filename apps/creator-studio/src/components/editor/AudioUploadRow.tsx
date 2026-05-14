@@ -98,6 +98,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
       emotion: 'emotion' in block ? (block as any).emotion : undefined,
       style: 'style' in block ? (block as any).style : undefined,
       voiceLabel: effectiveVoiceLabel,
+      performanceTag: block.performanceTag,
     })
 
     if (url) {
@@ -140,9 +141,12 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   const progress    = duration > 0 ? (currentTime / duration) * 100 : 0
   const blockText   = getBlockText(block)
   const canGenerate = !!blockText.trim() && !!userId
-  const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') ?? false
+  const selectedProvider = getTtsSettings().provider
+  const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') || selectedProvider === 'elevenlabs'
   const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
-  const providerBadge = isElevenLabsVoice ? 'ElevenLabs exact voice' : `OpenAI ${openaiVoice}`
+  const providerBadge = isElevenLabsVoice
+    ? (voiceId?.startsWith('elevenlabs:') ? 'ElevenLabs v3 exact voice' : 'ElevenLabs v3')
+    : `OpenAI ${openaiVoice}`
 
   // Voices not loaded yet?
 

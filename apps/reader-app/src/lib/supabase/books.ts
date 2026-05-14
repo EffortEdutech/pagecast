@@ -33,7 +33,8 @@ function dbContentToBlock(
   content: Record<string, unknown>,
   audioUrl: string | null
 ): StoryBlock {
-  const base = { id, type: type as BlockType, audioUrl: audioUrl ?? undefined }
+  const performanceTag = typeof content.performance_tag === 'string' ? content.performance_tag : undefined
+  const base = { id, type: type as BlockType, audioUrl: audioUrl ?? undefined, performanceTag }
   switch (type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(content.text ?? ''), characterId: content.character_id as string | undefined }
