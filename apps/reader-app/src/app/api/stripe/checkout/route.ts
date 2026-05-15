@@ -55,7 +55,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This Premium Cast is missing an unlock price.' }, { status: 409 })
   }
 
-  const baseUrl = (process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800').replace(/\/$/, '')
+  const baseUrl = (
+    req.headers.get('origin') ??
+    req.nextUrl.origin ??
+    process.env.NEXT_PUBLIC_READER_URL ??
+    'http://localhost:3800'
+  ).replace(/\/$/, '')
 
   const stripe = getStripe()
   const session = await stripe.checkout.sessions.create({
