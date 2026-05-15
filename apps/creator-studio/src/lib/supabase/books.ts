@@ -57,6 +57,7 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     language: book.language ?? 'en',
     status: book.status,
     price: book.price,
+    isFree: book.is_free,
     hasMusic: false,
     hasSfx: false,
     characters: characters.map(c => ({
@@ -126,14 +127,14 @@ export async function fetchBooks(): Promise<Story[]> {
   return books.map(b => dbBookToStory(b, charsByBook[b.id] ?? []))
 }
 
-export async function createBook(title: string, description: string): Promise<Story | null> {
+export async function createBook(title: string, description: string, price = 0): Promise<Story | null> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
   const { data: book, error } = await supabase
     .from('books')
-    .insert(storyToDbInsert({ title, description }, user.id))
+    .insert(storyToDbInsert({ title, description, price }, user.id))
     .select()
     .single()
 
@@ -164,6 +165,7 @@ export async function updateBook(bookId: string, updates: Partial<Story>): Promi
     ...(updates.description !== undefined && { description: updates.description }),
     ...(updates.status      !== undefined && { status: updates.status }),
     ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
+    ...(updates.isFree      !== undefined && { is_free: updates.isFree }),
     ...(updates.language    !== undefined && { language: updates.language }),
     ...(updates.coverImage        !== undefined && { cover_emoji:          updates.coverImage }),
     ...(updates.coverGradient     !== undefined && { cover_gradient:       updates.coverGradient }),

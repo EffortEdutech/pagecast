@@ -128,9 +128,23 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
   )
 }
 
-function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (title: string, desc: string) => void }) {
+const PREF_PRICE_KEY = 'pagecast_default_price'
+
+function readDefaultPrice(): number {
+  if (typeof window === 'undefined') return 0
+  const saved = Number(localStorage.getItem(PREF_PRICE_KEY) ?? '0')
+  return Number.isFinite(saved) && saved > 0 ? saved : 0
+}
+
+function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (title: string, desc: string, price: number) => void }) {
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
+  const [accessMode, setAccessMode] = useState<'free' | 'paid'>(() => readDefaultPrice() > 0 ? 'paid' : 'free')
+  const [price, setPrice] = useState(() => {
+    const defaultPrice = readDefaultPrice()
+    return defaultPrice > 0 ? defaultPrice.toFixed(2) : '4.99'
+  })
+  const parsedPrice = Math.max(0.5, Number(price) || 4.99)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -153,13 +167,35 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
               onChange={e => setDesc(e.target.value)}
             />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Access</label>
+              <select className="input" value={accessMode} onChange={e => setAccessMode(e.target.value as 'free' | 'paid')}>
+                <option value="free">Starter Cast</option>
+                <option value="paid">Premium Cast</option>
+              </select>
+            </div>
+            {accessMode === 'paid' && (
+              <div>
+                <label className="label">Unlock Price</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="0.50"
+                  step="0.01"
+                  value={price}
+                  onChange={e => setPrice(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 justify-end">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="btn-primary"
             disabled={!title.trim()}
-            onClick={() => { if (title.trim()) onCreate(title.trim(), desc.trim()) }}
+            onClick={() => { if (title.trim()) onCreate(title.trim(), desc.trim(), accessMode === 'paid' ? parsedPrice : 0) }}
           >
             <Plus size={15} /> Create Story
           </button>
@@ -179,8 +215,8 @@ export default function DashboardPage() {
 
   const filtered = stories.filter((s: Story) => filter === 'all' || s.status === filter)
 
-  const handleCreate = async (title: string, desc: string) => {
-    const book = await createBook(title, desc)
+  const handleCreate = async (title: string, desc: string, price: number) => {
+    const book = await createBook(title, desc, price)
     if (!book) return
     setShowModal(false)
     setActiveStory(book.id)

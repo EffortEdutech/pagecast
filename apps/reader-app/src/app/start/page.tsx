@@ -138,7 +138,7 @@ export default function StartPage() {
                       <p className="text-text-secondary text-xs leading-relaxed line-clamp-3">{story.description}</p>
                       <div className="flex items-center justify-between mt-4 text-xs">
                         <span className="text-text-muted">Starter Moment</span>
-                        <span className="text-text-primary font-semibold">{story.price === 0 ? 'Starter Cast' : formatUsd(story.price)}</span>
+                        <span className="text-text-primary font-semibold">{story.isFree ? 'Starter Cast' : formatUsd(story.price)}</span>
                       </div>
                     </div>
                   </Link>

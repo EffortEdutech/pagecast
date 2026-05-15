@@ -38,8 +38,8 @@ export function useBooks() {
     return () => { cancelled = true }
   }, [synced])
 
-  const createBook = useCallback(async (title: string, description: string): Promise<Story | null> => {
-    const book = await BooksApi.createBook(title, description)
+  const createBook = useCallback(async (title: string, description: string, price = 0): Promise<Story | null> => {
+    const book = await BooksApi.createBook(title, description, price)
     if (!book) { setError('Failed to create book.'); return null }
     useStudioStore.setState(state => ({ stories: [book, ...state.stories] }))
     return book

@@ -281,11 +281,13 @@ export default function StudioPage() {
   }
 
   const handleSettingsSave = async (updates: Partial<import('@/types').Story>) => {
-    await import('@/lib/supabase/books').then(m => m.updateBook(bookId, updates))
+    const ok = await import('@/lib/supabase/books').then(m => m.updateBook(bookId, updates))
+    if (!ok) return false
     useStudioStore.setState(state => ({
       stories: state.stories.map(s => s.id === bookId ? { ...s, ...updates } : s)
     }))
     setShowSettings(false)
+    return true
   }
 
   const handleImport = async (parsed: ParsedImport, destination: ImportDestination) => {

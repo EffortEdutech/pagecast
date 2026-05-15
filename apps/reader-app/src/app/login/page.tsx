@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const isDevelopment = process.env.NODE_ENV === 'development'
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,25 +171,26 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick-fill for dev testing */}
-          <div className="border-t border-bg-border pt-4">
-            <p className="text-text-muted text-xs text-center mb-3">Test accounts (pw: test123)</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Explorer 1', email: 'reader1@pagecast.test' },
-                { label: 'Explorer 2', email: 'reader2@pagecast.test' },
-              ].map(({ label, email: testEmail }) => (
-                <button
-                  key={testEmail}
-                  type="button"
-                  onClick={() => { setEmail(testEmail); setPassword('test123'); setTab('login') }}
-                  className="text-xs text-text-muted hover:text-text-secondary border border-bg-border hover:border-accent/30 rounded-lg px-3 py-2 transition-colors text-left"
-                >
-                  {label}
-                </button>
-              ))}
+          {isDevelopment && (
+            <div className="border-t border-bg-border pt-4">
+              <p className="text-text-muted text-xs text-center mb-3">Test accounts (pw: test123)</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Explorer 1', email: 'reader1@pagecast.test' },
+                  { label: 'Explorer 2', email: 'reader2@pagecast.test' },
+                ].map(({ label, email: testEmail }) => (
+                  <button
+                    key={testEmail}
+                    type="button"
+                    onClick={() => { setEmail(testEmail); setPassword('test123'); setTab('login') }}
+                    className="text-xs text-text-muted hover:text-text-secondary border border-bg-border hover:border-accent/30 rounded-lg px-3 py-2 transition-colors text-left"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Back to store */}

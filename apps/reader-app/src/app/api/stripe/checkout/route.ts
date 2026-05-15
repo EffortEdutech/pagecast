@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Free book → record purchase directly, no Stripe needed
-  if (book.is_free || book.price === 0) {
+  if (book.is_free) {
     await supabase.from('purchases').insert({
       user_id:    user.id,
       book_id:    bookId,
@@ -51,7 +51,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ free: true })
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800'
+  if (Number(book.price) <= 0) {
+    return NextResponse.json({ error: 'This Premium Cast is missing an unlock price.' }, { status: 409 })
+  }
+
+  const baseUrl = (process.env.NEXT_PUBLIC_READER_URL ?? 'http://localhost:3800').replace(/\/$/, '')
 
   const stripe = getStripe()
   const session = await stripe.checkout.sessions.create({

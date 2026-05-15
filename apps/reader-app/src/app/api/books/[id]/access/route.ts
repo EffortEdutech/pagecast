@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Book not found' }, { status: 404 })
   }
 
-  if (book.is_free || Number(book.price) === 0) {
+  if (book.is_free) {
     return NextResponse.json({ hasAccess: true, reason: 'free' })
   }
 

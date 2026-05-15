@@ -46,7 +46,7 @@ function StoryCard({ story }: { story: Story }) {
           {story.hasMusic && <span className="flex items-center gap-1"><Music size={10} /> Music</span>}
           <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
           <span className="ml-auto font-semibold text-text-primary text-xs">
-            {isOwned ? <span className="text-success">Unlocked</span> : story.price === 0 ? 'Starter Cast' : formatUsd(story.price)}
+            {isOwned ? <span className="text-success">Unlocked</span> : story.isFree ? 'Starter Cast' : formatUsd(story.price)}
           </span>
         </div>
       </div>

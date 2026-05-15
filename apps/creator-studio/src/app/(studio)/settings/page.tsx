@@ -180,7 +180,7 @@ export default function SettingsPage() {
               </select>
             </div>
             <div>
-              <label className="label">Default Price (USD)</label>
+              <label className="label">Default Price</label>
               <input
                 className="input"
                 type="number"
@@ -190,6 +190,9 @@ export default function SettingsPage() {
                 value={price}
                 onChange={e => setPrice(e.target.value)}
               />
+              <p className="mt-1 text-[10px] text-text-muted">
+                Used when a new Premium Cast is created.
+              </p>
             </div>
           </div>
         </section>

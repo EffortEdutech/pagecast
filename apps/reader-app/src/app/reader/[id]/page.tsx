@@ -210,6 +210,7 @@ const MODES: { id: ReaderMode; label: string; icon: typeof BookOpen }[] = [
 ]
 
 const BEAT_GAP_MS = 550
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function blockSummary(block: StoryBlock, index: number): string {
   const prefix = `Moment ${index + 1}`
@@ -284,7 +285,9 @@ export default function ReaderPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
-    if (story && serverAccess === false && !isOwned(story.id) && !isPreview) {
+    const isSupabaseCast = story ? UUID_RE.test(story.id) : false
+    const hasLocalDemoAccess = story ? !isSupabaseCast && isOwned(story.id) : false
+    if (story && serverAccess === false && !hasLocalDemoAccess && !isPreview) {
       router.replace(`/book/${id}`)
     }
   }, [story, id, isOwned, router, serverAccess])
@@ -774,13 +777,13 @@ export default function ReaderPage() {
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="text-center space-y-3">
         <BookOpen size={40} className="text-text-muted mx-auto" />
-        <p className="text-text-secondary">Story not found.</p>
-        <Link href="/library" className="btn-primary inline-flex"><ArrowLeft size={14} /> Library</Link>
+        <p className="text-text-secondary">Cast not found.</p>
+        <Link href="/library" className="btn-primary inline-flex"><ArrowLeft size={14} /> My Casts</Link>
       </div>
     </div>
   )
 
-  if (serverAccess === null && !isOwned(story.id)) return (
+  if (serverAccess === null && UUID_RE.test(story.id)) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
     </div>

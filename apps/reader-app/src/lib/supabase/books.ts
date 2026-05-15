@@ -127,6 +127,7 @@ function dbToStory(book: DbBook, chars: DbCharacter[], chapters: Chapter[] = [])
     coverGradient: book.cover_gradient || pickGradient(book.id),
     language: book.language ?? 'en',
     price: book.price,
+    isFree: book.is_free,
     hasMusic: false,
     hasSfx: false,
     genre: book.genre ?? undefined,

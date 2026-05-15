@@ -16,6 +16,8 @@ import type { Story } from '@/types'
 import { formatUsd } from '@/lib/format'
 import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function BookPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -52,10 +54,13 @@ export default function BookPage() {
     if (!story) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('purchased') === '1') {
-      addToLibrary(story.id)
       window.history.replaceState({}, '', `/book/${story.id}`)
+      fetch(`/api/books/${story.id}/access`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => setServerAccess(Boolean(data?.hasAccess)))
+        .catch(() => setServerAccess(false))
     }
-  }, [story, addToLibrary])
+  }, [story])
 
   // ── Early exits (after all hooks) ─────────────────────────────────────────
 
@@ -69,7 +74,7 @@ export default function BookPage() {
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="text-center space-y-3">
         <BookOpen size={40} className="text-text-muted mx-auto" />
-        <p className="text-text-secondary">Story not found.</p>
+        <p className="text-text-secondary">Cast not found.</p>
         <Link href="/store" className="btn-primary inline-flex"><ArrowLeft size={14} /> Back to TaleVerse</Link>
       </div>
     </div>
@@ -77,7 +82,8 @@ export default function BookPage() {
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const owned = serverAccess || (hydrated && isOwned(story.id))
+  const isSupabaseCast = UUID_RE.test(story.id)
+  const owned = serverAccess || (!isSupabaseCast && hydrated && isOwned(story.id))
 
   const handleBuy = async () => {
     if (!story) return
@@ -163,13 +169,13 @@ export default function BookPage() {
                     >
                       {buying
                         ? <><Loader2 size={18} className="animate-spin" /> Processing&hellip;</>
-                        : story.price === 0
+                        : story.isFree
                           ? <><Play size={18} className="fill-white" /> Begin Starter Cast</>
                           : <><ShoppingCart size={18} /> Unlock Cast for {formatUsd(story.price)}</>
                       }
                     </button>
                     {buyError && <p className="text-danger text-sm">{buyError}</p>}
-                    {story.price > 0 && (
+                    {!story.isFree && (
                       <Link href="/pricing" className="btn-secondary text-base px-6 py-3">
                         Get Cast Pass
                       </Link>
@@ -289,7 +295,7 @@ export default function BookPage() {
             <div className="text-2xl font-bold text-text-primary">
               {owned
                 ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> In My Casts</span>
-                : story.price === 0 ? 'Starter Cast' : formatUsd(story.price)
+                : story.isFree ? 'Starter Cast' : formatUsd(story.price)
               }
             </div>
             {owned ? (
@@ -299,7 +305,7 @@ export default function BookPage() {
             ) : (
               <button onClick={handleBuy} className="btn-primary w-full justify-center">
                 <Play size={14} className="fill-white" />
-                {story.price === 0 ? 'Begin Starter Cast' : `Unlock for ${formatUsd(story.price)}`}
+                {story.isFree ? 'Begin Starter Cast' : `Unlock for ${formatUsd(story.price)}`}
               </button>
             )}
             {!owned && (

@@ -35,7 +35,7 @@ export interface Chapter { id: string; title: string; order: number; scenes: Sce
 export interface Story {
   id: string; title: string; description: string
   coverGradient?: string; language: string
-  price: number; hasMusic: boolean; hasSfx: boolean
+  price: number; isFree?: boolean; hasMusic: boolean; hasSfx: boolean
   characters: Character[]; chapters: Chapter[]
   createdAt: string; durationMinutes?: number
   genre?: string; ageRating?: string
