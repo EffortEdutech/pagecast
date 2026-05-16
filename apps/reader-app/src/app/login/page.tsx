@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { saveMarketingConsent } from '@/lib/supabase/preferences'
 import { BookOpen, Headphones, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
@@ -13,6 +14,10 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [countryCode, setCountryCode] = useState('')
+  const [regionCode, setRegionCode] = useState('')
+  const [ageConfirmation, setAgeConfirmation] = useState('')
+  const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -44,7 +49,16 @@ export default function LoginPage() {
         email,
         password,
         options: {
-          data: { display_name: name || email.split('@')[0], role: 'reader', signup_source: signupSource },
+          data: {
+            display_name: name || email.split('@')[0],
+            role: 'reader',
+            signup_source: signupSource,
+            country_code: countryCode.trim().toUpperCase() || null,
+            region_code: regionCode.trim().toUpperCase() || null,
+            age_confirmation: ageConfirmation || null,
+            marketing_opt_in: marketingOptIn,
+            signup_consent_context: 'reader_signup_global',
+          },
         },
       })
       if (authError) {
@@ -52,6 +66,12 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
+      await saveMarketingConsent({
+        optedIn: marketingOptIn,
+        countryCode,
+        regionCode,
+        source: 'reader_signup',
+      })
       setMessage('Check your email for a confirmation link.')
       setLoading(false)
     }
@@ -99,17 +119,59 @@ export default function LoginPage() {
 
           <form onSubmit={handleAuth} className="space-y-4">
             {tab === 'signup' && (
-              <div>
-                <label className="label">Explorer Name</label>
-                <input
-                  type="text"
-                  className="input"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your Explorer name"
-                  autoComplete="name"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="label">Explorer Name</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Your Explorer name"
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Country</label>
+                    <input
+                      type="text"
+                      className="input uppercase"
+                      value={countryCode}
+                      onChange={e => setCountryCode(e.target.value)}
+                      placeholder="MY"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Region</label>
+                    <input
+                      type="text"
+                      className="input uppercase"
+                      value={regionCode}
+                      onChange={e => setRegionCode(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Age confirmation</label>
+                  <select className="input" value={ageConfirmation} onChange={e => setAgeConfirmation(e.target.value)} required>
+                    <option value="">Select one</option>
+                    <option value="adult_or_guardian">I am an adult or have guardian permission</option>
+                    <option value="guardian_managed">This account is managed by a parent or guardian</option>
+                  </select>
+                </div>
+                <label className="flex items-start gap-2 text-text-secondary text-xs leading-relaxed">
+                  <input
+                    type="checkbox"
+                    checked={marketingOptIn}
+                    onChange={e => setMarketingOptIn(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  Send me PageCast updates, launch news, and creator recommendations. I can opt out later.
+                </label>
+              </>
             )}
 
             <div>

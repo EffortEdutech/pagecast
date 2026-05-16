@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStudioStore } from '@/store/studioStore'
 import * as BooksApi from '@/lib/supabase/books'
+import { createPublishAttestation, validateBookCompliance } from '@/lib/supabase/compliance'
 import type { Story, StoryStatus } from '@/types'
 
 export function useBooks() {
@@ -58,6 +59,25 @@ export function useBooks() {
   }, [store])
 
   const publishBook = useCallback(async (id: string, status: StoryStatus) => {
+    if (status === 'published') {
+      const compliance = await validateBookCompliance(id)
+      if (!compliance.ok) {
+        setError(`Cannot publish yet: ${compliance.issues.join(' ')}`)
+        return
+      }
+      const attested = await createPublishAttestation(id, {
+        rightsCategory: compliance.rights?.rightsCategory,
+        audioRightsConfirmed: compliance.rights?.audioRightsConfirmed,
+        containsAiGeneratedContent: compliance.rights?.containsAiGeneratedContent,
+        containsSyntheticAudio: compliance.rights?.containsSyntheticAudio,
+        checkedAt: new Date().toISOString(),
+        source: 'dashboard',
+      })
+      if (!attested) {
+        setError('Could not record publish attestation. Apply the legal compliance migration and try again.')
+        return
+      }
+    }
     const ok = await BooksApi.publishBook(id, status as 'draft' | 'published')
     if (!ok) { setError('Failed to update publish status.'); return }
     store.updateStory(id, { status })

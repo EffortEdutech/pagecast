@@ -3,8 +3,10 @@ import { useRef, useState, useEffect } from 'react'
 import { Upload, Play, Pause, Trash2, Loader2, AlertCircle, Wand2, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { uploadBlockAudio, deleteBlockAudio } from '@/lib/supabase/storage'
+import { saveAssetRights, type RightsCategory } from '@/lib/supabase/compliance'
 import { generateBlockTts, getTtsSettings } from '@/lib/tts'
 import { getOpenAiVoiceForVoiceId, getPageCastVoice } from '@/lib/voiceLibrary'
+import { AssetRightsDeclaration } from './AssetRightsDeclaration'
 import type { StoryBlock } from '@/types'
 
 interface AudioUploadRowProps {
@@ -41,6 +43,9 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   const [duration,     setDuration]     = useState(0)
   const [userId,       setUserId]       = useState<string | null>(null)
   const [hasTtsKey,    setHasTtsKey]    = useState(false)
+  const [rightsConfirmed, setRightsConfirmed] = useState(false)
+  const [rightsNotes, setRightsNotes] = useState('')
+  const [rightsCategory, setRightsCategory] = useState<Exclude<RightsCategory, 'unspecified'>>('original')
 
   // ── Freeze badge info at generation time ────────────────────────────────────
   // Shows which voice was actually used, independent of current dropdown state
@@ -67,8 +72,13 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
     if (!file || !userId) return
     setUploading(true); setActionError(null)
     const url = await uploadBlockAudio(userId, bookId, block.id, file)
-    url ? onUpdate({ audioUrl: url } as Partial<StoryBlock>)
-        : setActionError('Upload failed — check storage bucket & RLS policies.')
+    if (url) {
+      const rightsOk = await saveAssetRights({ bookId, sourceUrl: url, rightsCategory, licenseNotes: rightsNotes })
+      if (!rightsOk) setActionError('Audio uploaded, but the rights record failed. Check migration 011.')
+      onUpdate({ audioUrl: url } as Partial<StoryBlock>)
+    } else {
+      setActionError('Upload failed — check storage bucket & RLS policies.')
+    }
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -154,13 +164,23 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   if (!block.audioUrl && !uploading && !generating) {
     return (
       <div className="space-y-1.5 pt-1">
+        <AssetRightsDeclaration
+          checked={rightsConfirmed}
+          notes={rightsNotes}
+          category={rightsCategory}
+          label="I confirm I have the rights to upload and publish this narration/audio file."
+          onCheckedChange={setRightsConfirmed}
+          onNotesChange={setRightsNotes}
+          onCategoryChange={setRightsCategory}
+        />
         <div className="flex items-center gap-2 flex-wrap">
           <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChange} />
 
           <button
             className="btn-ghost text-xs px-2 py-1 border border-bg-border hover:border-accent/40"
             onClick={() => fileInputRef.current?.click()}
-            disabled={!userId}
+            disabled={!userId || !rightsConfirmed}
+            title={!rightsConfirmed ? 'Confirm audio rights before uploading' : 'Upload audio'}
           >
             <Upload size={11} /> Upload
           </button>

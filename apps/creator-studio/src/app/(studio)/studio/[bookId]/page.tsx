@@ -20,6 +20,14 @@ import { clsx } from 'clsx'
 import { v4 as uuid } from 'uuid'
 import type { StoryBlock, BlockType, Chapter, Scene } from '@/types'
 import type { ParsedImport } from '@/lib/textParser'
+import {
+  EMPTY_BOOK_RIGHTS,
+  createPublishAttestation,
+  fetchBookRights,
+  saveBookRights,
+  validateBookCompliance,
+  type BookRights,
+} from '@/lib/supabase/compliance'
 
 // ─── Inline editable title ────────────────────────────────────────────────────
 
@@ -130,6 +138,9 @@ export default function StudioPage() {
   const [showImport,    setShowImport]    = useState(false)
   const [showSettings, setShowSettings]   = useState(false)
   const [showPublishQA, setShowPublishQA] = useState(false)
+  const [showComplianceGate, setShowComplianceGate] = useState(false)
+  const [complianceIssues, setComplianceIssues] = useState<string[]>([])
+  const [bookRights, setBookRights] = useState<BookRights>({ ...EMPTY_BOOK_RIGHTS, bookId })
   const [publishing, setPublishing] = useState(false)
   const [showChapterInsert, setShowChapterInsert] = useState(false)
   const [chaptersWidth, setChaptersWidth] = useState(260)
@@ -144,6 +155,15 @@ export default function StudioPage() {
       }
     }
   }, [story, activeChapterId])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchBookRights(bookId).then(rights => {
+      if (cancelled) return
+      setBookRights(rights ?? { ...EMPTY_BOOK_RIGHTS, bookId })
+    })
+    return () => { cancelled = true }
+  }, [bookId])
 
   if (!story) {
     return (
@@ -247,8 +267,30 @@ export default function StudioPage() {
     setPublishing(true)
 
     if (newStatus === 'published') {
+      const compliance = await validateBookCompliance(bookId)
+      if (!compliance.ok) {
+        setComplianceIssues(compliance.issues)
+        setShowComplianceGate(true)
+        setPublishing(false)
+        return
+      }
+
       const ok = await editor.saveContent()
       if (!ok) {
+        setPublishing(false)
+        return
+      }
+
+      const attested = await createPublishAttestation(bookId, {
+        rightsCategory: compliance.rights?.rightsCategory,
+        audioRightsConfirmed: compliance.rights?.audioRightsConfirmed,
+        containsAiGeneratedContent: compliance.rights?.containsAiGeneratedContent,
+        containsSyntheticAudio: compliance.rights?.containsSyntheticAudio,
+        checkedAt: new Date().toISOString(),
+      })
+      if (!attested) {
+        setComplianceIssues(['Could not record publish attestation. Confirm the legal compliance migration has been applied, then try again.'])
+        setShowComplianceGate(true)
         setPublishing(false)
         return
       }
@@ -280,9 +322,12 @@ export default function StudioPage() {
     return count
   }
 
-  const handleSettingsSave = async (updates: Partial<import('@/types').Story>) => {
+  const handleSettingsSave = async (updates: Partial<import('@/types').Story>, rights: BookRights) => {
     const ok = await import('@/lib/supabase/books').then(m => m.updateBook(bookId, updates))
     if (!ok) return false
+    const rightsOk = await saveBookRights(bookId, rights)
+    if (!rightsOk) return false
+    setBookRights({ ...rights, bookId })
     useStudioStore.setState(state => ({
       stories: state.stories.map(s => s.id === bookId ? { ...s, ...updates } : s)
     }))
@@ -696,9 +741,48 @@ export default function StudioPage() {
       {showSettings && (
         <BookSettingsPanel
           story={story}
+          rights={bookRights}
           onClose={() => setShowSettings(false)}
           onSave={handleSettingsSave}
         />
+      )}
+
+      {/* Compliance publish gate */}
+      {showComplianceGate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="card-elevated w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-danger/20 flex items-center justify-center shrink-0">
+                <X size={16} className="text-danger" />
+              </div>
+              <div>
+                <h3 className="text-text-primary font-semibold">Rights & Compliance needed</h3>
+                <p className="text-text-secondary text-sm mt-1">
+                  Complete the publishing requirements before this Cast can go live.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-danger/20 bg-danger/10 p-3 space-y-2">
+              {complianceIssues.map(issue => (
+                <div key={issue} className="flex items-start gap-2 text-xs text-text-secondary">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
+                  {issue}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-sm" onClick={() => setShowComplianceGate(false)}>
+                Close
+              </button>
+              <button
+                className="btn-primary text-sm"
+                onClick={() => { setShowComplianceGate(false); setShowSettings(true) }}
+              >
+                Open Book Settings
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Publish QA gate */}

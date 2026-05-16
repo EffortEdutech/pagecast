@@ -1,9 +1,10 @@
 'use client'
 import { useState } from 'react'
-import { X, Save, Loader2, Palette } from 'lucide-react'
+import { X, Save, Loader2, Palette, ShieldCheck } from 'lucide-react'
 import { clsx } from 'clsx'
 import { STORY_LANGUAGES } from '@/lib/voiceLibrary'
 import type { Story } from '@/types'
+import type { BookRights, RightsCategory } from '@/lib/supabase/compliance'
 
 const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Thriller', 'Horror',
   "Children's", 'Non-fiction', 'History', 'Poetry', 'Other']
@@ -21,10 +22,21 @@ const GRADIENTS = [
 ]
 const EMOJIS = ['📖', '🌲', '🤖', '🌙', '⚔️', '🔮', '🚀', '🐉', '🌺', '🎭', '🗺️', '💫']
 
+const RIGHTS_CATEGORIES: Array<{ value: RightsCategory; label: string }> = [
+  { value: 'unspecified', label: 'Select rights type' },
+  { value: 'original', label: 'Original work' },
+  { value: 'licensed', label: 'Licensed work' },
+  { value: 'public_domain', label: 'Public domain' },
+  { value: 'commissioned', label: 'Commissioned work' },
+  { value: 'ai_generated', label: 'AI-generated work' },
+  { value: 'mixed', label: 'Mixed sources' },
+]
+
 interface Props {
   story: Story
+  rights: BookRights
   onClose: () => void
-  onSave: (updates: Partial<Story>) => Promise<boolean>
+  onSave: (updates: Partial<Story>, rights: BookRights) => Promise<boolean>
 }
 
 function readDefaultPrice(): string {
@@ -33,7 +45,7 @@ function readDefaultPrice(): string {
   return Number.isFinite(saved) && saved > 0 ? saved.toFixed(2) : '4.99'
 }
 
-export function BookSettingsPanel({ story, onClose, onSave }: Props) {
+export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
   const [genre,     setGenre]     = useState(story.genre     ?? '')
   const [ageRating, setAgeRating] = useState(story.ageRating ?? 'All ages')
   const [estTime,   setEstTime]   = useState(story.durationMinutes?.toString() ?? '')
@@ -43,8 +55,13 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
   const [emoji,     setEmoji]     = useState((story as any).coverImage ?? '📖')
   const [language,  setLanguage]  = useState(story.language ?? 'en')
   const [desc,      setDesc]      = useState(story.description ?? '')
+  const [rightsDraft, setRightsDraft] = useState<BookRights>(rights)
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState<string | null>(null)
+
+  const updateRights = <K extends keyof BookRights>(key: K, value: BookRights[K]) => {
+    setRightsDraft(current => ({ ...current, [key]: value }))
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -59,7 +76,7 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
       language,
       price:           accessMode === 'paid' ? Math.max(0.5, Number(price) || Number(readDefaultPrice())) : 0,
       isFree:          accessMode !== 'paid',
-    })
+    }, rightsDraft)
     setSaving(false)
     if (ok) onClose()
     else setError('Could not save Cast settings. Please check your session and try again.')
@@ -210,6 +227,152 @@ export function BookSettingsPanel({ story, onClose, onSave }: Props) {
                   )}
                 />
               ))}
+            </div>
+          </div>
+
+          <div className="border-t border-bg-border pt-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={15} className="text-success" />
+              <div>
+                <h3 className="text-text-primary font-semibold text-sm">Rights & Compliance</h3>
+                <p className="text-text-muted text-[10px]">Required before publishing worldwide.</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Rights Type</label>
+              <select
+                className="input text-sm"
+                value={rightsDraft.rightsCategory}
+                onChange={e => updateRights('rightsCategory', e.target.value as RightsCategory)}
+              >
+                {RIGHTS_CATEGORIES.map(category => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Copyright Owner / Rights Holder</label>
+              <input
+                className="input text-sm"
+                value={rightsDraft.copyrightOwner}
+                onChange={e => updateRights('copyrightOwner', e.target.value)}
+                placeholder="Creator, publisher, estate, licensor..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Territory</label>
+                <input
+                  className="input text-sm"
+                  value={rightsDraft.territory}
+                  onChange={e => updateRights('territory', e.target.value)}
+                  placeholder="Worldwide"
+                />
+              </div>
+              <div>
+                <label className="label">Language Rights</label>
+                <input
+                  className="input text-sm"
+                  value={rightsDraft.languageRights}
+                  onChange={e => updateRights('languageRights', e.target.value)}
+                  placeholder="English, Malay..."
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Source / Proof URL</label>
+              <input
+                className="input text-sm"
+                value={rightsDraft.sourceUrl}
+                onChange={e => updateRights('sourceUrl', e.target.value)}
+                placeholder="License, source, receipt, or reference URL"
+              />
+            </div>
+
+            <div>
+              <label className="label">License / Rights Notes</label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={3}
+                value={rightsDraft.licenseNotes}
+                onChange={e => updateRights('licenseNotes', e.target.value)}
+                placeholder="Summarize the permission, license scope, public-domain basis, or mixed-source details."
+              />
+            </div>
+
+            {rightsDraft.rightsCategory === 'public_domain' && (
+              <div>
+                <label className="label">Public Domain Basis</label>
+                <textarea
+                  className="input resize-none text-sm"
+                  rows={3}
+                  value={rightsDraft.publicDomainBasis}
+                  onChange={e => updateRights('publicDomainBasis', e.target.value)}
+                  placeholder="Author death/publication facts, jurisdiction, edition used, and source."
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="label">Attribution Text</label>
+              <input
+                className="input text-sm"
+                value={rightsDraft.attributionText}
+                onChange={e => updateRights('attributionText', e.target.value)}
+                placeholder="Optional reader-facing attribution"
+              />
+            </div>
+
+            <label className="flex items-start gap-2 text-xs text-text-secondary">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={rightsDraft.audioRightsConfirmed}
+                onChange={e => updateRights('audioRightsConfirmed', e.target.checked)}
+              />
+              I confirm I control the audio, adaptation, narration, music, SFX, and synthetic voice rights needed to publish this Cast.
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-start gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={rightsDraft.containsAiGeneratedContent}
+                  onChange={e => updateRights('containsAiGeneratedContent', e.target.checked)}
+                />
+                Uses AI-generated content
+              </label>
+              <label className="flex items-start gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={rightsDraft.containsSyntheticAudio}
+                  onChange={e => updateRights('containsSyntheticAudio', e.target.checked)}
+                />
+                Uses synthetic audio
+              </label>
+            </div>
+
+            {(rightsDraft.containsAiGeneratedContent || rightsDraft.containsSyntheticAudio) && (
+              <div>
+                <label className="label">AI / Synthetic Disclosure</label>
+                <textarea
+                  className="input resize-none text-sm"
+                  rows={3}
+                  value={rightsDraft.aiDisclosureText}
+                  onChange={e => updateRights('aiDisclosureText', e.target.value)}
+                  placeholder="Example: This Cast includes AI-generated narration."
+                />
+              </div>
+            )}
+
+            <div className="rounded-lg border border-success/20 bg-success/10 px-3 py-2 text-xs text-text-secondary">
+              These records support global copyright, takedown, creator warranty, AI disclosure, and reader trust workflows.
             </div>
           </div>
         </div>

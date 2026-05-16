@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, ChevronRight } from 'lucide-react'
+import { BookOpen, ChevronRight, Flag, ShieldAlert, UserCheck } from 'lucide-react'
 import { legalPages } from './legalContent'
 
 export const metadata = {
@@ -8,6 +8,27 @@ export const metadata = {
 }
 
 export default function LegalIndexPage() {
+  const requestForms = [
+    {
+      href: '/legal/report',
+      icon: Flag,
+      title: 'Report content',
+      body: 'Flag a Cast, passage, listing, or audio segment for PageCast review.',
+    },
+    {
+      href: '/legal/takedown',
+      icon: ShieldAlert,
+      title: 'Takedown request',
+      body: 'Submit a copyright, trademark, privacy, publicity, or rights claim.',
+    },
+    {
+      href: '/legal/privacy-request',
+      icon: UserCheck,
+      title: 'Privacy request',
+      body: 'Ask for access, deletion, correction, portability, consent withdrawal, or opt-out handling.',
+    },
+  ]
+
   return (
     <main className="min-h-screen bg-bg-primary text-text-primary">
       <section className="max-w-4xl mx-auto px-6 py-14">
@@ -34,8 +55,23 @@ export default function LegalIndexPage() {
             </Link>
           ))}
         </div>
+
+        <section className="mt-10">
+          <p className="text-accent text-xs font-semibold uppercase tracking-widest mb-3">Submit a request</p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {requestForms.map(({ href, icon: Icon, title, body }) => (
+              <Link key={href} href={href} className="card p-5 hover:border-accent/40 transition-colors group">
+                <Icon size={18} className="text-gold mb-3" />
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="font-semibold text-text-primary">{title}</h2>
+                  <ChevronRight size={16} className="text-text-muted group-hover:text-accent" />
+                </div>
+                <p className="text-text-muted text-xs leading-relaxed mt-3">{body}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
       </section>
     </main>
   )
 }
-

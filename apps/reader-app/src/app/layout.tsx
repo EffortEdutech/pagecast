@@ -3,6 +3,8 @@ import { Suspense } from 'react'
 import './globals.css'
 import { SyncProvider } from '@/components/SyncProvider'
 import { UtmCapture } from '@/components/UtmCapture'
+import { ConsentGate } from '@/components/ConsentGate'
+import { RegionalPrivacyBanner } from '@/components/RegionalPrivacyBanner'
 
 export const metadata: Metadata = {
   title: 'PageCast - A world of Tales with voices',
@@ -17,6 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Suspense fallback={null}>
             <UtmCapture />
           </Suspense>
+          <ConsentGate />
+          <RegionalPrivacyBanner />
           {children}
         </SyncProvider>
       </body>

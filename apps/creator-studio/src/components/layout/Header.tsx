@@ -7,6 +7,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/voices': 'Voice Library',
   '/assets': 'Asset Manager',
   '/legal-center': 'Legal Center',
+  '/compliance-queue': 'Compliance Queue',
+  '/compliance-sla': 'Legal SLA Dashboard',
+  '/compliance-records': 'Compliance Records',
   '/settings': 'Settings',
 }
 

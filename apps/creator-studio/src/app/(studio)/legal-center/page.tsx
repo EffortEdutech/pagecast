@@ -87,7 +87,7 @@ export default function LegalCenterPage() {
             <div>
               <h2 className="text-warning font-semibold text-sm">Implementation status</h2>
               <p className="text-text-secondary text-sm leading-relaxed mt-1">
-                This page is the first visible compliance surface. The next build step is to connect Book Rights, Asset Rights, and the Publish Attestation gate to the database migration.
+              Book Rights, Asset Rights, Publish Attestation, public legal forms, the admin Compliance Queue, action logs, notification outbox, case evidence, privacy SLA dashboard, exports, and retention rules are wired to the legal compliance migrations. Apply migration 017 before relying on retention review.
               </p>
             </div>
           </div>
@@ -106,6 +106,9 @@ export default function LegalCenterPage() {
               ['Copyright', '/legal/copyright'],
               ['Refund', '/legal/refund'],
               ['AI Disclosure', '/legal/ai-disclosure'],
+              ['Report Content', '/legal/report'],
+              ['Takedown Request', '/legal/takedown'],
+              ['Privacy Request', '/legal/privacy-request'],
             ].map(([label, href]) => (
               <Link
                 key={href}
@@ -122,4 +125,3 @@ export default function LegalCenterPage() {
     </>
   )
 }
-

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
 import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
+import { ReportContentButton } from '@/components/ReportContentButton'
 import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 import type { Story, StoryBlock, Character, ReaderMode, ReaderTheme } from '@/types'
 import { clsx } from 'clsx'
@@ -907,6 +908,7 @@ export default function ReaderPage() {
               className="btn-ghost px-2 py-1.5 text-text-muted" title="Settings">
               <Settings size={15} />
             </button>
+            <ReportContentButton bookId={story.id} blockId={block?.id} variant="icon" />
           </div>
           </header>
         </>

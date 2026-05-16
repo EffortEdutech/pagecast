@@ -8,9 +8,11 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { uploadSceneAudio, deleteSceneAudio, uploadSceneImage, deleteSceneImage } from '@/lib/supabase/storage'
 import { updateSceneAtmosphere } from '@/lib/supabase/scenes'
+import { saveAssetRights, type RightsCategory } from '@/lib/supabase/compliance'
 import { useStudioStore } from '@/store/studioStore'
 import { clsx } from 'clsx'
 import type { Scene } from '@/types'
+import { AssetRightsDeclaration } from './AssetRightsDeclaration'
 
 // ── Mini Audio Layer ──────────────────────────────────────────────────────────
 
@@ -49,6 +51,9 @@ function AudioLayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration,    setDuration]    = useState(0)
   const [userId,      setUserId]      = useState<string | null>(null)
+  const [rightsConfirmed, setRightsConfirmed] = useState(false)
+  const [rightsNotes, setRightsNotes] = useState('')
+  const [rightsCategory, setRightsCategory] = useState<Exclude<RightsCategory, 'unspecified'>>('original')
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
@@ -98,6 +103,13 @@ function AudioLayer({
     setError(null)
     const newUrl = await uploadSceneAudio(userId, bookId, sceneId, layer, file)
     if (newUrl) {
+      const rightsOk = await saveAssetRights({
+        bookId,
+        sourceUrl: newUrl,
+        rightsCategory,
+        licenseNotes: `${label}: ${rightsNotes}`.trim(),
+      })
+      if (!rightsOk) setError('Uploaded, but rights record failed. Check migration 011.')
       onUrlChange(newUrl)
       await updateSceneAtmosphere(sceneId, layer === 'ambience' ? { ambienceUrl: newUrl } : { musicUrl: newUrl })
     } else {
@@ -156,11 +168,21 @@ function AudioLayer({
       {/* Upload / Player */}
       {!url && !uploading && (
         <>
+          <AssetRightsDeclaration
+            checked={rightsConfirmed}
+            notes={rightsNotes}
+            category={rightsCategory}
+            label={`I confirm I have the rights to upload and publish this ${label.toLowerCase()} audio.`}
+            onCheckedChange={setRightsConfirmed}
+            onNotesChange={setRightsNotes}
+            onCategoryChange={setRightsCategory}
+          />
           <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={handleUpload} />
           <button
             className="btn-ghost w-full text-xs py-2 border border-dashed border-bg-border hover:border-accent/40 justify-center"
             onClick={() => fileRef.current?.click()}
-            disabled={!userId}
+            disabled={!userId || !rightsConfirmed}
+            title={!rightsConfirmed ? `Confirm ${label.toLowerCase()} rights before uploading` : `Upload ${label}`}
           >
             <Upload size={11} /> Upload {label}
           </button>
@@ -264,6 +286,9 @@ export function SceneAtmospherePanel({
   const [imgUploading,   setImgUploading]   = useState(false)
   const [imgError,       setImgError]       = useState<string | null>(null)
   const [userId,         setUserId]         = useState<string | null>(null)
+  const [imageRightsConfirmed, setImageRightsConfirmed] = useState(false)
+  const [imageRightsNotes, setImageRightsNotes] = useState('')
+  const [imageRightsCategory, setImageRightsCategory] = useState<Exclude<RightsCategory, 'unspecified'>>('original')
   const imgInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -277,6 +302,13 @@ export function SceneAtmospherePanel({
     setImgError(null)
     const url = await uploadSceneImage(userId, bookId, scene.id, file)
     if (url) {
+      const rightsOk = await saveAssetRights({
+        bookId,
+        sourceUrl: url,
+        rightsCategory: imageRightsCategory,
+        licenseNotes: `Scene image: ${imageRightsNotes}`.trim(),
+      })
+      if (!rightsOk) setImgError('Image uploaded, but rights record failed. Check migration 011.')
       setSceneImage(url)
       syncStore({ sceneImage: url })
       // Persist to DB so Vercel sees it too
@@ -408,6 +440,15 @@ export function SceneAtmospherePanel({
             </div>
           ) : (
             <>
+              <AssetRightsDeclaration
+                checked={imageRightsConfirmed}
+                notes={imageRightsNotes}
+                category={imageRightsCategory}
+                label="I confirm I have the rights to upload and publish this scene image."
+                onCheckedChange={setImageRightsConfirmed}
+                onNotesChange={setImageRightsNotes}
+                onCategoryChange={setImageRightsCategory}
+              />
               <input
                 ref={imgInputRef}
                 type="file"
@@ -418,7 +459,8 @@ export function SceneAtmospherePanel({
               <button
                 className="btn-ghost w-full text-xs py-2 border border-dashed border-bg-border hover:border-accent/40 justify-center"
                 onClick={() => imgInputRef.current?.click()}
-                disabled={!userId}
+                disabled={!userId || !imageRightsConfirmed}
+                title={!imageRightsConfirmed ? 'Confirm image rights before uploading' : 'Upload image'}
               >
                 <Upload size={11} /> Upload image
               </button>

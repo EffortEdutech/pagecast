@@ -219,6 +219,7 @@ export function TextImportModal({
     canInsertAtActiveBeat ? 'current-beat' : 'new-chapter'
   )
   const [insertPosition, setInsertPosition] = useState('end')
+  const [rightsConfirmed, setRightsConfirmed] = useState(false)
 
   const handleParse = useCallback(() => {
     if (!text.trim()) return
@@ -315,6 +316,10 @@ export function TextImportModal({
 
   const handleImport = async () => {
     if (!parsed) return
+    if (!rightsConfirmed) {
+      setError('Confirm that you have the rights to import and adapt this text before continuing.')
+      return
+    }
     if (!showDestination) {
       setShowDestination(true)
       return
@@ -569,18 +574,24 @@ export function TextImportModal({
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-bg-border shrink-0">
-          <p className="text-text-muted text-xs">
-            {parsed
-              ? `Ready to import ${parsed.stats.chapters} chapter${parsed.stats.chapters !== 1 ? 's' : ''} into your book`
-              : 'Paste text or upload a .txt / .pdf file to begin'
-            }
-          </p>
+          <label className="flex items-start gap-2 text-text-muted text-xs max-w-xl">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={rightsConfirmed}
+              onChange={e => setRightsConfirmed(e.target.checked)}
+            />
+            <span>
+              I confirm I have the rights to import, adapt, and publish this text in PageCast.
+              {parsed && <span className="block mt-0.5">Ready to import {parsed.stats.chapters} chapter{parsed.stats.chapters !== 1 ? 's' : ''}.</span>}
+            </span>
+          </label>
           <div className="flex items-center gap-2">
             <button className="btn-secondary text-sm" onClick={onClose} disabled={importing}>Cancel</button>
             <button
               className={clsx('btn-primary text-sm min-w-28 justify-center', importDone && 'bg-success/80')}
               onClick={handleImport}
-              disabled={!parsed || importing || importDone}
+              disabled={!parsed || !rightsConfirmed || importing || importDone}
             >
               {importDone ? (
                 <><Check size={14} /> Imported!</>

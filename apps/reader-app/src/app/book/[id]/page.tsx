@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
 import { Navbar } from '@/components/layout/Navbar'
+import { ReportContentButton } from '@/components/ReportContentButton'
 import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
 import {
@@ -311,6 +312,9 @@ export default function BookPage() {
             {!owned && (
               <p className="text-text-muted text-[10px]">Instant unlock &middot; No app required</p>
             )}
+            <div className="pt-2 border-t border-bg-border">
+              <ReportContentButton bookId={story.id} />
+            </div>
           </div>
         </div>
       </main>
