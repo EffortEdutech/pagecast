@@ -6,7 +6,9 @@
     "dev": "next dev -p 3801",
     "build": "next build",
     "start": "next start -p 3801",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.6.0",
@@ -14,13 +16,13 @@
     "@supabase/supabase-js": "^2.44.4",
     "clsx": "^2.1.1",
     "lucide-react": "^0.400.0",
-    "next": "14.2.5",
+    "next": "^14.2.35",
+    "pdfjs-dist": "^5.4.296",
     "react": "^18",
     "react-dom": "^18",
     "tailwind-merge": "^2.4.0",
     "uuid": "^10.0.0",
-    "zustand": "^4.5.4",
-    "pdfjs-dist": "^5.4.296"
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -29,9 +31,10 @@
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10",
     "eslint": "^8",
-    "eslint-config-next": "14.2.5",
-    "postcss": "^8",
+    "eslint-config-next": "^14.2.35",
+    "postcss": "^8.5.14",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.6"
   }
 }

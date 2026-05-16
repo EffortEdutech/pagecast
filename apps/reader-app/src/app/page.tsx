@@ -463,15 +463,15 @@ export default function LandingPage() {
             <div>
               <h4 className="text-[#9896A8] text-xs font-semibold uppercase tracking-wider mb-3">Company</h4>
               <ul className="space-y-2">
-                {[['About','/about'],['Privacy','/privacy'],['Terms','/terms'],['Contact','/contact']].map(([l,h]) => (
+                {[['Legal Center','/legal'],['Privacy','/legal/privacy'],['Terms','/legal/terms'],['Copyright','/legal/copyright'],['AI Disclosure','/legal/ai-disclosure']].map(([l,h]) => (
                   <li key={h}><Link href={h} className="text-[#5C5A6A] hover:text-[#9896A8] text-sm transition-colors">{l}</Link></li>
                 ))}
               </ul>
             </div>
           </div>
           <div className="border-t border-[#1A1A1E] pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
-            <p className="text-[#3D3D4A] text-xs">© 2025 PageCast. All rights reserved.</p>
-            <p className="text-[#3D3D4A] text-xs">Built for storytellers. Made with obsession.</p>
+            <p className="text-[#3D3D4A] text-xs">© 2026 PageCast. All rights reserved.</p>
+            <p className="text-[#3D3D4A] text-xs">Built for storytellers, readers, and rights-respecting publishing.</p>
           </div>
         </div>
       </footer>

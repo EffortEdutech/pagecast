@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import { BookOpen, LayoutDashboard, Mic, Music, Settings, LogOut, ChevronRight, Sparkles } from 'lucide-react'
+import { BookOpen, LayoutDashboard, Mic, Music, Settings, LogOut, ChevronRight, Sparkles, ShieldCheck } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/voices',    icon: Mic,             label: 'Characters & Voices' },
   { href: '/assets',    icon: Music,           label: 'Assets' },
+  { href: '/legal-center', icon: ShieldCheck,  label: 'Legal Center' },
   { href: '/settings',  icon: Settings,        label: 'Settings' },
 ]
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, CreditCard, Library, ShoppingBag, LogIn, LogOut, Rocket, User } from 'lucide-react'
+import { BookOpen, CreditCard, Library, ShoppingBag, LogIn, LogOut, Rocket, User, ShieldCheck } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
@@ -108,6 +108,12 @@ export function Navbar() {
                     className="flex items-center gap-2 w-full px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
                   >
                     <User size={12} /> My Casts
+                  </button>
+                  <button
+                    onClick={() => { router.push('/legal'); setShowUserMenu(false) }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                  >
+                    <ShieldCheck size={12} /> Legal Center
                   </button>
                   <button
                     onClick={handleSignOut}
