@@ -119,6 +119,9 @@ export interface Story {
   status: StoryStatus
   price: number
   isFree?: boolean
+  guestAccess?: boolean
+  guestAccessRank?: number
+  guestAccessLabel?: string
   hasMusic: boolean
   hasSfx: boolean
   characters: Character[]

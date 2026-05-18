@@ -17,7 +17,7 @@ with ranked_guest_books as (
   select id, row_number() over (order by created_at asc) as rank
   from public.books
   where status = 'published'
-    and (is_free = true or price = 0)
+    and is_free = true
   order by created_at asc
   limit 3
 )

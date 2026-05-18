@@ -99,10 +99,7 @@ export default function StorePage() {
   const explicitGuestCasts = stories
     .filter(story => story.guestAccess)
     .sort((a, b) => (a.guestAccessRank ?? 99) - (b.guestAccessRank ?? 99))
-  const fallbackGuestCasts = stories
-    .filter(story => !story.guestAccess && story.isFree)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  const guestCasts = [...explicitGuestCasts, ...fallbackGuestCasts].slice(0, 3)
+  const guestCasts = explicitGuestCasts.slice(0, 3)
   const guestIds = new Set(guestCasts.map(story => story.id))
   const accountCasts = stories.filter(story => !guestIds.has(story.id) && story.isFree).slice(0, 6)
   const premiumCasts = stories.filter(story => !story.isFree).slice(0, 6)

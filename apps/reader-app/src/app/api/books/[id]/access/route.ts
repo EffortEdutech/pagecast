@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: book, error: bookError } = await supabase
     .from('books')
-    .select('id, is_free, price, guest_access')
+    .select('id, is_free, guest_access')
     .eq('id', bookId)
     .eq('status', 'published')
     .maybeSingle()
@@ -23,19 +23,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 
   if (book.guest_access) {
-    return NextResponse.json({ hasAccess: true, reason: 'guest' })
-  }
-
-  const { data: guestShelf } = await supabase
-    .from('books')
-    .select('id')
-    .eq('status', 'published')
-    .or('is_free.eq.true,price.eq.0')
-    .order('guest_access_rank', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-    .limit(3)
-
-  if ((guestShelf ?? []).some(item => item.id === bookId)) {
     return NextResponse.json({ hasAccess: true, reason: 'guest' })
   }
 

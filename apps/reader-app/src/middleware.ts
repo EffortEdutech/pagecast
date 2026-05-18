@@ -76,17 +76,7 @@ async function isGuestReadableCast(supabase: ReturnType<typeof createServerClien
     .maybeSingle()
 
   if (book?.guest_access) return true
-
-  const { data: guestShelf } = await supabase
-    .from('books')
-    .select('id')
-    .eq('status', 'published')
-    .or('is_free.eq.true,price.eq.0')
-    .order('guest_access_rank', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-    .limit(3)
-
-  return (guestShelf ?? []).some(item => item.id === bookId)
+  return false
 }
 
 export const config = {

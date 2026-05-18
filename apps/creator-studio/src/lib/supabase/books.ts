@@ -22,6 +22,9 @@ export interface DbBook {
   status: 'draft' | 'published' | 'archived'
   price: number
   is_free: boolean
+  guest_access: boolean | null
+  guest_access_rank: number | null
+  guest_access_label: string | null
   total_chapters: number
   estimated_time: string | null
   narrator_only_mode: boolean
@@ -58,6 +61,9 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     status: book.status,
     price: book.price,
     isFree: book.is_free,
+    guestAccess: book.guest_access ?? false,
+    guestAccessRank: book.guest_access_rank ?? undefined,
+    guestAccessLabel: book.guest_access_label ?? undefined,
     hasMusic: false,
     hasSfx: false,
     characters: characters.map(c => ({

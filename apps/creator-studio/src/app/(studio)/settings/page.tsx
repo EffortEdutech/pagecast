@@ -3,14 +3,23 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
-import { Check, Key, User, Globe, BookOpen, Sparkles, AlertCircle, Loader2, Zap } from 'lucide-react'
+import { Check, Key, User, BookOpen, Sparkles, AlertCircle, Loader2, Zap, Rocket } from 'lucide-react'
 import { getTtsSettings, saveTtsSettings } from '@/lib/tts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
 const PREF_PRICE_KEY    = 'pagecast_default_price'
 
+type GuestCastOption = {
+  id: string
+  title: string
+  genre: string | null
+  language: string | null
+  guest_access: boolean
+  guest_access_rank: number | null
+}
+
 export default function SettingsPage() {
-  const { displayName, email } = useUser()
+  const { user, displayName, email } = useUser()
   const supabase = createClient()
 
   const [name,     setName]     = useState('')
@@ -23,6 +32,13 @@ export default function SettingsPage() {
   const [error,    setError]    = useState<string | null>(null)
   const [charsUsed,  setCharsUsed]  = useState<number | null>(null)
   const [charsLimit, setCharsLimit] = useState<number>(100000)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [guestCasts, setGuestCasts] = useState<GuestCastOption[]>([])
+  const [guestCastIds, setGuestCastIds] = useState<string[]>([])
+  const [guestLoading, setGuestLoading] = useState(false)
+  const [guestSaving, setGuestSaving] = useState(false)
+  const [guestSaved, setGuestSaved] = useState(false)
+  const [guestError, setGuestError] = useState<string | null>(null)
 
   useEffect(() => { if (displayName) setName(displayName) }, [displayName])
 
@@ -52,22 +68,126 @@ export default function SettingsPage() {
     if (tts.provider) setProvider(tts.provider)
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+
+    let cancelled = false
+    setGuestLoading(true)
+    setGuestError(null)
+
+    fetch('/api/admin/guest-casts')
+      .then(async res => {
+        if (res.status === 401 || res.status === 403) {
+          if (!cancelled) setIsAdmin(false)
+          return null
+        }
+
+        const payload = await res.json()
+        if (!res.ok) throw new Error(payload?.error ?? 'Failed to load reader shelf.')
+        return payload
+      })
+      .then(payload => {
+        if (cancelled || !payload) return
+
+        const casts = (payload.casts ?? []) as GuestCastOption[]
+        setIsAdmin(true)
+        setGuestCasts(casts)
+        setGuestCastIds(
+          casts
+            .filter(cast => cast.guest_access)
+            .sort((a, b) => (a.guest_access_rank ?? 99) - (b.guest_access_rank ?? 99))
+            .map(cast => cast.id)
+            .slice(0, 3)
+        )
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setIsAdmin(true)
+          setGuestError(err instanceof Error ? err.message : 'Failed to load reader shelf.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setGuestLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [user])
+
   const handleSave = async () => {
     setSaving(true)
     setError(null)
 
-    const { error: authErr } = await supabase.auth.updateUser({
-      data: { display_name: name.trim() || displayName },
+    try {
+      const { error: authErr } = await supabase.auth.updateUser({
+        data: { display_name: name.trim() || displayName },
+      })
+      if (authErr) throw new Error('Failed to save display name: ' + authErr.message)
+
+      localStorage.setItem(PREF_LANGUAGE_KEY, language)
+      localStorage.setItem(PREF_PRICE_KEY, price)
+      saveTtsSettings(ttsKey.trim(), provider)
+
+      if (isAdmin) {
+        const guestSavedOk = await saveGuestCasts(false)
+        if (!guestSavedOk) throw new Error('Settings saved, but the reader shelf could not be saved.')
+      }
+
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleGuestSlotChange = (index: number, castId: string) => {
+    setGuestCastIds(current => {
+      const next = [...current]
+      next[index] = castId
+      return [...new Set(next.filter(Boolean))].slice(0, 3)
     })
-    if (authErr) { setError('Failed to save display name: ' + authErr.message); setSaving(false); return }
+  }
 
-    localStorage.setItem(PREF_LANGUAGE_KEY, language)
-    localStorage.setItem(PREF_PRICE_KEY, price)
-    saveTtsSettings(ttsKey.trim(), provider)
+  const saveGuestCasts = async (showSavedState = true): Promise<boolean> => {
+    setGuestSaving(true)
+    setGuestSaved(false)
+    setGuestError(null)
 
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    try {
+      const castIds = guestCastIds.filter(Boolean).slice(0, 3)
+      const res = await fetch('/api/admin/guest-casts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ castIds }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error ?? 'Failed to save reader shelf.')
+
+      setGuestCastIds(castIds)
+      setGuestCasts(current => current.map(cast => {
+        const rank = castIds.indexOf(cast.id)
+        return {
+          ...cast,
+          guest_access: rank >= 0,
+          guest_access_rank: rank >= 0 ? rank + 1 : null,
+        }
+      }))
+      if (showSavedState) {
+        setGuestSaved(true)
+        setTimeout(() => setGuestSaved(false), 2500)
+      }
+      return true
+    } catch (err) {
+      setGuestError(err instanceof Error ? err.message : 'Failed to save reader shelf.')
+      return false
+    } finally {
+      setGuestSaving(false)
+    }
+  }
+
+  const handleSaveGuestCasts = () => {
+    void saveGuestCasts()
   }
 
   return (
@@ -160,11 +280,11 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Book defaults */}
+        {/* Cast settings */}
         <section className="card p-5 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <BookOpen size={15} className="text-info" />
-            <h2 className="text-text-primary font-semibold">Book Defaults</h2>
+            <h2 className="text-text-primary font-semibold">Cast Settings</h2>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -195,6 +315,71 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="pt-4 mt-2 border-t border-bg-border/60 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-2">
+                  <Rocket size={15} className="text-success mt-0.5" />
+                  <div>
+                    <h3 className="text-text-primary font-semibold text-sm">Reader Start Free Shelf</h3>
+                    <p className="text-text-secondary text-xs mt-1">
+                      Choose up to 3 published Starter Casts for visitors. Rotate these to test different Cast styles and grow subscribers.
+                    </p>
+                  </div>
+                </div>
+                {guestLoading && <Loader2 size={15} className="animate-spin text-text-muted shrink-0" />}
+              </div>
+
+              {guestError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20 text-danger text-xs">
+                  <AlertCircle size={13} /> {guestError}
+                </div>
+              )}
+
+              <div className="grid gap-3">
+                {[0, 1, 2].map(index => {
+                  const selectedInOtherSlots = new Set(
+                    guestCastIds.filter((id, slot) => id && slot !== index)
+                  )
+
+                  return (
+                    <div key={index} className="grid grid-cols-[72px_1fr] gap-3 items-center">
+                      <label className="label mb-0">Slot {index + 1}</label>
+                      <select
+                        className="input"
+                        value={guestCastIds[index] ?? ''}
+                        onChange={e => handleGuestSlotChange(index, e.target.value)}
+                        disabled={guestLoading || guestSaving}
+                      >
+                        <option value="">No Cast selected</option>
+                        {guestCasts.map(cast => (
+                          <option key={cast.id} value={cast.id} disabled={selectedInOtherSlots.has(cast.id)}>
+                            {cast.title}{cast.language ? ` (${cast.language.toUpperCase()})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  className="btn-secondary min-w-32 justify-center"
+                  onClick={handleSaveGuestCasts}
+                  disabled={guestLoading || guestSaving}
+                >
+                  {guestSaving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> :
+                   guestSaved  ? <><Check size={14} /> Saved!</> :
+                   'Save Free Shelf'}
+                </button>
+                <span className="text-text-muted text-xs">
+                  {guestCastIds.filter(Boolean).length}/3 visitor Casts selected.
+                </span>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Save */}
@@ -202,11 +387,11 @@ export default function SettingsPage() {
           <button
             className="btn-primary min-w-32 justify-center"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || guestSaving}
           >
             {saving  ? <><Loader2 size={14} className="animate-spin" /> Saving…</> :
              saved   ? <><Check   size={14} /> Saved!</>                            :
-             'Save Settings'}
+             'Save Cast Settings'}
           </button>
           {saved && <p className="text-success text-sm">Changes saved successfully.</p>}
         </div>

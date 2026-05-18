@@ -26,10 +26,7 @@ export default function StartPage() {
   const explicitGuestCasts = stories
     .filter(story => story.guestAccess)
     .sort((a, b) => (a.guestAccessRank ?? 99) - (b.guestAccessRank ?? 99))
-  const fallbackGuestCasts = stories
-    .filter(story => !story.guestAccess && story.isFree)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  const featured = [...explicitGuestCasts, ...fallbackGuestCasts].slice(0, 3)
+  const featured = explicitGuestCasts.slice(0, 3)
   const firstStory = featured[0]
 
   return (
