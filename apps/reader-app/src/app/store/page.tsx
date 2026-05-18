@@ -4,15 +4,15 @@ import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
 import { usePublishedBooks } from '@/hooks/usePublishedBooks'
 import { Navbar } from '@/components/layout/Navbar'
-import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check, Languages } from 'lucide-react'
+import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check, Languages, Lock, Rocket, ShoppingBag } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
 import { formatUsd } from '@/lib/format'
 
-function StoryCard({ story }: { story: Story }) {
+function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' | 'locked' | 'premium' | 'default' }) {
   const hydrated   = useHydrated()
   const isOwnedRaw = useReaderStore(s => s.isOwned(story.id))
-  const isOwned    = hydrated && isOwnedRaw
+  const isOwned    = mode !== 'guest' && hydrated && isOwnedRaw
 
   return (
     <Link href={`/book/${story.id}`} className="card hover:border-accent/40 transition-all duration-200 overflow-hidden group flex flex-col">
@@ -27,6 +27,15 @@ function StoryCard({ story }: { story: Story }) {
             )}
             {story.ageRating && (
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.ageRating}</span>
+            )}
+            {mode === 'guest' && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-success/25 text-white">Guest Access</span>
+            )}
+            {mode === 'locked' && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-black/35 text-white/90">Free Account</span>
+            )}
+            {mode === 'premium' && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gold/25 text-white">Premium</span>
             )}
           </div>
           <h3 className="text-white font-bold text-lg leading-tight group-hover:text-accent-hover transition-colors">{story.title}</h3>
@@ -46,7 +55,25 @@ function StoryCard({ story }: { story: Story }) {
           {story.hasMusic && <span className="flex items-center gap-1"><Music size={10} /> Music</span>}
           <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
           <span className="ml-auto font-semibold text-text-primary text-xs">
-            {isOwned ? <span className="text-success">Unlocked</span> : story.isFree ? 'Starter Cast' : formatUsd(story.price)}
+            {isOwned
+              ? <span className="text-success">Unlocked</span>
+              : mode === 'guest'
+                ? 'Start free'
+                : mode === 'locked'
+                  ? 'Join free'
+                  : story.isFree ? 'Starter Cast' : formatUsd(story.price)}
+          </span>
+        </div>
+        <div className="mt-4">
+          <span className={clsx(
+            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium',
+            mode === 'guest' ? 'bg-success/15 text-success' :
+            mode === 'premium' ? 'bg-gold/15 text-gold' :
+            mode === 'locked' ? 'bg-accent/15 text-accent' :
+            'bg-bg-elevated text-text-secondary'
+          )}>
+            {mode === 'guest' ? <Rocket size={12} /> : mode === 'premium' ? <ShoppingBag size={12} /> : mode === 'locked' ? <Lock size={12} /> : <BookOpen size={12} />}
+            {mode === 'guest' ? 'Start Cast' : mode === 'premium' ? 'Unlock Cast' : mode === 'locked' ? 'Create account' : 'View Cast'}
           </span>
         </div>
       </div>
@@ -69,6 +96,16 @@ function SkeletonCard() {
 
 export default function StorePage() {
   const { stories, loading, usingDemo } = usePublishedBooks()
+  const explicitGuestCasts = stories
+    .filter(story => story.guestAccess)
+    .sort((a, b) => (a.guestAccessRank ?? 99) - (b.guestAccessRank ?? 99))
+  const fallbackGuestCasts = stories
+    .filter(story => !story.guestAccess && story.isFree)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const guestCasts = [...explicitGuestCasts, ...fallbackGuestCasts].slice(0, 3)
+  const guestIds = new Set(guestCasts.map(story => story.id))
+  const accountCasts = stories.filter(story => !guestIds.has(story.id) && story.isFree).slice(0, 6)
+  const premiumCasts = stories.filter(story => !story.isFree).slice(0, 6)
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -81,14 +118,14 @@ export default function StorePage() {
         <div className="max-w-5xl mx-auto px-6 py-16 relative z-10">
           <div className="flex items-center gap-2 text-accent text-sm font-medium mb-4">
             <Sparkles size={14} />
-            <span>Fresh from the TaleVerse</span>
+            <span>Start instantly with 3 free Casts</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight max-w-2xl">
             Casts you can<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-info">read, hear, and feel.</span>
           </h1>
           <p className="text-text-secondary text-lg mt-4 max-w-xl leading-relaxed">
-            Begin multilingual Casts with voices, scenes, and Dream Music. No app. No download.
+            Visitors can begin three curated Casts without registering. Create a free account when you want to save progress, unlock more, or purchase premium bundles.
           </p>
           <div className="flex gap-3 mt-6 flex-wrap">
             {[
@@ -110,13 +147,13 @@ export default function StorePage() {
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-text-primary font-bold text-xl">Explore Casts</h2>
+            <h2 className="text-text-primary font-bold text-xl">Start Free</h2>
             <p className="text-text-secondary text-sm mt-0.5">
               {loading
-                ? 'Opening the TaleVerse...'
+                ? 'Opening the guest shelf...'
                 : usingDemo
                   ? `${stories.length} demo Casts - Publish a Cast in Creator Studio to see it here`
-                  : `${stories.length} ${stories.length === 1 ? 'Cast' : 'Casts'} in the TaleVerse`
+                  : 'Three Casts are open to visitors. No account needed.'
               }
             </p>
           </div>
@@ -132,9 +169,57 @@ export default function StorePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {loading
             ? Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-            : stories.map(story => <StoryCard key={story.id} story={story} />)
+            : guestCasts.map(story => <StoryCard key={story.id} story={story} mode="guest" />)
           }
         </div>
+
+        {!loading && (
+          <>
+            <section className="mt-10 rounded-xl border border-accent/20 bg-accent/10 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-text-primary font-semibold">Keep your place in the TaleVerse</h2>
+                  <p className="text-text-secondary text-sm mt-1">Create a free account to save progress, build My Casts, and unlock more free Casts.</p>
+                </div>
+                <Link href="/login?next=/store" className="btn-primary justify-center">
+                  Create free account
+                </Link>
+              </div>
+            </section>
+
+            {accountCasts.length > 0 && (
+              <section className="mt-10">
+                <div className="mb-5">
+                  <h2 className="text-text-primary font-bold text-xl">More Casts with a free account</h2>
+                  <p className="text-text-secondary text-sm mt-0.5">These Casts stay visible, but saving and continuing starts with a free PageCast account.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {accountCasts.map(story => <StoryCard key={story.id} story={story} mode="locked" />)}
+                </div>
+              </section>
+            )}
+
+            <section className="mt-10">
+              <div className="mb-5">
+                <h2 className="text-text-primary font-bold text-xl">Premium Casts and bundles</h2>
+                <p className="text-text-secondary text-sm mt-0.5">Discover paid Casts now. Purchases and bundles unlock after account creation.</p>
+              </div>
+              {premiumCasts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {premiumCasts.map(story => <StoryCard key={story.id} story={story} mode="premium" />)}
+                </div>
+              ) : (
+                <div className="card p-5 flex items-center gap-3">
+                  <ShoppingBag size={18} className="text-gold" />
+                  <div>
+                    <h3 className="text-text-primary font-semibold text-sm">Bundles coming soon</h3>
+                    <p className="text-text-secondary text-xs mt-1">Premium Casts, creator bundles, and Cast Pass offers will appear here.</p>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
     </div>
   )

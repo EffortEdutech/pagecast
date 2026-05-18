@@ -6,6 +6,7 @@ import { useReaderStore } from '@/store/readerStore'
 import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
 import { ReportContentButton } from '@/components/ReportContentButton'
+import { GuestConversionPrompt } from '@/components/GuestConversionPrompt'
 import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 import type { Story, StoryBlock, Character, ReaderMode, ReaderTheme } from '@/types'
 import { clsx } from 'clsx'
@@ -259,6 +260,10 @@ export default function ReaderPage() {
 
   const [story, setStory] = useState<Story | null | undefined>(undefined)
   const [serverAccess, setServerAccess] = useState<boolean | null>(null)
+  const [accessReason, setAccessReason] = useState<string | null>(null)
+  const [showGuestPrompt, setShowGuestPrompt] = useState(false)
+  const [guestPromptReason, setGuestPromptReason] = useState<'progress' | 'save' | 'finish'>('progress')
+  const [guestPromptShown, setGuestPromptShown] = useState(false)
 
   // Load story: Supabase first, demo fallback
   useEffect(() => {
@@ -273,12 +278,16 @@ export default function ReaderPage() {
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
     if (isPreview) {
       setServerAccess(true)
+      setAccessReason('preview')
       return
     }
 
     fetch(`/api/books/${id}/access`)
       .then(res => res.ok ? res.json() : null)
-      .then(data => setServerAccess(Boolean(data?.hasAccess)))
+      .then(data => {
+        setServerAccess(Boolean(data?.hasAccess))
+        setAccessReason(data?.reason ?? null)
+      })
       .catch(() => setServerAccess(false))
   }, [id])
 
@@ -287,11 +296,12 @@ export default function ReaderPage() {
     if (typeof window === 'undefined') return
     const isPreview = new URLSearchParams(window.location.search).get('preview') === '1'
     const isSupabaseCast = story ? UUID_RE.test(story.id) : false
-    const hasLocalDemoAccess = story ? !isSupabaseCast && isOwned(story.id) : false
-    if (story && serverAccess === false && !hasLocalDemoAccess && !isPreview) {
+    const hasLocalDemoAccess = story ? !isSupabaseCast && (story.isFree || isOwned(story.id)) : false
+    const hasGuestAccess = story ? accessReason === 'guest' || Boolean(story.guestAccess) : false
+    if (story && serverAccess === false && !hasLocalDemoAccess && !hasGuestAccess && !isPreview) {
       router.replace(`/book/${id}`)
     }
-  }, [story, id, isOwned, router, serverAccess])
+  }, [story, id, isOwned, router, serverAccess, accessReason])
 
   // Apply theme to body
   useEffect(() => {
@@ -432,6 +442,10 @@ export default function ReaderPage() {
       setPlaying(false)
       setCurrentBlock(null)
       setBookComplete(true)
+      if (accessReason === 'guest') {
+        setGuestPromptReason('finish')
+        setShowGuestPrompt(true)
+      }
       saveProgress({
         storyId: story.id,
         chapterIdx,
@@ -442,7 +456,7 @@ export default function ReaderPage() {
         completedAt: new Date().toISOString(),
       })
     }
-  }, [story, chapterIdx, sceneIdx, blockIdx, setCurrentBlock, persistProgress, setPlaying, saveProgress])
+  }, [story, chapterIdx, sceneIdx, blockIdx, setCurrentBlock, persistProgress, setPlaying, saveProgress, accessReason])
 
   const retreat = useCallback(() => {
     if (!story) return
@@ -751,6 +765,10 @@ export default function ReaderPage() {
 
   const toggleBookmark = () => {
     if (!story || !chapter || !scene) return
+    if (accessReason === 'guest') {
+      setGuestPromptReason('save')
+      setShowGuestPrompt(true)
+    }
     const existing = bookmarks.find(b =>
       b.chapterIdx === chapterIdx && b.sceneIdx === sceneIdx && b.blockIdx === blockIdx
     )
@@ -767,6 +785,26 @@ export default function ReaderPage() {
       label: `${chapter.title} - ${scene.title} - Beat ${blockIdx + 1}`,
     })
   }
+
+  useEffect(() => {
+    if (!story || accessReason !== 'guest' || guestPromptShown) return
+    const total = story.chapters.reduce((a, c) => a + c.scenes.reduce((b, s) => b + s.blocks.length, 0), 0)
+    let done = 0
+    for (let ci = 0; ci < chapterIdx; ci++) {
+      story.chapters[ci].scenes.forEach(sc => { done += sc.blocks.length })
+    }
+    const ch = story.chapters[chapterIdx]
+    if (ch) {
+      for (let si = 0; si < sceneIdx; si++) done += ch.scenes[si]?.blocks.length ?? 0
+      done += blockIdx
+    }
+    const pct = total > 0 ? (done / total) * 100 : 0
+    if (done >= 3 || pct >= 20) {
+      setGuestPromptShown(true)
+      setGuestPromptReason('progress')
+      setShowGuestPrompt(true)
+    }
+  }, [story, accessReason, guestPromptShown, chapterIdx, sceneIdx, blockIdx])
 
   if (story === undefined) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
@@ -820,15 +858,23 @@ export default function ReaderPage() {
     return done + ch.scenes.reduce((n, sc, si) => si < sceneIdx ? n + sc.blocks.length : n, 0) + blockIdx
   }, 0)
   const currentBeatNumber = totalBeats > 0 ? Math.min(totalBeats, completedBeats + 1) : 0
+  const isGuestAccess = accessReason === 'guest' || story.guestAccess
   const remainingMinutes = story.durationMinutes && totalBeats > 0
     ? Math.max(1, Math.ceil(((totalBeats - completedBeats) / totalBeats) * story.durationMinutes))
     : null
+
 
   return (
     <div className={clsx(
       'min-h-screen flex flex-col transition-colors duration-500',
       cinemaMode ? 'bg-black' : 'bg-bg-primary'
     )}>
+      <GuestConversionPrompt
+        storyId={story.id}
+        open={showGuestPrompt}
+        reason={guestPromptReason}
+        onClose={() => setShowGuestPrompt(false)}
+      />
 
       {/* ── Top bar ── */}
       {!cinemaMode && (

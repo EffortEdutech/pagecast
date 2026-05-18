@@ -80,6 +80,7 @@ interface DbBook {
   id: string; author_id: string; title: string; description: string | null
   cover_gradient: string; cover_emoji: string; genre: string | null
   age_rating: string; status: string; price: number; is_free: boolean
+  guest_access: boolean | null; guest_access_rank: number | null; guest_access_label: string | null
   language: string | null
   estimated_time: string | null; created_at: string
   narrator_only_mode: boolean | null; narrator_voice_id: string | null
@@ -128,6 +129,9 @@ function dbToStory(book: DbBook, chars: DbCharacter[], chapters: Chapter[] = [])
     language: book.language ?? 'en',
     price: book.price,
     isFree: book.is_free,
+    guestAccess: book.guest_access ?? false,
+    guestAccessRank: book.guest_access_rank ?? undefined,
+    guestAccessLabel: book.guest_access_label ?? undefined,
     hasMusic: false,
     hasSfx: false,
     genre: book.genre ?? undefined,

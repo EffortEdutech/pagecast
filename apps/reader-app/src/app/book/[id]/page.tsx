@@ -27,7 +27,8 @@ export default function BookPage() {
   const [story,    setStory]    = useState<Story | null | undefined>(undefined)
   const [buying,   setBuying]   = useState(false)
   const [buyError, setBuyError] = useState<string | null>(null)
-  const [serverAccess, setServerAccess] = useState(false)
+  const [serverAccess, setServerAccess] = useState<boolean | null>(null)
+  const [accessReason, setAccessReason] = useState<string | null>(null)
 
   // Load story — Supabase first, fall back to demo data
   useEffect(() => {
@@ -43,8 +44,14 @@ export default function BookPage() {
     if (!id) return
     fetch(`/api/books/${id}/access`)
       .then(res => res.ok ? res.json() : null)
-      .then(data => setServerAccess(Boolean(data?.hasAccess)))
-      .catch(() => setServerAccess(false))
+      .then(data => {
+        setServerAccess(Boolean(data?.hasAccess))
+        setAccessReason(data?.reason ?? null)
+      })
+      .catch(() => {
+        setServerAccess(false)
+        setAccessReason(null)
+      })
   }, [id])
 
   // Handle ?purchased=1 redirect from Stripe success_url.
@@ -58,8 +65,14 @@ export default function BookPage() {
       window.history.replaceState({}, '', `/book/${story.id}`)
       fetch(`/api/books/${story.id}/access`)
         .then(res => res.ok ? res.json() : null)
-        .then(data => setServerAccess(Boolean(data?.hasAccess)))
-        .catch(() => setServerAccess(false))
+        .then(data => {
+          setServerAccess(Boolean(data?.hasAccess))
+          setAccessReason(data?.reason ?? null)
+        })
+        .catch(() => {
+          setServerAccess(false)
+          setAccessReason(null)
+        })
     }
   }, [story])
 
@@ -84,7 +97,9 @@ export default function BookPage() {
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const isSupabaseCast = UUID_RE.test(story.id)
-  const owned = serverAccess || (!isSupabaseCast && hydrated && isOwned(story.id))
+  const checkingAccess = isSupabaseCast && serverAccess === null
+  const owned = serverAccess === true || (!isSupabaseCast && (story.isFree || (hydrated && isOwned(story.id))))
+  const isGuestAccess = accessReason === 'guest' || story.guestAccess
 
   const handleBuy = async () => {
     if (!story) return
@@ -142,6 +157,7 @@ export default function BookPage() {
                 {story.genre && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.genre}</span>}
                 {story.ageRating && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.ageRating}</span>}
                 <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/80">{story.language.toUpperCase()}</span>
+                {isGuestAccess && <span className="text-xs px-2.5 py-1 rounded-full bg-success/20 text-white">Guest Access</span>}
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">{story.title}</h1>
               <p className="text-white/70 mt-3 max-w-lg leading-relaxed">{story.description}</p>
@@ -157,9 +173,13 @@ export default function BookPage() {
 
               {/* CTA */}
               <div className="flex items-center gap-3 mt-6 flex-wrap">
-                {owned ? (
+                {checkingAccess ? (
+                  <button disabled className="btn-primary text-base px-6 py-3 shadow-accent disabled:opacity-70">
+                    <Loader2 size={18} className="animate-spin" /> Checking access...
+                  </button>
+                ) : owned ? (
                   <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
-                    <Play size={18} className="fill-white" /> Resume Cast
+                    <Play size={18} className="fill-white" /> {isGuestAccess ? 'Start Guest Cast' : 'Resume Cast'}
                   </Link>
                 ) : (
                   <>
@@ -220,8 +240,10 @@ export default function BookPage() {
               )
             })}
             <div className={clsx('mt-4 p-3 rounded-lg text-center text-sm', owned ? 'bg-success/10 text-success' : 'bg-bg-elevated text-text-muted')}>
-              {owned
-                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> This Cast is unlocked - enjoy the full Journey</span>
+              {checkingAccess
+                ? <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking access...</span>
+                : owned
+                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> {isGuestAccess ? 'Guest access is open - create an account anytime to save progress' : 'This Cast is unlocked - enjoy the full Journey'}</span>
                 : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Unlock this Cast to continue the Journey</span>
               }
             </div>
@@ -242,7 +264,7 @@ export default function BookPage() {
                     <div className="text-text-primary text-sm font-medium">{ch.title}</div>
                     <div className="text-text-muted text-[10px]">{ch.scenes.length} scene{ch.scenes.length !== 1 ? 's' : ''}</div>
                   </div>
-                  {!owned && i > 0 && <Lock size={12} className="text-text-muted" />}
+                  {!checkingAccess && !owned && i > 0 && <Lock size={12} className="text-text-muted" />}
                 </div>
               ))}
             </div>
@@ -294,12 +316,18 @@ export default function BookPage() {
           {/* Buy / read button (sidebar) */}
           <div className="card p-4 text-center space-y-3">
             <div className="text-2xl font-bold text-text-primary">
-              {owned
-                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> In My Casts</span>
+              {checkingAccess
+                ? <span className="text-text-muted text-base flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Checking</span>
+                : owned
+                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> {isGuestAccess ? 'Guest Cast' : 'In My Casts'}</span>
                 : story.isFree ? 'Starter Cast' : formatUsd(story.price)
               }
             </div>
-            {owned ? (
+            {checkingAccess ? (
+              <button disabled className="btn-primary w-full justify-center disabled:opacity-70">
+                <Loader2 size={14} className="animate-spin" /> Checking access...
+              </button>
+            ) : owned ? (
               <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center">
                 <Play size={14} className="fill-white" /> Open Cast
               </Link>

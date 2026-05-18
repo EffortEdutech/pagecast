@@ -36,6 +36,7 @@ export interface Story {
   id: string; title: string; description: string
   coverGradient?: string; language: string
   price: number; isFree?: boolean; hasMusic: boolean; hasSfx: boolean
+  guestAccess?: boolean; guestAccessRank?: number; guestAccessLabel?: string
   characters: Character[]; chapters: Chapter[]
   createdAt: string; durationMinutes?: number
   genre?: string; ageRating?: string

@@ -23,7 +23,13 @@ const languages = ['English', 'Arabic', 'Malay', 'Indonesian', 'Hindi', 'Spanish
 
 export default function StartPage() {
   const { stories, loading } = usePublishedBooks()
-  const featured = stories.slice(0, 3)
+  const explicitGuestCasts = stories
+    .filter(story => story.guestAccess)
+    .sort((a, b) => (a.guestAccessRank ?? 99) - (b.guestAccessRank ?? 99))
+  const fallbackGuestCasts = stories
+    .filter(story => !story.guestAccess && story.isFree)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const featured = [...explicitGuestCasts, ...fallbackGuestCasts].slice(0, 3)
   const firstStory = featured[0]
 
   return (
@@ -36,7 +42,7 @@ export default function StartPage() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/25 bg-accent/10 text-accent text-xs font-semibold mb-5">
                 <Globe2 size={13} />
-                Global Tales. Multilingual Explorers.
+                Three free Casts for visitors.
               </div>
 
               <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight max-w-2xl">
@@ -44,14 +50,14 @@ export default function StartPage() {
               </h1>
 
               <p className="text-text-secondary text-lg leading-relaxed mt-5 max-w-xl">
-                PageCast turns Tale previews from social platforms and marketplaces into Explorers,
-                gentle unlocks, and instant Cast access.
+                Begin with three guest Casts now. Create a free account when you want to save progress,
+                unlock more Tales, and purchase premium Casts or bundles.
               </p>
 
               <div className="flex flex-wrap gap-3 mt-7">
                 <Link href={firstStory ? `/book/${firstStory.id}` : '/store'} className="btn-primary px-5 py-3">
                   <Play size={16} className="fill-white" />
-                  Begin Free Cast
+                  Start Guest Cast
                 </Link>
                 <Link href="/pricing" className="btn-secondary px-5 py-3">
                   View Cast Pass

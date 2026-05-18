@@ -64,8 +64,8 @@ coverage/
 
 external_services.txt
 pageCast info.xlsx
+.casts/
 
 # ─── Office temp/lock files ──────────────────────────────────
 ~$*
 *.tmp
-

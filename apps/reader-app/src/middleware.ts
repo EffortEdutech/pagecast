@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -32,6 +34,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  if (pathname.startsWith('/reader/') && !user) {
+    const bookId = pathname.split('/')[2]
+    const guestReadable = await isGuestReadableCast(supabase, bookId)
+    if (guestReadable) return supabaseResponse
+  }
+
   // Protected routes — redirect to login if not authenticated
   const protectedPaths = ['/library', '/reader']
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
@@ -51,6 +59,34 @@ export async function middleware(request: NextRequest) {
   }
 
   return supabaseResponse
+}
+
+async function isGuestReadableCast(supabase: ReturnType<typeof createServerClient>, bookId?: string) {
+  if (!bookId) return false
+
+  // Demo/local casts are still gated by the client reader; they do not expose
+  // private Supabase content, so middleware should not force login first.
+  if (!UUID_RE.test(bookId)) return true
+
+  const { data: book } = await supabase
+    .from('books')
+    .select('id, guest_access')
+    .eq('id', bookId)
+    .eq('status', 'published')
+    .maybeSingle()
+
+  if (book?.guest_access) return true
+
+  const { data: guestShelf } = await supabase
+    .from('books')
+    .select('id')
+    .eq('status', 'published')
+    .or('is_free.eq.true,price.eq.0')
+    .order('guest_access_rank', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .limit(3)
+
+  return (guestShelf ?? []).some(item => item.id === bookId)
 }
 
 export const config = {
