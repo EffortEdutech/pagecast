@@ -51,7 +51,8 @@ export function Navbar() {
   ]
 
   return (
-    <header className="sticky top-0 z-40 h-14 flex items-center justify-between px-6 bg-bg-secondary/90 backdrop-blur-md border-b border-bg-border">
+    <>
+    <header className="fixed inset-x-0 top-0 z-50 h-14 flex items-center justify-between px-6 bg-bg-secondary/95 backdrop-blur-md border-b border-bg-border shadow-sm">
       <Link href="/" className="flex items-center gap-2.5 group">
         <div className="w-8 h-8 bg-accent rounded-xl flex items-center justify-center group-hover:shadow-accent transition-shadow">
           <BookOpen size={15} className="text-white" />
@@ -136,5 +137,7 @@ export function Navbar() {
         )}
       </nav>
     </header>
+    <div className="h-14 shrink-0" aria-hidden="true" />
+    </>
   )
 }

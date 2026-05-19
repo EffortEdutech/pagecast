@@ -14,6 +14,7 @@ interface AudioUploadRowProps {
   bookId:      string
   voiceId?:    string   // e.g. 'ai_female_soft'
   voiceLabel?: string   // e.g. 'Nova · Aria — Female Soft'
+  characterName?: string
   onUpdate:    (updates: Partial<StoryBlock>) => void
 }
 
@@ -31,7 +32,7 @@ function getDefaultTtsSpeed(block: StoryBlock, voiceId: string): number {
   return getPageCastVoice(voiceId).rate
 }
 
-export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }: AudioUploadRowProps) {
+export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterName, onUpdate }: AudioUploadRowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef     = useRef<HTMLAudioElement | null>(null)
 
@@ -109,6 +110,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
       style: 'style' in block ? (block as any).style : undefined,
       voiceLabel: effectiveVoiceLabel,
       performanceTag: block.performanceTag,
+      characterName,
     })
 
     if (url) {
@@ -153,8 +155,11 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, onUpdate }:
   const canGenerate = !!blockText.trim() && !!userId
   const selectedProvider = getTtsSettings().provider
   const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') || selectedProvider === 'elevenlabs'
+  const isGeminiVoice = voiceId?.startsWith('gemini:') || selectedProvider === 'gemini'
   const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
-  const providerBadge = isElevenLabsVoice
+  const providerBadge = isGeminiVoice
+    ? (voiceId?.startsWith('gemini:') ? 'Google Gemini exact voice' : 'Google Gemini')
+    : isElevenLabsVoice
     ? (voiceId?.startsWith('elevenlabs:') ? 'ElevenLabs v3 exact voice' : 'ElevenLabs v3')
     : `OpenAI ${openaiVoice}`
 

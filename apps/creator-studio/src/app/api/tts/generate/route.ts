@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getOpenAiVoiceForVoiceId, getPageCastVoice, getVoiceCastingInstruction } from '@/lib/voiceLibrary'
+import { getGeminiVoice, getOpenAiVoiceForVoiceId, getPageCastVoice, getVoiceCastingInstruction } from '@/lib/voiceLibrary'
+import { normalizeGeminiTtsModel, type GeminiTtsModel } from '@/lib/tts'
 
 // Voice mapping and casting notes live in src/lib/voiceLibrary.ts.
 
@@ -244,6 +245,66 @@ function normalizeElevenLabsPerformanceTag(value?: string): string | undefined {
   return ELEVENLABS_PERFORMANCE_TAGS.has(tag) ? tag : undefined
 }
 
+function buildGeminiPrompt(opts: {
+  text: string
+  voiceId?: string
+  blockType?: string
+  emotion?: string
+  style?: string
+  voiceLabel?: string
+  performanceTag?: string
+  characterName?: string
+  speed?: number
+}) {
+  const voice = getGeminiVoice(opts.voiceId)
+  const characterName = opts.characterName?.trim() || 'Character'
+  const pacing = typeof opts.speed === 'number' && opts.speed < 0.9
+    ? 'slow, measured, with natural pauses'
+    : typeof opts.speed === 'number' && opts.speed > 1.03
+      ? 'lively and quick, but still clearly articulated'
+      : 'natural story dialogue pace'
+  const tag = opts.performanceTag?.trim()
+  const transcript = tag ? `${tag} ${opts.text.trim()}` : opts.text.trim()
+
+  const directions = [
+    `Synthesize speech for PageCast. Speak only the transcript, not these directions.`,
+    `# AUDIO PROFILE: ${characterName}`,
+    voice.castingNote,
+    opts.voiceLabel ? `Casting label: ${opts.voiceLabel}.` : '',
+    `Block type: ${opts.blockType ?? 'narration'}.`,
+    opts.emotion && opts.emotion !== 'neutral' ? `Emotion: ${opts.emotion}. Let it affect tone, emphasis, and pacing naturally.` : '',
+    opts.style && opts.style !== 'default' ? `Style: ${opts.style}.` : '',
+    `Pacing: ${pacing}.`,
+    `Director notes: keep the voice consistent, expressive, and age-appropriate. Do not read punctuation labels or stage directions aloud.`,
+    `# TRANSCRIPT`,
+    transcript,
+  ]
+
+  return directions.filter(Boolean).join('\n')
+}
+
+function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitsPerSample = 16): Buffer {
+  const header = Buffer.alloc(44)
+  const byteRate = sampleRate * channels * bitsPerSample / 8
+  const blockAlign = channels * bitsPerSample / 8
+
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(channels, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(byteRate, 28)
+  header.writeUInt16LE(blockAlign, 32)
+  header.writeUInt16LE(bitsPerSample, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+
+  return Buffer.concat([header, pcm])
+}
+
 export async function POST(req: NextRequest) {
   let body: {
     text: string
@@ -256,6 +317,8 @@ export async function POST(req: NextRequest) {
     style?: string
     voiceLabel?: string
     performanceTag?: string
+    characterName?: string
+    geminiModel?: GeminiTtsModel
   }
 
   try {
@@ -275,6 +338,8 @@ export async function POST(req: NextRequest) {
     style,
     voiceLabel,
     performanceTag,
+    characterName,
+    geminiModel,
   } = body
 
   if (!text?.trim()) {
@@ -405,6 +470,88 @@ export async function POST(req: NextRequest) {
         'X-Chars-Used':   String(text.trim().length),
         'X-TTS-Provider': 'ElevenLabs',
         'X-TTS-Voice':    voiceLabel?.replace(/^ElevenLabs - /, '') ?? elevenVoice.name,
+      },
+    })
+  }
+
+  if (provider === 'gemini') {
+    const geminiVoice = getGeminiVoice(voiceId)
+    const model = normalizeGeminiTtsModel(geminiModel)
+    const prompt = buildGeminiPrompt({
+      text,
+      voiceId,
+      blockType,
+      emotion,
+      style,
+      voiceLabel,
+      performanceTag,
+      characterName,
+      speed,
+    })
+
+    let res: Response
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: geminiVoice.voiceName,
+                },
+              },
+            },
+          },
+          model,
+        }),
+      })
+    } catch (e: any) {
+      return NextResponse.json({ error: `Gemini request failed: ${e.message}` }, { status: 502 })
+    }
+
+    if (!res.ok) {
+      const errText = await res.text()
+      let errMsg = `Gemini error ${res.status}`
+      try { errMsg = JSON.parse(errText)?.error?.message ?? errMsg } catch {}
+      return NextResponse.json({ error: errMsg }, { status: res.status })
+    }
+
+    const payload = await res.json().catch(() => null)
+    const base64Audio = payload?.candidates?.[0]?.content?.parts?.find((part: any) => part.inlineData || part.inline_data)?.inlineData?.data
+      ?? payload?.candidates?.[0]?.content?.parts?.find((part: any) => part.inlineData || part.inline_data)?.inline_data?.data
+
+    if (!base64Audio) {
+      return NextResponse.json({ error: 'Gemini did not return audio. Try again or simplify the prompt.' }, { status: 502 })
+    }
+
+    const audioBuffer = pcmToWav(Buffer.from(base64Audio, 'base64'))
+
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.rpc('increment_tts_chars', {
+          p_user_id: user.id,
+          p_chars:   text.trim().length,
+        })
+      }
+    } catch { /* non-blocking */ }
+
+    return new NextResponse(new Uint8Array(audioBuffer), {
+      headers: {
+        'Content-Type':   'audio/wav',
+        'Content-Length': String(audioBuffer.byteLength),
+        'Cache-Control':  'no-store',
+        'X-Chars-Used':   String(text.trim().length),
+        'X-TTS-Provider': 'Gemini',
+        'X-TTS-Voice':    `${geminiVoice.label} / ${model}`,
       },
     })
   }

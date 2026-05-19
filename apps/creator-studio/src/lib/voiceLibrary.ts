@@ -25,6 +25,15 @@ export interface PageCastVoiceProfile extends VoiceProfile {
   castingNote: string
 }
 
+export interface GeminiVoiceProfile {
+  id: string
+  voiceName: string
+  label: string
+  category: 'narrator' | 'female' | 'male' | 'child' | 'elder' | 'dramatic' | 'casual'
+  tone: string
+  castingNote: string
+}
+
 export type StoryLanguageCode =
   | 'en'
   | 'es'
@@ -382,6 +391,33 @@ export const VOICE_LIBRARY: PageCastVoiceProfile[] = [
   },
 ]
 
+export const GEMINI_VOICES: GeminiVoiceProfile[] = [
+  { id: 'gemini:Leda', voiceName: 'Leda', label: 'Leda - Youthful Child / Teen', category: 'child', tone: 'Youthful', castingNote: 'A youthful, bright child or young teen voice with clean diction, curiosity, and gentle energy.' },
+  { id: 'gemini:Puck', voiceName: 'Puck', label: 'Puck - Upbeat Young Character', category: 'child', tone: 'Upbeat', castingNote: 'An upbeat young character voice: lively, friendly, expressive, and quick to react.' },
+  { id: 'gemini:Fenrir', voiceName: 'Fenrir', label: 'Fenrir - Excitable Boyish Energy', category: 'child', tone: 'Excitable', castingNote: 'An excitable, energetic young voice with playful momentum and clear enthusiasm.' },
+  { id: 'gemini:Laomedeia', voiceName: 'Laomedeia', label: 'Laomedeia - Upbeat Girl', category: 'child', tone: 'Upbeat', castingNote: 'A lively youthful girl voice with bright confidence and warm energy.' },
+  { id: 'gemini:Sadachbia', voiceName: 'Sadachbia', label: 'Sadachbia - Lively Young Voice', category: 'child', tone: 'Lively', castingNote: 'A lively youthful voice suited for playful dialogue, wonder, and cheerful reactions.' },
+  { id: 'gemini:Achird', voiceName: 'Achird', label: 'Achird - Friendly Young Voice', category: 'child', tone: 'Friendly', castingNote: 'A friendly, approachable young voice with natural conversational warmth.' },
+  { id: 'gemini:Zephyr', voiceName: 'Zephyr', label: 'Zephyr - Bright Female', category: 'female', tone: 'Bright', castingNote: 'A bright, clear female voice with optimistic color and crisp delivery.' },
+  { id: 'gemini:Aoede', voiceName: 'Aoede', label: 'Aoede - Breezy Female', category: 'female', tone: 'Breezy', castingNote: 'A breezy, relaxed female voice with soft confidence and easy movement.' },
+  { id: 'gemini:Callirrhoe', voiceName: 'Callirrhoe', label: 'Callirrhoe - Easy-going Female', category: 'female', tone: 'Easy-going', castingNote: 'An easy-going female voice, relaxed and natural for dialogue.' },
+  { id: 'gemini:Autonoe', voiceName: 'Autonoe', label: 'Autonoe - Bright Woman', category: 'female', tone: 'Bright', castingNote: 'A bright adult woman voice with clarity and approachable warmth.' },
+  { id: 'gemini:Despina', voiceName: 'Despina', label: 'Despina - Smooth Woman', category: 'female', tone: 'Smooth', castingNote: 'A smooth adult woman voice with polished delivery and calm control.' },
+  { id: 'gemini:Vindemiatrix', voiceName: 'Vindemiatrix', label: 'Vindemiatrix - Gentle Woman', category: 'female', tone: 'Gentle', castingNote: 'A gentle adult woman voice, warm, tender, and softly expressive.' },
+  { id: 'gemini:Kore', voiceName: 'Kore', label: 'Kore - Firm Narrator', category: 'narrator', tone: 'Firm', castingNote: 'A firm, grounded narrator voice with authority and clean pacing.' },
+  { id: 'gemini:Charon', voiceName: 'Charon', label: 'Charon - Informative Male', category: 'male', tone: 'Informative', castingNote: 'An informative adult male voice with steady clarity and measured delivery.' },
+  { id: 'gemini:Orus', voiceName: 'Orus', label: 'Orus - Firm Male', category: 'male', tone: 'Firm', castingNote: 'A firm adult male voice with confidence, weight, and controlled expression.' },
+  { id: 'gemini:Iapetus', voiceName: 'Iapetus', label: 'Iapetus - Clear Male', category: 'male', tone: 'Clear', castingNote: 'A clear adult male voice suited for clean dialogue and direct narration.' },
+  { id: 'gemini:Algenib', voiceName: 'Algenib', label: 'Algenib - Gravelly Male', category: 'male', tone: 'Gravelly', castingNote: 'A gravelly adult male voice with texture, grit, and grounded presence.' },
+  { id: 'gemini:Gacrux', voiceName: 'Gacrux', label: 'Gacrux - Mature Elder', category: 'elder', tone: 'Mature', castingNote: 'A mature, older voice with patient pacing, warmth, and lived-in depth.' },
+  { id: 'gemini:Enceladus', voiceName: 'Enceladus', label: 'Enceladus - Breathy / Tired', category: 'dramatic', tone: 'Breathy', castingNote: 'A breathy, vulnerable voice useful for tired, scared, secretive, or intimate moments.' },
+  { id: 'gemini:Sulafat', voiceName: 'Sulafat', label: 'Sulafat - Warm Story Voice', category: 'narrator', tone: 'Warm', castingNote: 'A warm story voice with inviting tone and gentle emotional color.' },
+  { id: 'gemini:Umbriel', voiceName: 'Umbriel', label: 'Umbriel - Easy-going', category: 'casual', tone: 'Easy-going', castingNote: 'An easy-going casual voice with natural flow and relaxed phrasing.' },
+  { id: 'gemini:Zubenelgenubi', voiceName: 'Zubenelgenubi', label: 'Zubenelgenubi - Casual', category: 'casual', tone: 'Casual', castingNote: 'A casual, conversational voice with informal warmth.' },
+]
+
+const GEMINI_VOICE_BY_ID = new Map(GEMINI_VOICES.map(voice => [voice.id, voice]))
+
 export const CATEGORIES = [
   'all',
   'narrator',
@@ -408,5 +444,11 @@ export function getOpenAiVoiceForVoiceId(voiceId?: string): OpenAiVoiceName {
 }
 
 export function getVoiceCastingInstruction(voiceId?: string): string {
+  const geminiVoice = GEMINI_VOICE_BY_ID.get(voiceId ?? '')
+  if (geminiVoice) return geminiVoice.castingNote
   return getPageCastVoice(voiceId).castingNote
+}
+
+export function getGeminiVoice(voiceId?: string): GeminiVoiceProfile {
+  return GEMINI_VOICE_BY_ID.get(voiceId ?? '') ?? GEMINI_VOICES[0]
 }

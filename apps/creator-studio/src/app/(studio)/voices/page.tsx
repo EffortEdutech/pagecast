@@ -17,6 +17,7 @@ import {
 import * as BooksApi from '@/lib/supabase/books'
 import {
   CATEGORIES,
+  GEMINI_VOICES,
   LANGUAGE_FILTERS,
   VOICE_LIBRARY,
   getLanguageLabel,
@@ -42,6 +43,8 @@ interface ProviderVoice {
   previewUrl?: string | null
 }
 
+type GeminiVoice = (typeof GEMINI_VOICES)[number]
+
 type VoiceLanguageTag = StoryLanguageCode | 'multi'
 type VoiceLanguageTags = Record<string, VoiceLanguageTag>
 
@@ -49,6 +52,13 @@ const VOICE_LANGUAGE_TAGS_KEY = 'pagecast-elevenlabs-language-tags'
 
 function sampleKey(voiceId: string, language: string) {
   return `${voiceId}:${language}`
+}
+
+function playAudioUrl(url: string, onError: (message: string) => void) {
+  const audio = new Audio(url)
+  audio.play().catch(err => {
+    onError(err instanceof Error ? err.message : 'Browser blocked audio playback. Click the play button again.')
+  })
 }
 
 function normalizeVoiceLanguageTag(value?: string): VoiceLanguageTag {
@@ -262,6 +272,78 @@ function ElevenLabsVoiceCard({
   )
 }
 
+function GeminiVoiceCard({
+  voice,
+  selected,
+  onSelect,
+  onSample,
+  loading,
+  sampleUrl,
+}: {
+  voice: GeminiVoice
+  selected: boolean
+  onSelect: () => void
+  onSample: () => void
+  loading: boolean
+  sampleUrl?: string
+}) {
+  const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const playSample = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (playing) {
+      audioRef.current?.pause()
+      setPlaying(false)
+      return
+    }
+    if (!sampleUrl) {
+      onSample()
+      return
+    }
+    const audio = new Audio(sampleUrl)
+    audioRef.current = audio
+    audio.onended = () => setPlaying(false)
+    audio.onerror = () => setPlaying(false)
+    setPlaying(true)
+    audio.play().catch(() => setPlaying(false))
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      className={clsx(
+        'card p-3 cursor-pointer transition-all duration-150 flex items-center gap-3',
+        selected ? 'border-info/70 bg-info/10' : 'hover:border-bg-hover hover:bg-bg-elevated'
+      )}
+    >
+      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+        selected ? 'bg-info/25 text-info' : 'bg-bg-elevated text-text-muted')}>
+        <Mic size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
+        <div className="text-text-muted text-[10px] truncate">Gemini / {voice.tone} / {voice.category}</div>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={playSample}
+          title={sampleUrl ? (playing ? 'Stop sample' : 'Play sample') : 'Generate Gemini sample'}
+          className={clsx('w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+            playing ? 'bg-info text-white' : 'bg-bg-elevated hover:bg-bg-hover text-text-muted')}
+        >
+          {loading
+            ? <Loader2 size={11} className="animate-spin" />
+            : playing
+              ? <Square size={9} className="fill-current" />
+              : <Play size={10} className="ml-0.5" />}
+        </button>
+        {selected && <Check size={14} className="text-info" />}
+      </div>
+    </div>
+  )
+}
+
 // ── Add character modal ────────────────────────────────────────────────────────
 
 interface AddModalProps {
@@ -274,6 +356,7 @@ interface AddModalProps {
   syncingVoices: boolean
   onSyncElevenLabsVoices: () => void
   onGenerateElevenLabsSample: (voice: ProviderVoice, language?: string) => void
+  onGenerateGeminiSample: (voice: GeminiVoice) => void
   onAdd: (char: Character) => void
   onClose: () => void
 }
@@ -288,6 +371,7 @@ function AddCharacterModal({
   syncingVoices,
   onSyncElevenLabsVoices,
   onGenerateElevenLabsSample,
+  onGenerateGeminiSample,
   onAdd,
   onClose,
 }: AddModalProps) {
@@ -302,8 +386,13 @@ function AddCharacterModal({
   const elevenLabsVoice = voiceId.startsWith('elevenlabs:')
     ? elevenVoices.find(v => `elevenlabs:${v.id}` === voiceId)
     : undefined
+  const geminiVoice = voiceId.startsWith('gemini:')
+    ? GEMINI_VOICES.find(v => v.id === voiceId)
+    : undefined
   const voiceLabel = elevenLabsVoice
     ? `ElevenLabs - ${elevenLabsVoice.label}`
+    : geminiVoice
+      ? `Gemini - ${geminiVoice.label}`
     : pageCastVoice?.label ?? ''
   const matchingElevenVoices = elevenVoices.filter(voice => languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
   const otherElevenVoices = elevenVoices.filter(voice => !languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
@@ -314,10 +403,14 @@ function AddCharacterModal({
       const previewLanguage = language === 'multi' ? bookLanguage : language
       const sampleUrl = sampleUrls[sampleKey(elevenLabsVoice.id, previewLanguage)] ?? elevenLabsVoice.previewUrl
       if (sampleUrl) {
-        new Audio(sampleUrl).play().catch(() => {})
+        playAudioUrl(sampleUrl, setError)
       } else {
         onGenerateElevenLabsSample(elevenLabsVoice, previewLanguage)
       }
+      return
+    }
+    if (geminiVoice) {
+      onGenerateGeminiSample(geminiVoice)
       return
     }
     previewVoice(voiceId)
@@ -387,6 +480,9 @@ function AddCharacterModal({
               <select className="input flex-1" value={voiceId} onChange={e => setVoiceId(e.target.value)}>
                 <optgroup label="PageCast / OpenAI presets">
                   {VOICE_LIBRARY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </optgroup>
+                <optgroup label="Google / Gemini voices">
+                  {GEMINI_VOICES.map(v => <option key={v.id} value={v.id}>Gemini - {v.label}</option>)}
                 </optgroup>
                 {matchingElevenVoices.length > 0 && (
                   <optgroup label={`ElevenLabs - ${getLanguageLabel(bookLanguage)} / multilingual`}>
@@ -488,6 +584,10 @@ export default function VoicesPage() {
     (categoryFilter === 'all' || v.category === categoryFilter) &&
     (languageFilter === 'all' || v.language === 'multi' || v.language === languageFilter)
   )
+  const filteredGeminiVoices = GEMINI_VOICES.filter(v =>
+    (categoryFilter === 'all' || v.category === categoryFilter) &&
+    (languageFilter === 'all' || languageFilter === 'multi' || isStoryLanguageCode(languageFilter))
+  )
   const providerFilteredVoices = categoryFilter === 'all'
     ? elevenVoices.filter(v => {
       const language = getElevenLabsVoiceLanguage(v, elevenVoiceTags)
@@ -547,11 +647,11 @@ export default function VoicesPage() {
   }, [])
 
   const syncElevenLabsVoices = useCallback(async () => {
-    const { apiKey, provider } = getTtsSettings()
+    const { keys, geminiModel } = getTtsSettings()
     setVoiceSyncError(null)
 
-    if (!apiKey || provider !== 'elevenlabs') {
-      setVoiceSyncError('Choose ElevenLabs in Settings and save your ElevenLabs API key first.')
+    if (!keys.elevenlabs) {
+      setVoiceSyncError('Save your ElevenLabs API key in Settings first.')
       return
     }
 
@@ -560,7 +660,7 @@ export default function VoicesPage() {
       const res = await fetch('/api/tts/voices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'elevenlabs', apiKey }),
+        body: JSON.stringify({ provider: 'elevenlabs', apiKey: keys.elevenlabs }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not sync ElevenLabs voices.')
@@ -573,10 +673,10 @@ export default function VoicesPage() {
   }, [])
 
   const generateElevenLabsSample = useCallback(async (voice: ProviderVoice, language = storyLanguage) => {
-    const { apiKey } = getTtsSettings()
+    const { keys, geminiModel } = getTtsSettings()
     setVoiceSyncError(null)
 
-    if (!apiKey) {
+    if (!keys.elevenlabs) {
       setVoiceSyncError('Add your ElevenLabs API key in Settings before generating samples.')
       return
     }
@@ -590,7 +690,7 @@ export default function VoicesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'elevenlabs',
-          apiKey,
+          apiKey: keys.elevenlabs,
           voiceId: `elevenlabs:${voice.id}`,
           voiceLabel: `ElevenLabs - ${voice.label}`,
           text: getSampleTextForLanguage(sampleLanguage),
@@ -602,12 +702,67 @@ export default function VoicesPage() {
         throw new Error(body.error ?? 'Could not generate sample.')
       }
       const blob = await res.blob()
+      if (!blob.type.startsWith('audio/')) {
+        const text = await blob.text().catch(() => '')
+        throw new Error(text || 'ElevenLabs sample did not return audio. Check the API key and try again.')
+      }
+      const sampleUrl = URL.createObjectURL(blob)
       setSampleUrls(prev => {
         if (prev[key]) URL.revokeObjectURL(prev[key])
-        return { ...prev, [key]: URL.createObjectURL(blob) }
+        return { ...prev, [key]: sampleUrl }
       })
+      playAudioUrl(sampleUrl, setVoiceSyncError)
     } catch (e: any) {
       setVoiceSyncError(e.message ?? 'Could not generate sample.')
+    } finally {
+      setSamplingVoiceId(null)
+    }
+  }, [storyLanguage])
+
+  const generateGeminiSample = useCallback(async (voice: GeminiVoice) => {
+    const { keys, geminiModel } = getTtsSettings()
+    setVoiceSyncError(null)
+
+    if (!keys.gemini) {
+      setVoiceSyncError('Add your Google / Gemini API key in Settings before generating Gemini samples.')
+      return
+    }
+
+    const key = sampleKey(voice.id, storyLanguage)
+    setSamplingVoiceId(key)
+    try {
+      const res = await fetch('/api/tts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'gemini',
+          apiKey: keys.gemini,
+          geminiModel,
+          voiceId: voice.id,
+          voiceLabel: `Gemini - ${voice.label}`,
+          text: getSampleTextForLanguage(storyLanguage),
+          speed: voice.category === 'child' ? 0.94 : 0.95,
+          blockType: 'dialogue',
+          characterName: voice.category === 'child' ? 'Young character' : 'Cast member',
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Could not generate Gemini sample.')
+      }
+      const blob = await res.blob()
+      if (!blob.type.startsWith('audio/')) {
+        const text = await blob.text().catch(() => '')
+        throw new Error(text || 'Gemini sample did not return audio. Check the API key and try again.')
+      }
+      const sampleUrl = URL.createObjectURL(blob)
+      setSampleUrls(prev => {
+        if (prev[key]) URL.revokeObjectURL(prev[key])
+        return { ...prev, [key]: sampleUrl }
+      })
+      playAudioUrl(sampleUrl, setVoiceSyncError)
+    } catch (e: any) {
+      setVoiceSyncError(e.message ?? 'Could not generate Gemini sample.')
     } finally {
       setSamplingVoiceId(null)
     }
@@ -628,15 +783,28 @@ export default function VoicesPage() {
       const previewLanguage = language === 'multi' ? storyLanguage : language
       const sampleUrl = sampleUrls[sampleKey(voice.id, previewLanguage)] ?? voice.previewUrl
       if (sampleUrl) {
-        new Audio(sampleUrl).play().catch(() => {})
+        playAudioUrl(sampleUrl, setVoiceSyncError)
       } else {
         generateElevenLabsSample(voice, previewLanguage)
       }
       return
     }
 
+    if (voiceId.startsWith('gemini:')) {
+      const voice = GEMINI_VOICES.find(v => v.id === voiceId)
+      if (!voice) return
+      const key = sampleKey(voice.id, storyLanguage)
+      const sampleUrl = sampleUrls[key]
+      if (sampleUrl) {
+        playAudioUrl(sampleUrl, setVoiceSyncError)
+      } else {
+        generateGeminiSample(voice)
+      }
+      return
+    }
+
     previewVoice(voiceId)
-  }, [elevenVoices, sampleUrls, generateElevenLabsSample, elevenVoiceTags, storyLanguage])
+  }, [elevenVoices, sampleUrls, generateElevenLabsSample, generateGeminiSample, elevenVoiceTags, storyLanguage])
 
   const handleDelete = useCallback(async (charId: string) => {
     storeDelete(selectedStoryId, charId)
@@ -845,6 +1013,29 @@ export default function VoicesPage() {
                             })}
                           </div>
                         )}
+                        <div className="pt-2 mt-2 border-t border-bg-border">
+                          <p className="px-2 pb-1 text-[9px] uppercase tracking-wide text-info font-medium">Google / Gemini</p>
+                          {GEMINI_VOICES.map(v => (
+                            <button key={v.id}
+                              className={clsx(
+                                'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs transition-colors',
+                                char.voiceId === v.id
+                                  ? 'bg-info/20 text-info font-medium'
+                                  : 'hover:bg-bg-elevated text-text-secondary'
+                              )}
+                              onClick={e => { e.stopPropagation(); handleVoiceChange(char.id, v.id, `Gemini - ${v.label}`) }}
+                            >
+                              {savingVoice === char.id && char.voiceId === v.id
+                                ? <Loader2 size={10} className="animate-spin shrink-0" />
+                                : char.voiceId === v.id
+                                  ? <Check size={10} className="shrink-0 text-info" />
+                                  : <span className="w-2.5 shrink-0" />
+                              }
+                              <span className="truncate flex-1">{v.label}</span>
+                              <span className="text-[9px] opacity-70">{v.tone}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1051,6 +1242,45 @@ export default function VoicesPage() {
               </div>
             </div>
           )}
+
+          {filteredGeminiVoices.length > 0 && (
+            <div className="space-y-3 pt-3 border-t border-bg-border">
+              <div>
+                <h3 className="text-text-primary font-semibold text-sm">Google / Gemini Voices</h3>
+                <p className="text-text-muted text-xs mt-0.5">
+                  Gemini gives PageCast stronger prompt control and several youthful casting options for children and teens.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredGeminiVoices.map(voice => {
+                  const assignedChar = story?.characters.find(c => c.voiceId === voice.id)
+                  const key = sampleKey(voice.id, storyLanguage)
+                  return (
+                    <div key={voice.id} className="relative">
+                      <GeminiVoiceCard
+                        voice={voice}
+                        selected={!!assignedChar}
+                        sampleUrl={sampleUrls[key]}
+                        loading={samplingVoiceId === key}
+                        onSample={() => generateGeminiSample(voice)}
+                        onSelect={() => {
+                          if (editingCharId) {
+                            handleVoiceChange(editingCharId, voice.id, `Gemini - ${voice.label}`)
+                          }
+                        }}
+                      />
+                      {assignedChar && (
+                        <div className="absolute top-1.5 right-8 px-1.5 py-0.5 rounded-full text-[9px] font-medium"
+                          style={{ backgroundColor: assignedChar.color + '30', color: assignedChar.color }}>
+                          {assignedChar.displayName}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1065,6 +1295,7 @@ export default function VoicesPage() {
           syncingVoices={syncingVoices}
           onSyncElevenLabsVoices={syncElevenLabsVoices}
           onGenerateElevenLabsSample={generateElevenLabsSample}
+          onGenerateGeminiSample={generateGeminiSample}
           onAdd={handleAddChar}
           onClose={() => setShowAddModal(false)}
         />

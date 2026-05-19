@@ -7,7 +7,7 @@ import { getStory } from '@/data/stories'
 import { fetchBook } from '@/lib/supabase/books'
 import { ReportContentButton } from '@/components/ReportContentButton'
 import { GuestConversionPrompt } from '@/components/GuestConversionPrompt'
-import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
+import { formatPerformanceTextForSpeech, stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
 import type { Story, StoryBlock, Character, ReaderMode, ReaderTheme } from '@/types'
 import { clsx } from 'clsx'
 import {
@@ -571,10 +571,10 @@ export default function ReaderPage() {
     // ── No audio file → fall back to Web Speech API ──
     if (!synth) return
     const speakText: string =
-      block.type === 'narration' ? stripPerformanceTagsForDisplay((block as any).text) :
-      block.type === 'dialogue'  ? stripPerformanceTagsForDisplay((block as any).text) :
-      block.type === 'thought'   ? stripPerformanceTagsForDisplay((block as any).text) :
-      block.type === 'quote'     ? stripPerformanceTagsForDisplay((block as any).text) : ''
+      block.type === 'narration' ? formatPerformanceTextForSpeech((block as any).text) :
+      block.type === 'dialogue'  ? formatPerformanceTextForSpeech((block as any).text) :
+      block.type === 'thought'   ? formatPerformanceTextForSpeech((block as any).text) :
+      block.type === 'quote'     ? formatPerformanceTextForSpeech((block as any).text) : ''
 
     if (!speakText) { advanceAfterBeat(); return }
 

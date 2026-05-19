@@ -535,6 +535,7 @@ export function BlockItem({
               onUpdate={onUpdate}
               voiceId={resolvedVoiceId}
               voiceLabel={resolvedVoiceLabel}
+              characterName={effectiveChar?.displayName}
             />
           )}
 
