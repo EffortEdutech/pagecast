@@ -54,6 +54,29 @@ function sampleKey(voiceId: string, language: string) {
   return `${voiceId}:${language}`
 }
 
+// ── Voice sample cache (localStorage) ─────────────────────────────────────────
+
+const VOICE_SAMPLE_CACHE_PREFIX = 'pagecast-voice-sample:'
+
+/** Convert a Blob to a base64 data URL and persist it in localStorage. Returns the data URL. */
+async function cacheSample(key: string, blob: Blob): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      try { localStorage.setItem(VOICE_SAMPLE_CACHE_PREFIX + key, dataUrl) } catch {}
+      resolve(dataUrl)
+    }
+    reader.onerror = () => resolve(URL.createObjectURL(blob))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/** Return a previously cached data URL, or null if not found. */
+function getCachedSample(key: string): string | null {
+  try { return localStorage.getItem(VOICE_SAMPLE_CACHE_PREFIX + key) } catch { return null }
+}
+
 function playAudioUrl(url: string, onError: (message: string) => void) {
   const audio = new Audio(url)
   audio.play().catch(err => {
@@ -578,6 +601,24 @@ export default function VoicesPage() {
     } catch {}
   }, [])
 
+  // Reload any previously generated samples from localStorage on mount
+  useEffect(() => {
+    const cached: Record<string, string> = {}
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const storageKey = localStorage.key(i)
+        if (storageKey?.startsWith(VOICE_SAMPLE_CACHE_PREFIX)) {
+          const sk = storageKey.slice(VOICE_SAMPLE_CACHE_PREFIX.length)
+          const dataUrl = localStorage.getItem(storageKey)
+          if (dataUrl) cached[sk] = dataUrl
+        }
+      }
+    } catch {}
+    if (Object.keys(cached).length > 0) {
+      setSampleUrls(prev => ({ ...cached, ...prev }))
+    }
+  }, [])
+
   const story = stories.find(s => s.id === selectedStoryId)
   const storyLanguage = story?.language ?? 'en'
   const filteredVoices = VOICE_LIBRARY.filter(v =>
@@ -706,9 +747,10 @@ export default function VoicesPage() {
         const text = await blob.text().catch(() => '')
         throw new Error(text || 'ElevenLabs sample did not return audio. Check the API key and try again.')
       }
-      const sampleUrl = URL.createObjectURL(blob)
+      const sampleUrl = await cacheSample(key, blob)
       setSampleUrls(prev => {
-        if (prev[key]) URL.revokeObjectURL(prev[key])
+        const old = prev[key]
+        if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
         return { ...prev, [key]: sampleUrl }
       })
       playAudioUrl(sampleUrl, setVoiceSyncError)
@@ -722,11 +764,6 @@ export default function VoicesPage() {
   const generateGeminiSample = useCallback(async (voice: GeminiVoice) => {
     const { keys, geminiModel } = getTtsSettings()
     setVoiceSyncError(null)
-
-    if (!keys.gemini) {
-      setVoiceSyncError('Add your Google / Gemini API key in Settings before generating Gemini samples.')
-      return
-    }
 
     const key = sampleKey(voice.id, storyLanguage)
     setSamplingVoiceId(key)
@@ -755,9 +792,10 @@ export default function VoicesPage() {
         const text = await blob.text().catch(() => '')
         throw new Error(text || 'Gemini sample did not return audio. Check the API key and try again.')
       }
-      const sampleUrl = URL.createObjectURL(blob)
+      const sampleUrl = await cacheSample(key, blob)
       setSampleUrls(prev => {
-        if (prev[key]) URL.revokeObjectURL(prev[key])
+        const old = prev[key]
+        if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
         return { ...prev, [key]: sampleUrl }
       })
       playAudioUrl(sampleUrl, setVoiceSyncError)

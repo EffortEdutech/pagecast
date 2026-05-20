@@ -339,9 +339,30 @@ export default function StudioPage() {
     let firstChapterId: string | null = null
     let firstSceneId:   string | null = null
 
+    // Build a name → characterId map for auto-assigning dialogue/thought blocks.
+    // The pageCast parser stores the character name (e.g. "pip") in characterId as a hint.
+    // A UUID looks like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx; anything else is a name hint.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const charByName = new Map<string, string>()
+    for (const c of story.characters) {
+      // Match by exact name, lowercase, and underscore-normalised (pip, Pip, pip_the_child → same)
+      charByName.set(c.name.toLowerCase(), c.id)
+      charByName.set(c.name.toLowerCase().replace(/\s+/g, '_'), c.id)
+      charByName.set(c.name.toLowerCase().replace(/\s+/g, '-'), c.id)
+    }
+
+    const resolveCharacter = (block: import('@/types').StoryBlock): import('@/types').StoryBlock => {
+      if (block.type !== 'dialogue' && block.type !== 'thought') return block
+      const hint = block.characterId
+      if (!hint || UUID_RE.test(hint)) return block  // already a UUID or empty — leave as-is
+      const resolved = charByName.get(hint.toLowerCase())
+        ?? charByName.get(hint.toLowerCase().replace(/\s+/g, '_'))
+      return { ...block, characterId: resolved ?? '' }
+    }
+
     if (destination.mode === 'current-beat') {
       const blocks = parsed.chapters.flatMap(parsedCh =>
-        parsedCh.scenes.flatMap(parsedSc => parsedSc.blocks)
+        parsedCh.scenes.flatMap(parsedSc => parsedSc.blocks.map(resolveCharacter))
       )
       await editor.insertBlocks(destination.chapterId, destination.sceneId, blocks, destination.insertIndex)
       setActiveChapterId(destination.chapterId)
@@ -364,7 +385,7 @@ export default function StudioPage() {
         if (!firstSceneId) firstSceneId = sc.id
 
         for (const block of parsedSc.blocks) {
-          await editor.addBlock(ch.id, sc.id, block)
+          await editor.addBlock(ch.id, sc.id, resolveCharacter(block))
         }
       }
     }

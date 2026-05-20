@@ -270,12 +270,23 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
   }
 
   if (name === 'DIALOGUE') {
-    if (text) pushBlock(chapters, dialogueWithEmotion(stripQuotes(text), optionValue(options, 'emotion')))
+    if (text) {
+      const block = dialogueWithEmotion(stripQuotes(text), optionValue(options, 'emotion'))
+      // Store character name as a hint so handleImport can resolve it to a real ID.
+      // e.g. [DIALOGUE: pip | emotion=curious] → characterId = 'pip' (resolved later)
+      if (target) block.characterId = target.trim()
+      pushBlock(chapters, block)
+    }
     return
   }
 
   if (name === 'THOUGHT') {
-    if (text) pushBlock(chapters, thought(stripThoughtMarkers(stripQuotes(text))))
+    if (text) {
+      const block = thought(stripThoughtMarkers(stripQuotes(text)))
+      // Same name hint for thoughts
+      if (target) block.characterId = target.trim()
+      pushBlock(chapters, block)
+    }
     return
   }
 

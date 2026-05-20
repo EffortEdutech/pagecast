@@ -136,7 +136,7 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
   const apiKey = getTtsApiKey(provider)
   const ttsText = formatTextForTts(opts.text)
 
-  if (!apiKey) {
+  if (!apiKey && provider !== 'gemini') {
     return {
       url:   null,
       error: 'No API key — add your key in Settings → AI Voice (TTS).',

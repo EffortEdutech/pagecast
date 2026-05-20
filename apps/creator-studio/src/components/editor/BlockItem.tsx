@@ -523,6 +523,42 @@ export function BlockItem({
                 currentLabel={(block as SfxBlock).label ?? ''}
                 onSelect={handleSfxSelect}
               />
+
+              {/* Playback mode */}
+              <div>
+                <label className="label mb-1">Playback mode</label>
+                <div className="flex gap-1.5">
+                  {([
+                    { value: 'wait',    label: 'Wait',    desc: 'Hold story until SFX finishes' },
+                    { value: 'overlap', label: 'Overlap', desc: 'Fire SFX and continue immediately' },
+                  ] as const).map(opt => {
+                    const active = ((block as SfxBlock).playMode ?? 'wait') === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        title={opt.desc}
+                        onClick={() => onUpdate({ playMode: opt.value } as any)}
+                        className={clsx(
+                          'flex-1 text-[11px] px-2 py-1.5 rounded-lg border transition-colors',
+                          active
+                            ? 'border-success/60 bg-success/10 text-success font-medium'
+                            : 'border-bg-border text-text-muted hover:text-text-secondary hover:border-bg-border/80'
+                        )}
+                      >
+                        {opt.value === 'wait' ? '⏸ ' : '▶▶ '}{opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-text-muted mt-1">
+                  {((block as SfxBlock).playMode ?? 'wait') === 'wait'
+                    ? 'Story pauses at this beat until the SFX finishes playing.'
+                    : 'SFX fires and the story immediately continues — beats overlap.'
+                  }
+                </p>
+              </div>
+
               {sfxError && <p className="text-[11px] text-danger">{sfxError}</p>}
             </>
           )}

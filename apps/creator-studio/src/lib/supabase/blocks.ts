@@ -75,6 +75,7 @@ function dbBlockToStoryBlock(b: DbBlock): StoryBlock {
         label: String(c.label ?? ''),
         sfxFile: String(c.sfx_file ?? ''),
         duration: Number(c.duration_ms ?? 1000) / 1000,
+        playMode: (c.play_mode === 'overlap' ? 'overlap' : 'wait') as 'wait' | 'overlap',
       }
     default:
       return { ...base, type: 'narration', text: '' }
@@ -97,6 +98,7 @@ function storyBlockToDbContent(block: StoryBlock): Record<string, unknown> {
         label: block.label,
         sfx_file: block.sfxFile,
         duration_ms: typeof block.duration === 'number' ? block.duration * 1000 : undefined,
+        play_mode: block.playMode ?? 'wait',
       }
     default:
       return {}
@@ -137,6 +139,7 @@ function storyBlockToDbContentPatch(
       if ('label' in block) next.label = block.label
       if ('sfxFile' in block) next.sfx_file = block.sfxFile
       if ('duration' in block && typeof block.duration === 'number') next.duration_ms = block.duration * 1000
+      if ('playMode' in block) next.play_mode = block.playMode ?? 'wait'
       break
   }
 

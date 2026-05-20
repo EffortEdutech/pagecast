@@ -18,7 +18,7 @@ export interface DialogueBlock  extends BaseBlock { type: 'dialogue'; characterI
 export interface ThoughtBlock   extends BaseBlock { type: 'thought';  characterId: string; text: string }
 export interface QuoteBlock     extends BaseBlock { type: 'quote';    text: string; attribution?: string; style?: 'poem'|'letter'|'quran'|'default'; characterId?: string }
 export interface PauseBlock     extends BaseBlock { type: 'pause';    duration: number }
-export interface SfxBlock       extends BaseBlock { type: 'sfx';      sfxFile: string; label?: string }
+export interface SfxBlock       extends BaseBlock { type: 'sfx';      sfxFile: string; label?: string; playMode?: 'wait' | 'overlap' }
 export type StoryBlock = NarrationBlock | DialogueBlock | ThoughtBlock | QuoteBlock | PauseBlock | SfxBlock
 
 export interface Scene {

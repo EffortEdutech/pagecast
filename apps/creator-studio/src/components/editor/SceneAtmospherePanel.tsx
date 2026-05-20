@@ -263,7 +263,8 @@ interface SceneAtmospherePanelProps {
 export function SceneAtmospherePanel({
   scene, storyId, chapterId, bookId, onClose
 }: SceneAtmospherePanelProps) {
-  const updateScene = useStudioStore(s => s.updateScene)
+  const updateScene    = useStudioStore(s => s.updateScene)
+  const markDirty      = useStudioStore(s => s.markStoryDirty)
 
   const [ambienceUrl,    setAmbienceUrl]    = useState(scene.ambienceUrl)
   const [musicUrl,       setMusicUrl]       = useState(scene.musicUrl)
@@ -328,9 +329,10 @@ export function SceneAtmospherePanel({
     await updateSceneAtmosphere(scene.id, { sceneImage: null })
   }
 
-  // Keep store in sync
+  // Keep store in sync and mark the story dirty so the Save button activates
   const syncStore = (patch: Partial<Scene>) => {
     updateScene(storyId, chapterId, scene.id, patch)
+    markDirty(storyId)
   }
 
   const handleAmbienceUrl = (url: string | undefined) => {

@@ -68,6 +68,7 @@ function dbContentToBlock(
         label: String(content.label ?? ''),
         sfxFile: String(content.sfx_file ?? ''),
         duration: Number(content.duration_ms ?? 1000) / 1000,
+        playMode: (content.play_mode === 'overlap' ? 'overlap' : 'wait') as 'wait' | 'overlap',
       }
     default:
       return { ...base, type: 'narration', text: '' }

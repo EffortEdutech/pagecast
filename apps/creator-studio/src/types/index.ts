@@ -70,6 +70,8 @@ export interface SfxBlock extends BaseBlock {
   type: 'sfx'
   sfxFile: string
   label?: string
+  /** 'wait' = hold the story until SFX finishes (default); 'overlap' = fire SFX and immediately continue to next beat */
+  playMode?: 'wait' | 'overlap'
 }
 
 export type StoryBlock =

@@ -214,6 +214,12 @@ const MODES: { id: ReaderMode; label: string; icon: typeof BookOpen }[] = [
 const BEAT_GAP_MS = 550
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+function formatSceneTitle(title?: string | null) {
+  const raw = title?.trim() ?? ''
+  const withoutNumberPrefix = raw.replace(/^scene\s*\d+\s*[:.-]\s*/i, '').trim()
+  return withoutNumberPrefix || raw
+}
+
 function blockSummary(block: StoryBlock, index: number): string {
   const prefix = `Moment ${index + 1}`
   if (block.type === 'pause') return `${prefix} - Pause`
@@ -340,12 +346,15 @@ export default function ReaderPage() {
   const audioRef     = useRef<HTMLAudioElement | null>(null)   // block voice audio
   const ambienceRef  = useRef<HTMLAudioElement | null>(null)   // scene ambience loop
   const musicRef     = useRef<HTMLAudioElement | null>(null)   // scene music loop
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const sfxOverlapRef = useRef<HTMLAudioElement | null>(null)  // SFX playing in overlap mode
+  // Keep voices in a ref so loading them doesn't re-trigger the auto-play effect
+  // (which would clear the advance timer mid-playback).
+  const voicesRef    = useRef<SpeechSynthesisVoice[]>([])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     synthRef.current = window.speechSynthesis
-    const load = () => setVoices(window.speechSynthesis.getVoices())
+    const load = () => { voicesRef.current = window.speechSynthesis.getVoices() }
     load()
     window.speechSynthesis.addEventListener('voiceschanged', load)
     return () => {
@@ -354,11 +363,21 @@ export default function ReaderPage() {
       audioRef.current?.pause()
       ambienceRef.current?.pause()
       musicRef.current?.pause()
+      sfxOverlapRef.current?.pause()
     }
   }, [])
 
+  // ── Stop overlap SFX when user pauses ────────────────────────────────────────
+  useEffect(() => {
+    if (!isPlaying && sfxOverlapRef.current) {
+      sfxOverlapRef.current.pause()
+      sfxOverlapRef.current = null
+    }
+  }, [isPlaying])
+
   const chapter = story?.chapters[chapterIdx]
   const scene   = chapter?.scenes[sceneIdx]
+  const sceneDisplayTitle = formatSceneTitle(scene?.title)
   const blocks  = scene?.blocks ?? []
   const block   = blocks[blockIdx]
   const bookmarks = story ? getBookmarks(story.id) : []
@@ -514,12 +533,32 @@ export default function ReaderPage() {
       return () => { if (timerRef.current) clearTimeout(timerRef.current) }
     }
 
-    // ── SFX block: play audio file if available (no loop, wait for finish) ──
+    // ── SFX block: play audio file if available ──────────────────────────────────
     if (block.type === 'sfx') {
+      const isOverlap = block.playMode === 'overlap'
+
       if (block.audioUrl) {
         const sfxAudio = new Audio(block.audioUrl)
         sfxAudio.loop = false
         sfxAudio.volume = prefs.sfxVolume ?? 1
+
+        if (isOverlap) {
+          // Overlap mode: fire SFX and immediately continue to next beat.
+          // The audio plays concurrently — it is NOT stored in audioRef so it
+          // survives the next block's cleanup.
+          sfxOverlapRef.current?.pause()  // stop any previous overlap SFX first
+          sfxOverlapRef.current = sfxAudio
+          sfxAudio.onended = () => {
+            if (sfxOverlapRef.current === sfxAudio) sfxOverlapRef.current = null
+          }
+          sfxAudio.play().catch(() => {
+            if (sfxOverlapRef.current === sfxAudio) sfxOverlapRef.current = null
+          })
+          advanceAfterBeat()  // don't wait — continue immediately
+          return () => { /* sfxAudio keeps playing; sfxOverlapRef owns it */ }
+        }
+
+        // Wait mode (default): hold the story until SFX finishes
         sfxAudio.onended = advanceAfterBeat
         sfxAudio.onerror = () => {
           // File missing — fall back to duration timer
@@ -539,7 +578,8 @@ export default function ReaderPage() {
         })
         return () => { sfxAudio.pause(); sfxAudio.onended = null; sfxAudio.onerror = null }
       }
-      // No audio URL — skip after nominal duration
+
+      // No audio URL — skip after nominal duration (both modes)
       const ms = (block.duration ?? 1) * 1000 / prefs.playbackSpeed
       timerRef.current = setTimeout(() => {
         if (autoAdvance) advance()
@@ -585,9 +625,9 @@ export default function ReaderPage() {
       ? prefs.narratorVolume
       : prefs.characterVolume
 
-    if (voices.length > 0) {
-      const speakable = voices.filter(v => v.lang.startsWith('en'))
-      const pool = speakable.length > 0 ? speakable : voices
+    if (voicesRef.current.length > 0) {
+      const speakable = voicesRef.current.filter(v => v.lang.startsWith('en'))
+      const pool = speakable.length > 0 ? speakable : voicesRef.current
       const blockCharId = (block as any).characterId as string | undefined
       if (story.narratorOnlyMode) {
         // Narrator-only: single voice reads everything
@@ -617,7 +657,7 @@ export default function ReaderPage() {
     return () => { synth.cancel() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, block, prefs.mode, prefs.playbackSpeed, autoAdvance,
-      prefs.narratorVolume, prefs.characterVolume, voices, replayNonce])
+      prefs.narratorVolume, prefs.characterVolume, replayNonce])
 
   // ── Scene atmosphere: ambience + music loops ──────────────────────────────
   useEffect(() => {
@@ -631,9 +671,11 @@ export default function ReaderPage() {
 
     const prev = { ambience: ambienceRef.current, music: musicRef.current }
 
-    // Fade out old layers
-    if (prev.ambience) fadeOut(prev.ambience, () => { ambienceRef.current = null })
-    if (prev.music)    fadeOut(prev.music,    () => { musicRef.current    = null })
+    // Fade out old layers.
+    // Guard the callback: only null the ref if it still points to the OLD element,
+    // not the new one that was just assigned later in this same effect run.
+    if (prev.ambience) fadeOut(prev.ambience, () => { if (ambienceRef.current === prev.ambience) ambienceRef.current = null })
+    if (prev.music)    fadeOut(prev.music,    () => { if (musicRef.current   === prev.music)    musicRef.current    = null })
 
     if (!scene) return
 
@@ -782,7 +824,7 @@ export default function ReaderPage() {
       chapterIdx,
       sceneIdx,
       blockIdx,
-      label: `${chapter.title} - ${scene.title} - Beat ${blockIdx + 1}`,
+      label: `${chapter.title} - ${sceneDisplayTitle} - Beat ${blockIdx + 1}`,
     })
   }
 
@@ -910,7 +952,7 @@ export default function ReaderPage() {
             </Link>
             <div className="hidden sm:block">
               <p className="text-text-primary text-xs font-semibold leading-tight">{story.title}</p>
-              <p className="text-text-muted text-[10px]">{chapter?.title} · {scene?.title}</p>
+              <p className="text-text-muted text-[10px]">{chapter?.title} · {sceneDisplayTitle}</p>
             </div>
           </div>
 
@@ -1105,7 +1147,8 @@ export default function ReaderPage() {
             {[
               { key: 'narratorVolume' as const,  label: 'Narrator' },
               { key: 'characterVolume' as const, label: 'Characters' },
-              { key: 'musicVolume' as const,     label: 'Music' },
+              { key: 'musicVolume' as const,     label: 'Ambience & Music' },
+              { key: 'sfxVolume' as const,       label: 'Sound Effects' },
             ].map(({ key, label }) => (
               <div key={key}>
                 <label className="text-text-secondary mb-1.5 flex items-center justify-between">
@@ -1260,7 +1303,7 @@ export default function ReaderPage() {
                               isCurrent ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
                             )}
                           >
-                            {sc.title}
+                            {formatSceneTitle(sc.title)}
                           </button>
                         </div>
                         {expanded && (
@@ -1327,7 +1370,7 @@ export default function ReaderPage() {
                       >
                         <p className="text-text-primary text-sm font-medium truncate">{bookmark.label}</p>
                         <p className="text-text-muted text-[11px] mt-0.5 truncate">
-                          {bookmarkChapter?.title ?? 'Chapter'} - {bookmarkScene?.title ?? 'Scene'}
+                          {bookmarkChapter?.title ?? 'Chapter'} - {formatSceneTitle(bookmarkScene?.title) || 'Scene'}
                         </p>
                       </button>
                       <button
@@ -1437,7 +1480,7 @@ export default function ReaderPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={scene.sceneImage}
-                  alt={scene.title}
+                  alt={sceneDisplayTitle}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-bg-primary" />
@@ -1445,7 +1488,7 @@ export default function ReaderPage() {
                   <p className="text-white/60 text-xs uppercase tracking-widest mb-0.5">
                     Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
                   </p>
-                  <h2 className="text-white font-bold text-xl drop-shadow">{scene?.title}</h2>
+                  <h2 className="text-white font-bold text-xl drop-shadow">{sceneDisplayTitle}</h2>
                 </div>
               </div>
             )}
@@ -1455,7 +1498,7 @@ export default function ReaderPage() {
                 <p className="text-text-muted text-xs uppercase tracking-widest mb-1">
                   Chapter {chapterIdx + 1} · Scene {sceneIdx + 1}
                 </p>
-                <h2 className="text-text-primary font-bold text-xl">{scene?.title}</h2>
+                <h2 className="text-text-primary font-bold text-xl">{sceneDisplayTitle}</h2>
               </div>
             )}
 

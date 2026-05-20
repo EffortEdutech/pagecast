@@ -305,12 +305,26 @@ function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitsPerSample =
   return Buffer.concat([header, pcm])
 }
 
+function getServerProviderApiKey(provider: string): string {
+  if (provider === 'gemini') {
+    return (
+      process.env.GEMINI_API_KEY ??
+      process.env.GOOGLE_AI_API_KEY ??
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ??
+      ''
+    )
+  }
+  if (provider === 'elevenlabs') return process.env.ELEVENLABS_API_KEY ?? ''
+  if (provider === 'openai') return process.env.OPENAI_API_KEY ?? ''
+  return ''
+}
+
 export async function POST(req: NextRequest) {
   let body: {
     text: string
     voiceId?: string
     provider?: string
-    apiKey: string
+    apiKey?: string
     speed?: number
     blockType?: string
     emotion?: string
@@ -345,7 +359,8 @@ export async function POST(req: NextRequest) {
   if (!text?.trim()) {
     return NextResponse.json({ error: 'No text provided' }, { status: 400 })
   }
-  if (!apiKey?.trim()) {
+  const providerApiKey = apiKey?.trim() || getServerProviderApiKey(provider)
+  if (!providerApiKey) {
     return NextResponse.json({ error: 'No API key provided — add your key in Settings.' }, { status: 400 })
   }
 
@@ -359,7 +374,7 @@ export async function POST(req: NextRequest) {
       res = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
         headers: {
-          Authorization:  `Bearer ${apiKey}`,
+          Authorization:  `Bearer ${providerApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -412,7 +427,7 @@ export async function POST(req: NextRequest) {
   if (provider === 'elevenlabs') {
     let elevenVoice: { id: string; name: string }
     try {
-      elevenVoice = await resolveElevenLabsVoice(apiKey, voiceId)
+      elevenVoice = await resolveElevenLabsVoice(providerApiKey, voiceId)
     } catch (e: any) {
       return NextResponse.json({ error: e.message ?? 'Could not load ElevenLabs voices' }, { status: 502 })
     }
@@ -427,7 +442,7 @@ export async function POST(req: NextRequest) {
       res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenVoice.id}`, {
         method: 'POST',
         headers: {
-          'xi-api-key':   apiKey,
+          'xi-api-key':   providerApiKey,
           'Content-Type': 'application/json',
           Accept:         'audio/mpeg',
         },
@@ -494,7 +509,7 @@ export async function POST(req: NextRequest) {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: {
-          'x-goog-api-key': apiKey,
+          'x-goog-api-key': providerApiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
