@@ -323,6 +323,7 @@ export default function ReaderPage() {
   const [blockIdx, setBlockIdx]     = useState(savedProgress?.blockIdx   ?? 0)
 
   // ── UI state ──
+  const [showCover,      setShowCover]      = useState(true)
   const [showTOC,        setShowTOC]        = useState(false)
   const [showBookmarks,  setShowBookmarks]  = useState(false)
   const [showSettings,   setShowSettings]   = useState(false)
@@ -411,6 +412,7 @@ export default function ReaderPage() {
     const progress = getProgress(story.id)
     if (progress && (progress.chapterIdx > 0 || progress.sceneIdx > 0 || progress.blockIdx > 0)) {
       setShowResumePrompt(true)
+      setShowCover(false)  // skip cover — user is resuming mid-story
     }
     setResumeHandled(true)
   }, [story, getProgress, resumeHandled])
@@ -867,6 +869,82 @@ export default function ReaderPage() {
   if (serverAccess === null && UUID_RE.test(story.id)) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
+  // ── Cover page (shown when no saved progress) ──────────────────────────────
+  if (showCover) return (
+    <div className={clsx(
+      'min-h-screen flex flex-col relative overflow-hidden',
+      story.coverImage?.startsWith('http') ? 'bg-black' : `bg-gradient-to-br ${story.coverGradient ?? 'from-purple-900 via-violet-900 to-bg-primary'}`
+    )}>
+      {story.coverImage?.startsWith('http') ? (
+        <img
+          src={story.coverImage}
+          alt={story.title}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : story.coverImage ? (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-[12rem] select-none opacity-20">{story.coverImage}</span>
+        </div>
+      ) : null}
+
+      {/* Gradient veil */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
+
+      {/* Back button */}
+      <div className="relative z-10 p-4">
+        <Link href="/library" className="inline-flex items-center gap-1.5 text-white/60 hover:text-white text-sm transition-colors">
+          <ArrowLeft size={15} />
+          My Casts
+        </Link>
+      </div>
+
+      {/* Cover content */}
+      <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-12 max-w-lg mx-auto w-full">
+        <div className="space-y-3">
+          {(story.genre || story.ageRating) && (
+            <div className="flex gap-2 flex-wrap">
+              {story.genre && (
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/15 text-white/90 backdrop-blur-sm">
+                  {story.genre}
+                </span>
+              )}
+              {story.ageRating && (
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/15 text-white/90 backdrop-blur-sm">
+                  {story.ageRating}
+                </span>
+              )}
+            </div>
+          )}
+
+          <h1 className="text-white font-bold text-4xl sm:text-5xl leading-tight">
+            {story.title}
+          </h1>
+
+          {story.description && (
+            <p className="text-white/70 text-sm leading-relaxed line-clamp-3">
+              {story.description}
+            </p>
+          )}
+
+          {story.durationMinutes && (
+            <p className="text-white/50 text-xs flex items-center gap-1.5">
+              <Timer size={11} />
+              {story.durationMinutes} min read
+            </p>
+          )}
+        </div>
+
+        <button
+          onClick={() => setShowCover(false)}
+          className="mt-8 w-full py-4 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-base flex items-center justify-center gap-2 transition-colors"
+        >
+          <Play size={18} className="fill-white" />
+          Begin Cast
+        </button>
+      </div>
     </div>
   )
 

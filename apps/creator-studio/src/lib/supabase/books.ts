@@ -197,6 +197,28 @@ export async function publishBook(bookId: string, status: 'draft' | 'published')
   return !error
 }
 
+/**
+ * Upload a cover image file to Supabase Storage (bucket: 'covers').
+ * Returns the public URL on success.
+ *
+ * The 'covers' bucket must exist in your Supabase project and be set to public.
+ * Create it once: Supabase dashboard → Storage → New bucket → name "covers" → Public ✓
+ */
+export async function uploadCoverImage(bookId: string, file: File): Promise<string> {
+  const supabase = createClient()
+  const ext  = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const path = `${bookId}/cover.${ext}`
+
+  const { error } = await supabase.storage
+    .from('covers')
+    .upload(path, file, { upsert: true, contentType: file.type })
+
+  if (error) throw new Error(error.message)
+
+  const { data } = supabase.storage.from('covers').getPublicUrl(path)
+  return data.publicUrl
+}
+
 export async function duplicateBook(sourceBookId: string): Promise<Story | null> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()

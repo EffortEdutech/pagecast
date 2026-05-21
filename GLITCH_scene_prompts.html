@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>GLITCH — Scene Image Prompts</title>
+<style>
+  body { font-family: Segoe UI, sans-serif; font-size: 13px; background:#1a1a2e; color:#e0e0e0; margin:0; padding:20px; }
+  h1 { color:#ffc875; font-size:22px; margin-bottom:4px; }
+  p  { color:#8c8c98; margin-bottom:16px; }
+  table { border-collapse:collapse; width:100%; }
+  th { background:#2a2a3e; color:#7cc7ff; padding:10px 12px; text-align:left; position:sticky; top:0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+  td { padding:9px 12px; border-bottom:1px solid #2a2a3e; vertical-align:top; }
+  tr:hover td { background:#22223a; }
+  .scene { color:#7cc7ff; font-weight:bold; white-space:nowrap; }
+  .title { color:#ffc875; font-weight:bold; }
+  .loc   { color:#b7b7c2; font-size:12px; }
+  .chars { color:#b69cff; font-size:12px; }
+  .narr  { color:#8c8c98; font-size:12px; font-style:italic; }
+  .filtered-ok   { color:#2ecc71; }
+  .filtered-weak { color:#f39c12; font-weight:bold; }
+  .filtered-empty{ color:#e74c3c; font-weight:bold; }
+  .prompt { color:#e6e6eb; font-size:11px; word-break:break-word; }
+  .badge-ok    { background:#1a4a2e; color:#2ecc71; border-radius:4px; padding:2px 6px; font-size:11px; }
+  .badge-weak  { background:#4a3a1a; color:#f39c12; border-radius:4px; padding:2px 6px; font-size:11px; }
+  .badge-empty { background:#4a1a1a; color:#e74c3c; border-radius:4px; padding:2px 6px; font-size:11px; }
+</style></head><body>
+<h1>GLITCH — Scene Image Prompts</h1>
+<p>39 scenes &nbsp;|&nbsp; Style: Cinematic Photography, DSLR photo &nbsp;|&nbsp; 
+<span class="badge-ok">OK</span> = good context &nbsp;
+<span class="badge-weak">WEAK</span> = vague action &nbsp;
+<span class="badge-empty">EMPTY</span> = no action — will produce empty scenery</p>
+<table>
+<tr>
+  <th>Scene</th><th>Title</th><th>Location / Time</th>
+  <th>Characters</th><th>Narration (raw first line)</th>
+  <th>Filtered → sent to AI</th><th>Status</th>
+</tr>
+<tr>
+  <td class="scene">Ch1Sc1</td>
+  <td class="title">The Van</td>
+  <td class="loc">Crabb Street intersection, Velmoor<br><span style="color:#5a5a6a">8:14 AM, Tuesday</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">Here's what I know about my superpower. It lasts four seconds. Not five. Definitely not ten. Four. I have checked many t</td>
+  <td class="filtered-ok">Heres superpower</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch1Sc2</td>
+  <td class="title">The Alley Test</td>
+  <td class="loc">Alley behind Crabb Street, Velmoor<br><span style="color:#5a5a6a">8:19 AM</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">I went into the alley behind the dry cleaner's and tested it seventeen times. Here is what I learned.</td>
+  <td class="filtered-ok">went into alley behind dry cleaners tested seventeen times</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch1Sc3</td>
+  <td class="title">The Shopping Incident</td>
+  <td class="loc">Velmoor High Street<br><span style="color:#5a5a6a">8:31 AM</span></td>
+  <td class="chars">Old Woman, Marcus</td>
+  <td class="narr">My first act of heroism happened eleven minutes later and lasted four seconds. An old woman dropped her shopping bag out</td>
+  <td class="filtered-ok">first act of heroism happened eleven minutes later lasted four seconds</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch2Sc1</td>
+  <td class="title">The Dog Problem</td>
+  <td class="loc">Outside Marcus's apartment block, Velmoor<br><span style="color:#5a5a6a">7:52 AM, Wednesday</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">The dog was outside my building in the morning. I'd gone home the night before telling myself it wasn't my dog. It had f</td>
+  <td class="filtered-ok">dog outside building in morning</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch2Sc2</td>
+  <td class="title">Disaster Number Two — The Trolley</td>
+  <td class="loc">VelMart car park, Velmoor<br><span style="color:#5a5a6a">8:20 AM</span></td>
+  <td class="chars">—</td>
+  <td class="narr">The second disaster happened in a supermarket car park. I was cutting through it on the way to school when I saw a shopp</td>
+  <td class="filtered-ok">second disaster happened in supermarket car park</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch2Sc3</td>
+  <td class="title">Bolt Earns His Name</td>
+  <td class="loc">Velmoor High Street, alley near Crabb Street<br><span style="color:#5a5a6a">9:05 AM — (late for school, but this felt more important)</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">Here is something I had not considered about my power: I can only carry things I can physically reach. I'm thirteen. My </td>
+  <td class="filtered-ok">Here is something not considered power only carry things physically reach</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch2Sc4</td>
+  <td class="title">Disaster Number Three — The Snatcher</td>
+  <td class="loc">Velmoor Market, near the textile stalls<br><span style="color:#5a5a6a">After school — 4:15 PM</span></td>
+  <td class="chars">Purse Lady, Marcus</td>
+  <td class="narr">In my defence, this one had been going so well. A man grabbed a woman's bag and ran. Velmoor Market was busy. Nobody was</td>
+  <td class="filtered-ok">In defence this one going well</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch2Sc5</td>
+  <td class="title">Interference</td>
+  <td class="loc">Dredge Lane, Velmoor — quieter side street<br><span style="color:#5a5a6a">5:40 PM</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">I was on the way home, doing one last test freeze before I called it a day, when I felt it. It's hard to describe. In a </td>
+  <td class="filtered-ok">on way home doing one last test freeze before called day</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch3Sc1</td>
+  <td class="title">Telling Dex</td>
+  <td class="loc">Velmoor Secondary, canteen — corner table<br><span style="color:#5a5a6a">Thursday, 12:15 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">I told Dex at lunch. I showed him the whole thing: the freeze, the four seconds, Bolt sitting under the table being immu</td>
+  <td class="filtered-ok">told Dex at lunch</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch3Sc2</td>
+  <td class="title">Dex's Notebook</td>
+  <td class="loc">Velmoor Secondary, canteen — corner table<br><span style="color:#5a5a6a">Thursday, 12:30 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">By the time lunch was half done, Dex had two pages of notes and a numbered list of questions. He read them out while eat</td>
+  <td class="filtered-ok">By time lunch half done Dex two pages of notes numbered list of questions</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch3Sc3</td>
+  <td class="title">The Tests</td>
+  <td class="loc">Caldwell Park, Velmoor — near the fountain<br><span style="color:#5a5a6a">Thursday, 4:30 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">We went to the park after school. Dex had a stopwatch, a tape measure, and a hypothesis. The tape measure was to check m</td>
+  <td class="filtered-ok">went to park after school</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch3Sc4</td>
+  <td class="title">Heroism with Commentary</td>
+  <td class="loc">Velmoor Market District — near the fruit stalls<br><span style="color:#5a5a6a">Thursday, 5:10 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">It happened on the way home, which in my experience is when things always happen. A kid — maybe eight years old — had ch</td>
+  <td class="filtered-ok">happened on way home in experience is things always happen</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch3Sc5</td>
+  <td class="title">What Dex Noticed</td>
+  <td class="loc">Velmoor street, walking home<br><span style="color:#5a5a6a">Thursday, 5:25 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">I stopped walking. I thought about the alley on Dredge Lane. The flicker in the freeze. The shadow that Bolt had stared </td>
+  <td class="filtered-ok">stopped walking</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch4Sc1</td>
+  <td class="title">Scanning Mode</td>
+  <td class="loc">Various locations around Velmoor<br><span style="color:#5a5a6a">Friday through Monday — four days after the park tests</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">Dex had added a new protocol to PROJECT: STUPID. Every time I activated the freeze, I had to report on three things: wha</td>
+  <td class="filtered-ok">Dex added new protocol to PROJECT STUPID</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch4Sc2</td>
+  <td class="title">The Coin</td>
+  <td class="loc">Dredge Lane, Velmoor — the spot from last Tuesday<br><span style="color:#5a5a6a">Monday, 4:50 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">It was Bolt who found it. We'd gone back to Dredge Lane on Dex's suggestion. His theory was that repeated exposure to th</td>
+  <td class="filtered-weak">Bolt found</td>
+  <td><span class="badge-weak">WEAK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch4Sc3</td>
+  <td class="title">Operation Frequency</td>
+  <td class="loc">Dex's bedroom, Velmoor<br><span style="color:#5a5a6a">Monday, 6:30 PM</span></td>
+  <td class="chars">Marcus, Dex</td>
+  <td class="narr">Dex had added a new section to PROJECT: STUPID. It was called OPERATION: FREQUENCY and it took up three pages. There was</td>
+  <td class="filtered-ok">Dex added new section to PROJECT STUPID</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch4Sc4</td>
+  <td class="title">The Passive Ping</td>
+  <td class="loc">Dredge Lane, Velmoor<br><span style="color:#5a5a6a">Tuesday, 5:40 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">We stood in the lane. It was the exact spot. Same postbox. Same closed newsagent. Same alley between the two buildings, </td>
+  <td class="filtered-weak">stood in lane</td>
+  <td><span class="badge-weak">WEAK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch4Sc5</td>
+  <td class="title">Seven Hundred Books</td>
+  <td class="loc">Velmoor Secondary, school library<br><span style="color:#5a5a6a">Wednesday, 1:15 PM</span></td>
+  <td class="chars">Marcus</td>
+  <td class="narr">The next day, I looked at everyone differently. I had been doing this since Dex told me the other person might be local.</td>
+  <td class="filtered-ok">next day looked at everyone differently</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch5Sc1</td>
+  <td class="title">SUBJECT — UNKNOWN</td>
+  <td class="loc">Velmoor Secondary, canteen — corner table<br><span style="color:#5a5a6a">Thursday, 12:20 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">Dex had added a new section to PROJECT: STUPID. It was called SUBJECT: UNKNOWN. It had its own tab. He had drawn a silho</td>
+  <td class="filtered-ok">Dex added new section to PROJECT STUPID</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch5Sc2</td>
+  <td class="title">Two Weeks Before You</td>
+  <td class="loc">Velmoor Secondary, English classroom — Marcus's desk<br><span style="color:#5a5a6a">Thursday, 2:05 PM</span></td>
+  <td class="chars">—</td>
+  <td class="narr">I found the note in English. Not passed to me. Not slipped under the door. It was already there when I sat down — tucked</td>
+  <td class="filtered-ok">found note in English</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch5Sc3</td>
+  <td class="title">She Chooses the Terms</td>
+  <td class="loc">Velmoor Secondary, side gate — low wall outside<br><span style="color:#5a5a6a">Thursday, 3:40 PM</span></td>
+  <td class="chars">Marcus, Seren</td>
+  <td class="narr">She was waiting for me after school. Not dramatically. Not standing in the middle of the path with her arms crossed. She</td>
+  <td class="filtered-ok">waiting after school</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch5Sc4</td>
+  <td class="title">What She's Figured Out</td>
+  <td class="loc">Caldwell Park, Velmoor — bench near the east path<br><span style="color:#5a5a6a">Thursday, 4:10 PM</span></td>
+  <td class="chars">Seren, Marcus</td>
+  <td class="narr">We walked to the park because standing outside school felt too visible and she suggested it in a tone that didn't really</td>
+  <td class="filtered-ok">walked to park standing outside school too visible suggested in tone didnt leave room disagreement</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch5Sc5</td>
+  <td class="title">Different Choices</td>
+  <td class="loc">Caldwell Park, Velmoor — same bench<br><span style="color:#5a5a6a">Thursday, 4:35 PM</span></td>
+  <td class="chars">Seren, Marcus</td>
+  <td class="narr">We sat on the bench. Bolt had found something interesting near the fountain and was investigating it with the focus of a</td>
+  <td class="filtered-weak">sat on bench</td>
+  <td><span class="badge-weak">WEAK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch6Sc1</td>
+  <td class="title">Telling Dex About Seren</td>
+  <td class="loc">Velmoor Secondary, canteen — corner table<br><span style="color:#5a5a6a">Friday, 12:25 PM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">I had been putting off telling Dex about Seren for twenty-four hours. I was not sure why. Partly because his reaction wa</td>
+  <td class="filtered-ok">putting off telling Dex Seren twentyfour hours</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch6Sc2</td>
+  <td class="title">Caldwell Park, Saturday</td>
+  <td class="loc">Caldwell Park, Velmoor — the bench near the fountain<br><span style="color:#5a5a6a">Saturday, 2:00 PM</span></td>
+  <td class="chars">Seren, Dex</td>
+  <td class="narr">I told Dex three times before we arrived: be normal. Don't lead with the notebook. Don't ask about activation parameters</td>
+  <td class="filtered-ok">told Dex three times before arrived normal</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch6Sc3</td>
+  <td class="title">The Data</td>
+  <td class="loc">Caldwell Park, Velmoor — the bench<br><span style="color:#5a5a6a">Saturday, 2:35 PM</span></td>
+  <td class="chars">Seren, Dex</td>
+  <td class="narr">They had been comparing notes for half an hour. I had attempted to contribute three times. Each time, Dex had said "Yes,</td>
+  <td class="filtered-ok">comparing notes half hour</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch6Sc4</td>
+  <td class="title">The Graduated Response Matrix</td>
+  <td class="loc">Caldwell Park, Velmoor — the bench<br><span style="color:#5a5a6a">Saturday, 3:10 PM</span></td>
+  <td class="chars">Marcus, Seren</td>
+  <td class="narr">The argument started, as I had expected, around the question of what they were actually going to do. They both looked at</td>
+  <td class="filtered-ok">argument started as expected around question of going to</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch6Sc5</td>
+  <td class="title">North</td>
+  <td class="loc">Velmoor street, heading home from the park<br><span style="color:#5a5a6a">Saturday, 4:15 PM</span></td>
+  <td class="chars">Marcus, Seren</td>
+  <td class="narr">We walked back through Velmoor together. Dex was on my left. Seren was on my right. Bolt walked ahead, which was unusual</td>
+  <td class="filtered-ok">walked back through Velmoor together</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch7Sc1</td>
+  <td class="title">Caldwell Street</td>
+  <td class="loc">Caldwell district, north Velmoor — Arden Street<br><span style="color:#5a5a6a">Sunday, 10:15 AM</span></td>
+  <td class="chars">Dex, Marcus</td>
+  <td class="narr">Bolt took us directly there. No scanning. No signal tracking. He just walked north from the top of Caldwell Road, turned</td>
+  <td class="filtered-ok">Bolt took directly there</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch7Sc2</td>
+  <td class="title">Tea</td>
+  <td class="loc">Dot's front room, Arden Street<br><span style="color:#5a5a6a">Sunday, 10:20 AM</span></td>
+  <td class="chars">Dot, Dex</td>
+  <td class="narr">Her name was Dot. She made us tea without asking if we wanted any, in a kitchen that smelled of toast and something flor</td>
+  <td class="filtered-empty"><span style="color:#e74c3c;font-weight:bold">EMPTY — no action</span></td>
+  <td><span class="badge-empty">EMPTY</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch7Sc3</td>
+  <td class="title">The Pattern</td>
+  <td class="loc">Dot's front room, Arden Street<br><span style="color:#5a5a6a">Sunday, 11:05 AM</span></td>
+  <td class="chars">Dot, Marcus</td>
+  <td class="narr">We were putting on our coats when Dot said it. Very calmly. Not urgently. In the tone of someone mentioning a thing they</td>
+  <td class="filtered-ok">putting on coats Dot</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc1</td>
+  <td class="title">Volume 2</td>
+  <td class="loc">Velmoor Secondary, canteen — corner table<br><span style="color:#5a5a6a">Monday, 12:30 PM</span></td>
+  <td class="chars">Marcus, Dex</td>
+  <td class="narr">Dex had named the new section. It was called ORIGIN: VELMOOR and it took up four pages of the notebook — everything Dot </td>
+  <td class="filtered-ok">Dex named new section</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc2</td>
+  <td class="title">The Construction Site</td>
+  <td class="loc">Merchant Street, Velmoor — outside the new build<br><span style="color:#5a5a6a">Thursday, 4:30 PM</span></td>
+  <td class="chars">—</td>
+  <td class="narr">Bolt had been restless for four days. Not his usual directional restlessness — not pointing somewhere with that compass-</td>
+  <td class="filtered-ok">Bolt restless four days</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc3</td>
+  <td class="title">Dex's Assessment</td>
+  <td class="loc">Caldwell Park, Velmoor — the bench<br><span style="color:#5a5a6a">Thursday, 5:15 PM</span></td>
+  <td class="chars">Seren, Marcus</td>
+  <td class="narr">He told them that evening. Bolt was lying in the grass nearby, watching them. His ears were up.</td>
+  <td class="filtered-ok">told them evening</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc4</td>
+  <td class="title">Merchant Street, Friday</td>
+  <td class="loc">Merchant Street, Velmoor — Friday market<br><span style="color:#5a5a6a">Friday, 4:30 PM</span></td>
+  <td class="chars">Dex, Seren</td>
+  <td class="narr">The market was busy. Not chaotic — just the normal organised density of a Friday afternoon in a city that had been doing</td>
+  <td class="filtered-weak">market busy</td>
+  <td><span class="badge-weak">WEAK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc5</td>
+  <td class="title">4:47 PM</td>
+  <td class="loc">Merchant Street — same position<br><span style="color:#5a5a6a">Friday, 4:47 PM</span></td>
+  <td class="chars">Dex</td>
+  <td class="narr">A lorry turned onto Merchant Street from the north end. Heavy. Probably a delivery vehicle. It shouldn't have come this </td>
+  <td class="filtered-ok">lorry turned onto Merchant Street from north end</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc6</td>
+  <td class="title">Inside the Freeze — First Run</td>
+  <td class="loc">Merchant Street — in the freeze<br><span style="color:#5a5a6a">4:47 PM (frozen)</span></td>
+  <td class="chars">Dex, Seren</td>
+  <td class="narr">Everything stopped. The lorry, mid-roll. The market stalls, their awnings mid-flutter in the wind that no longer moved. </td>
+  <td class="filtered-ok">Everything stopped</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc7</td>
+  <td class="title">Inside the Freeze — Second Run</td>
+  <td class="loc">Merchant Street — second freeze<br><span style="color:#5a5a6a">4:47 PM (frozen again)</span></td>
+  <td class="chars">Dex</td>
+  <td class="narr">Fifteen-second cooldown. Marcus used it to run. The west join had separated further when time unfroze. He could see the </td>
+  <td class="filtered-ok">Fifteensecond cooldown</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+<tr>
+  <td class="scene">Ch8Sc8</td>
+  <td class="title">After</td>
+  <td class="loc">Merchant Street south side, then walking home<br><span style="color:#5a5a6a">Friday, 5:05 PM</span></td>
+  <td class="chars">Seren, Marcus</td>
+  <td class="narr">They were gone before the construction workers came running. There was no reason to stay. They hadn't been seen — or rat</td>
+  <td class="filtered-ok">gone before construction workers came running</td>
+  <td><span class="badge-ok">OK</span></td>
+</tr>
+</table></body></html>

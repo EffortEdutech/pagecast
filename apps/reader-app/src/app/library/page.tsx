@@ -60,9 +60,14 @@ function LibraryCard({ story }: { story: Story }) {
   return (
     <div className="card hover:border-accent/40 transition-all duration-200 overflow-hidden flex flex-col sm:flex-row gap-0">
       {/* Cover strip */}
-      <div className={clsx('h-36 sm:h-auto sm:w-28 bg-gradient-to-br flex-shrink-0 flex items-center justify-center relative', story.coverGradient)}>
+      <div className={clsx(
+        'h-36 sm:h-auto sm:w-28 flex-shrink-0 relative overflow-hidden',
+        story.coverImage?.startsWith('http') ? 'bg-black' : `bg-gradient-to-br ${story.coverGradient}`
+      )}>
+        {story.coverImage?.startsWith('http') && (
+          <img src={story.coverImage} alt={story.title} className="absolute inset-0 w-full h-full object-cover" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent sm:bg-gradient-to-r" />
-        <BookOpen size={28} className="text-white/25 relative z-10" />
       </div>
 
       {/* Info */}

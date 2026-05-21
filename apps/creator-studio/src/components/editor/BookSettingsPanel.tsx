@@ -1,10 +1,12 @@
 'use client'
 import { useState } from 'react'
-import { X, Save, Loader2, Palette, ShieldCheck } from 'lucide-react'
+import { X, Save, Loader2, Palette, ShieldCheck, ImageIcon, Upload, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useRef } from 'react'
 import { STORY_LANGUAGES } from '@/lib/voiceLibrary'
 import type { Story } from '@/types'
 import type { BookRights, RightsCategory } from '@/lib/supabase/compliance'
+import { uploadCoverImage } from '@/lib/supabase/books'
 
 const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Mystery', 'Thriller', 'Horror',
   "Children's", 'Non-fiction', 'History', 'Poetry', 'Other']
@@ -20,6 +22,7 @@ const GRADIENTS = [
   { label: 'Slate',    value: 'from-slate-900 via-gray-900 to-bg-primary' },
   { label: 'Crimson',  value: 'from-red-900 via-rose-900 to-bg-primary' },
 ]
+// EMOJIS kept for backward-compat read (older books may have emoji stored)
 const EMOJIS = ['📖', '🌲', '🤖', '🌙', '⚔️', '🔮', '🚀', '🐉', '🌺', '🎭', '🗺️', '💫']
 
 const RIGHTS_CATEGORIES: Array<{ value: RightsCategory; label: string }> = [
@@ -57,7 +60,27 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
   const [desc,      setDesc]      = useState(story.description ?? '')
   const [rightsDraft, setRightsDraft] = useState<BookRights>(rights)
   const [saving,    setSaving]    = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [error,     setError]     = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const url = await uploadCoverImage(story.id, file)
+      setEmoji(url)
+    } catch (err: any) {
+      setUploadError(err?.message ?? 'Upload failed — check your Supabase Storage bucket.')
+    } finally {
+      setUploading(false)
+      // Reset input so the same file can be re-uploaded if needed
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const updateRights = <K extends keyof BookRights>(key: K, value: BookRights[K]) => {
     setRightsDraft(current => ({ ...current, [key]: value }))
@@ -195,21 +218,77 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
             </div>
           )}
 
-          {/* Cover emoji */}
+          {/* Cover Image */}
           <div>
-            <label className="label">Cover Icon</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {EMOJIS.map(em => (
-                <button key={em}
-                  onClick={() => setEmoji(em)}
-                  className={clsx(
-                    'w-9 h-9 rounded-lg text-xl flex items-center justify-center transition-all',
-                    emoji === em ? 'bg-accent/20 ring-2 ring-accent/60 scale-110' : 'bg-bg-elevated hover:bg-bg-hover'
-                  )}>
-                  {em}
-                </button>
-              ))}
+            <label className="label flex items-center gap-1.5">
+              <ImageIcon size={11} /> Cover Image
+            </label>
+
+            {/* Live preview card */}
+            <div className={clsx(
+              'h-28 rounded-lg overflow-hidden mb-3 relative flex items-end p-2',
+              `bg-gradient-to-br ${gradient}`
+            )}>
+              {emoji?.startsWith('http') && (
+                <img
+                  src={emoji}
+                  alt="Cover preview"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <span className="relative z-10 text-white text-xs font-semibold truncate leading-tight">
+                {story.title}
+              </span>
+              {uploading && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <Loader2 size={22} className="animate-spin text-white" />
+                </div>
+              )}
             </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleCoverUpload}
+            />
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary flex-1 text-xs justify-center"
+              >
+                {uploading
+                  ? <><Loader2 size={12} className="animate-spin" /> Uploading…</>
+                  : <><Upload size={12} /> {emoji?.startsWith('http') ? 'Replace Cover' : 'Upload Cover Image'}</>
+                }
+              </button>
+              {emoji?.startsWith('http') && (
+                <button
+                  type="button"
+                  onClick={() => setEmoji('')}
+                  className="btn-ghost px-2.5 text-text-muted hover:text-danger"
+                  title="Remove cover image"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+
+            {uploadError && (
+              <p className="text-danger text-[10px] mt-1.5">{uploadError}</p>
+            )}
+            {!uploadError && (
+              <p className="text-text-muted text-[10px] mt-1.5">
+                JPG, PNG or WebP. First run <code className="text-accent">/storybook-image-prompt</code> to generate <code className="text-accent">cover.jpg</code>.
+              </p>
+            )}
           </div>
 
           {/* Cover gradient */}

@@ -1,50 +1,25 @@
 #!/usr/bin/env python3
 """
 storybook_pdf.py  --  pageCast Dark Storybook PDF Producer
-===========================================================
-Combines a pageCast .txt file + scene JPEGs into a dark-theme .docx / .pdf
-using the PageCast_Dark_Template_v1.dotx template styles.
+Source: _manuscript.docx files (proper prose)
+Theme:  PageCast Dark (dark background, gold headings, etc.)
 
 Usage:
-  python skills/storybook_pdf.py --book "The Garden That Talked Back"
-  python skills/storybook_pdf.py --txt ".casts/my-book/Ch1_pagecast.txt" --chapter 1
-  python skills/storybook_pdf.py --book "My Book" --no-pdf   # docx only
-
-Arguments:
-  --book        Book title (looks up .casts/<slug>/ folder automatically)
-  --txt         Direct path to the pageCast .txt file
-  --chapter     Chapter number (default: 1)
-  --out-dir     Output directory (default: same as .txt file)
-  --no-pdf      Skip LibreOffice PDF conversion, output .docx only
-  --template    Path to .dotx template (default: docs/PageCast_Dark_Template_v1.dotx)
+  python skills/storybook_pdf.py --book "Algoritma Tuhan"
+  python skills/storybook_pdf.py --book "The Garden That Talked Back" --chapter 1
+  python skills/storybook_pdf.py --book "My Book" --no-pdf
 """
 
 import argparse
 import re
-import struct
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
-# ---------------------------------------------------------------------------
-# CONSTANTS
-# ---------------------------------------------------------------------------
-
-# Page dimensions: A4 in EMU (1 inch = 914400 EMU, 1 twip = 635 EMU)
-PAGE_W_EMU = 7560210
-PAGE_H_EMU = 10692130
-MARGIN_L_EMU = 719190
-MARGIN_R_EMU = 719190
-CONTENT_W_EMU = PAGE_W_EMU - MARGIN_L_EMU - MARGIN_R_EMU  # ~6121830
-
-COVER_MAX_H_EMU = 5000000   # ~13.5 cm
-SCENE_MAX_H_EMU = 3600000   # ~9.7 cm
-
-REL_IMAGE_TYPE = (
-    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
-)
+# Force UTF-8 output on Windows (no-op on Linux)
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 
 # ---------------------------------------------------------------------------
 # UTILITIES
@@ -54,252 +29,156 @@ def slugify(title):
     slug = title.lower()
     slug = re.sub(r'[^\w\s-]', '', slug)
     slug = re.sub(r'[\s_]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug).strip('-')
-    return slug
+    return re.sub(r'-+', '-', slug).strip('-')
 
 
-def jpeg_dimensions(path):
-    with open(path, 'rb') as f:
-        data = f.read()
-    if data[0:2] != b'\xff\xd8':
-        raise ValueError('Not a JPEG: ' + str(path))
-    i = 2
-    while i < len(data) - 3:
-        if data[i] != 0xff:
-            break
-        marker = data[i + 1]
-        if marker in (0xC0, 0xC1, 0xC2, 0xC3):
-            h = struct.unpack('>H', data[i + 5:i + 7])[0]
-            w = struct.unpack('>H', data[i + 7:i + 9])[0]
-            return w, h
-        length = struct.unpack('>H', data[i + 2:i + 4])[0]
-        i += 2 + length
-    raise ValueError('No SOF marker in ' + str(path))
+def find_node():
+    for c in ('node', 'nodejs'):
+        try:
+            r = subprocess.run([c, '--version'], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                return c
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    return None
 
 
-def png_dimensions(path):
-    with open(path, 'rb') as f:
-        f.read(16)
-        w = struct.unpack('>I', f.read(4))[0]
-        h = struct.unpack('>I', f.read(4))[0]
-    return w, h
+def find_gen_script():
+    p = Path(__file__).resolve().parent / 'gen_storybook_dark.js'
+    return p if p.exists() else None
 
 
-def image_dimensions(path):
-    ext = path.suffix.lower()
-    if ext in ('.jpg', '.jpeg'):
-        return jpeg_dimensions(path)
-    if ext == '.png':
-        return png_dimensions(path)
-    raise ValueError('Unsupported image type: ' + ext)
+def find_pagecast_root():
+    for c in (Path(__file__).resolve().parent.parent, Path(__file__).resolve().parent, Path.cwd()):
+        if (c / 'docs').exists() or (c / '.casts').exists():
+            return c
+    return Path.cwd()
 
+# ---------------------------------------------------------------------------
+# MANUSCRIPT PARSER  (reads _manuscript.docx, classifies each paragraph)
+# ---------------------------------------------------------------------------
 
-def image_emu(path, max_w, max_h):
+def _is_center(p):
+    """True if paragraph is explicitly center-aligned."""
     try:
-        px_w, px_h = image_dimensions(path)
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        return p.alignment == WD_ALIGN_PARAGRAPH.CENTER
     except Exception:
-        return max_w, min(max_h, int(max_w * 0.6))
-    ratio = px_w / px_h
-    cx = max_w
-    cy = int(cx / ratio)
-    if cy > max_h:
-        cy = max_h
-        cx = int(cy * ratio)
-    return cx, cy
+        return p.alignment is not None and '1' in str(p.alignment)
 
 
-def xml_escape(s):
-    return (s.replace('&', '&amp;')
-             .replace('<', '&lt;')
-             .replace('>', '&gt;')
-             .replace('"', '&quot;'))
+def classify_paragraph(p):
+    """
+    Returns (ptype, text) where ptype is one of:
+      title | subtitle | chapter_heading | scene_number |
+      scene_break | centered | body | thought | empty
+    """
+    text = p.text.strip()
+    if not text:
+        return 'empty', ''
 
-# ---------------------------------------------------------------------------
-# PAGECAST .TXT PARSER
-# ---------------------------------------------------------------------------
+    italic = any(r.italic for r in p.runs if r.text.strip())
+    bold   = any(r.bold   for r in p.runs if r.text.strip())
+    center = _is_center(p)
+    style  = p.style.name if p.style else ''
 
-def parse_pagecast(txt_path):
-    text = txt_path.read_text(encoding='utf-8', errors='replace')
-    lines = text.splitlines()
+    if style == 'Heading 1' or style == 'Heading1':
+        return 'chapter_heading', text
 
-    book = {
-        'title': '', 'author': '', 'language': 'en', 'genre': '',
-        'cast': {}, 'chapters': []
-    }
-
-    in_header = False
-    in_cast = False
-    chapter = None
-    scene = None
-    block = None
-
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].strip()
-
-        # Header / cast delimiters
-        if stripped == '::PAGECAST_BOOK':
-            in_header = True
-            i += 1
-            continue
-        if stripped == '::CAST':
-            in_header = False
-            in_cast = True
-            i += 1
-            continue
-        if stripped == '::' and (in_header or in_cast):
-            in_header = False
-            in_cast = False
-            i += 1
-            continue
-
-        if in_header:
-            if ':' in stripped:
-                key, _, val = stripped.partition(':')
-                k = key.strip().lower()
-                v = val.strip()
-                if k == 'title':    book['title'] = v
-                elif k == 'author': book['author'] = v
-                elif k == 'language': book['language'] = v
-                elif k == 'genre':  book['genre'] = v
-            i += 1
-            continue
-
-        if in_cast:
-            if stripped and '|' in stripped:
-                parts = [p.strip() for p in stripped.split('|')]
-                name_id = parts[0]
-                if ':' in name_id:
-                    display_name, _, char_id = name_id.partition(':')
-                    display_name = display_name.strip()
-                    char_id = char_id.strip()
-                else:
-                    display_name = name_id
-                    char_id = name_id.lower().replace(' ', '_')
-                meta = {
-                    'name': display_name, 'id': char_id,
-                    'role': '', 'voice': '', 'color': '#FFFFFF'
-                }
-                for p in parts[1:]:
-                    if '=' in p:
-                        kk, _, vv = p.partition('=')
-                        meta[kk.strip()] = vv.strip()
-                book['cast'][char_id] = meta
-            i += 1
-            continue
-
-        # Chapter heading  (#)
-        m = re.match(r'^#\s+CHAPTER\s+(\d+)\s*:\s*(.+)$', stripped, re.IGNORECASE)
-        if not m:
-            m = re.match(r'^#\s+(.+)$', stripped)
-        if m and not stripped.startswith('##'):
-            chapter = {
-                'number': int(m.group(1)) if len(m.groups()) > 1
-                          else len(book['chapters']) + 1,
-                'title': m.group(2).strip() if len(m.groups()) > 1
-                         else m.group(1).strip(),
-                'scenes': []
-            }
-            book['chapters'].append(chapter)
-            scene = None
-            block = None
-            i += 1
-            continue
-
-        # Scene heading  (##)
-        m = re.match(r'^##\s+SCENE\s+(\d+)\s*:\s*(.+)$', stripped, re.IGNORECASE)
-        if not m:
-            m = re.match(r'^##\s+(.+)$', stripped)
+    if style == 'Heading 2' or style == 'Heading2':
+        # "Scene One: ...", "Scene Two: ...", or "Scene 1: ..." etc.
+        ORDINALS = {'ONE':1,'TWO':2,'THREE':3,'FOUR':4,'FIVE':5,
+                    'SIX':6,'SEVEN':7,'EIGHT':8,'NINE':9,'TEN':10}
+        m = re.search(r'\b(\d+)\b', text)
         if m:
-            if chapter is None:
-                chapter = {'number': 1, 'title': 'Chapter 1', 'scenes': []}
-                book['chapters'].append(chapter)
-            num = int(m.group(1)) if len(m.groups()) > 1 else len(chapter['scenes']) + 1
-            title = m.group(2).strip() if len(m.groups()) > 1 else m.group(1).strip()
-            sc_slug = re.sub(r'[^\w\s-]', '', title.lower())
-            sc_slug = re.sub(r'[\s_]+', '-', sc_slug).strip('-')
-            scene = {
-                'number': num, 'title': title, 'slug': sc_slug,
-                'ambience': '', 'music': '', 'location': '', 'time': '',
-                'blocks': []
-            }
-            chapter['scenes'].append(scene)
-            block = None
-            i += 1
+            return 'scene_number', str(int(m.group(1)))
+        m = re.search(r'\b(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b', text.upper())
+        if m and m.group(1) in ORDINALS:
+            return 'scene_number', str(ORDINALS[m.group(1)])
+        return 'scene_number', '0'
+
+    if center and bold and len(text) > 4:
+        return 'title', text                          # title-case or ALL CAPS heading
+
+    if center and italic and re.match(r'^[~*\-–—]', text) and re.search(r'[~*\-–—]$', text):
+        # Scene markers: ~ 1 ~  or  ~ I. Title ~  or  ~ III. Something ~
+        # Try Arabic digit first
+        m = re.search(r'\d+', text)
+        if m:
+            return 'scene_number', str(int(m.group()))
+        # Try Roman numeral (I, II, III, IV, V, VI, VII, VIII, IX, X)
+        roman = {'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,'VIII':8,'IX':9,'X':10}
+        rm = re.search(r'\b(X{0,3}I{0,3}|IV|VI{0,3}|IX|X)\b', text.upper())
+        if rm and rm.group() in roman:
+            return 'scene_number', str(roman[rm.group()])
+        return 'scene_number', '0'
+
+    if center and re.match(r'^[\*✦~\-\s]+$', text):
+        return 'scene_break', text                    # * * *  or  ✦ ✦ ✦
+
+    if center and italic:
+        return 'subtitle', text                       # "Algoritma yang Menemukan Tuhan"
+
+    if center:
+        return 'centered', text                       # chapter ref, page number filler, etc.
+
+    if italic:
+        return 'thought', text                        # internal monologue
+
+    return 'body', text
+
+
+def parse_manuscript(docx_path):
+    """
+    Read a _manuscript.docx and return a list of paragraph dicts:
+      [{type, text, number(for scene_number)}]
+    Also extracts book_title and chapter_title from the first headings found.
+    """
+    try:
+        from docx import Document
+    except ImportError:
+        print('  Installing python-docx...')
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'python-docx', '-q'], capture_output=True)
+        from docx import Document
+
+    doc = Document(str(docx_path))
+    paragraphs = []
+    book_title    = ''
+    chapter_title = ''
+
+    for p in doc.paragraphs:
+        ptype, text = classify_paragraph(p)
+        if ptype == 'empty':
             continue
+        if ptype == 'title' and not book_title:
+            # Convert ALL CAPS title back to title case for display
+            book_title = text.title()
+        elif ptype == 'title' and not chapter_title:
+            # Chapter uses all-caps bold for its heading (no Heading 1 style)
+            chapter_title = text.title()
+        if ptype == 'chapter_heading' and not chapter_title:
+            chapter_title = text
 
-        # Scene metadata
-        if scene and re.match(r'^(Ambience|Music|Location|Time)\s*:', stripped, re.IGNORECASE):
-            key, _, val = stripped.partition(':')
-            scene[key.strip().lower()] = val.strip()
-            i += 1
-            continue
+        entry = {'type': ptype, 'text': text}
+        if ptype == 'scene_number':
+            try:
+                entry['number'] = int(text)
+            except ValueError:
+                entry['number'] = 0
+        paragraphs.append(entry)
 
-        # Block tags  [TAG], [TAG: arg], [TAG | attr=val], [TAG: arg | attr=val]
-        tag_m = re.match(r'^\[([^\]|]+?)(?:\s*\|([^\]]*))?\]$', stripped)
-        if tag_m:
-            tag_full = tag_m.group(1).strip()
-            tag_attrs_str = tag_m.group(2) or ''
-
-            if ':' in tag_full:
-                tag_type, _, tag_arg = tag_full.partition(':')
-                tag_name = tag_type.strip().upper()
-                tag_speaker = tag_arg.strip()
-            else:
-                tag_name = tag_full.upper()
-                tag_speaker = ''
-
-            attrs = {}
-            for part in tag_attrs_str.split('|'):
-                part = part.strip()
-                if '=' in part:
-                    kk, _, vv = part.partition('=')
-                    attrs[kk.strip()] = vv.strip()
-
-            # Self-closing — skip in PDF
-            if tag_name in ('PAUSE', 'SFX', 'TRANSITION', 'MUSIC'):
-                i += 1
-                continue
-
-            if tag_name == 'NARRATION':
-                block = {'type': 'narration', 'speaker': '',
-                         'emotion': attrs.get('tone', ''), 'text': ''}
-            elif tag_name == 'DIALOGUE':
-                block = {'type': 'dialogue', 'speaker': tag_speaker,
-                         'emotion': attrs.get('emotion', 'neutral'), 'text': ''}
-            elif tag_name == 'THOUGHT':
-                block = {'type': 'thought', 'speaker': tag_speaker,
-                         'emotion': attrs.get('emotion', ''), 'text': ''}
-            else:
-                block = None
-
-            if block and scene:
-                scene['blocks'].append(block)
-            i += 1
-            continue
-
-        # Block body text
-        if block and stripped:
-            block['text'] = (block['text'] + ' ' + stripped).strip() if block['text'] else stripped
-            i += 1
-            continue
-
-        # Blank line — end block
-        if not stripped:
-            block = None
-
-        i += 1
-
-    return book
+    return {'book_title': book_title, 'chapter_title': chapter_title, 'paragraphs': paragraphs}
 
 # ---------------------------------------------------------------------------
-# IMAGE FINDER
+# IMAGE FINDER  (matches scene images to scene numbers)
 # ---------------------------------------------------------------------------
 
-def find_images(casts_folder, chapter_num, scenes):
+def find_scene_images(casts_folder, chapter_num):
+    """
+    Returns dict: {scene_num -> Path, 'cover' -> Path|None}
+    """
     images_dir = casts_folder / 'images'
     result = {'cover': None}
-
     if not images_dir.exists():
         return result
 
@@ -309,271 +188,251 @@ def find_images(casts_folder, chapter_num, scenes):
             result['cover'] = p
             break
 
-    for sc in scenes:
-        sc_num = sc['number']
-        slug = sc['slug'].replace('-', '_')
-        found = False
-        for ext in ('.jpg', '.jpeg', '.png'):
-            p = images_dir / ('Ch%d_Sc%d_%s%s' % (chapter_num, sc_num, slug, ext))
-            if p.exists():
-                result[sc_num] = p
-                found = True
-                break
-        if not found:
-            candidates = list(images_dir.glob('Ch%d_Sc%d_*' % (chapter_num, sc_num)))
-            if candidates:
-                result[sc_num] = candidates[0]
+    for img in sorted(images_dir.iterdir()):
+        m = re.match(r'Ch(\d+)_Sc(\d+)_', img.name)
+        if m and int(m.group(1)) == chapter_num:
+            result[int(m.group(2))] = img
 
     return result
 
 # ---------------------------------------------------------------------------
-# DOCX BUILDER  (delegates to gen_storybook_dark.js via Node.js)
+# DOCX BUILDER  (delegates to gen_storybook_dark.js)
 # ---------------------------------------------------------------------------
 
-def find_node():
-    for candidate in ('node', 'nodejs'):
-        try:
-            r = subprocess.run([candidate, '--version'], capture_output=True, timeout=5)
-            if r.returncode == 0:
-                return candidate
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-    return None
-
-
-def find_gen_script():
-    here = Path(__file__).resolve().parent
-    p = here / 'gen_storybook_dark.js'
-    if p.exists():
-        return p
-    # Also check outputs dir (sandbox path)
-    alt = Path('/sessions/funny-great-hamilton/mnt/pageCast/skills/gen_storybook_dark.js')
-    if alt.exists():
-        return alt
-    return None
-
-
-def build_docx(book, chapter_idx, image_map, out_path):
+def build_docx(title, author, genre, cover_image, chapters_json, out_path):
     import json, tempfile
 
     node_cmd = find_node()
     if not node_cmd:
-        print('  [!] Node.js not found. Install Node.js to generate dark-theme docx.')
-        sys.exit(1)
-
+        print('  [!] Node.js not found.'); sys.exit(1)
     gen_script = find_gen_script()
     if not gen_script:
-        print('  [!] gen_storybook_dark.js not found next to storybook_pdf.py')
-        sys.exit(1)
-
-    ch = book['chapters'][chapter_idx]
-
-    # Build scene list for the job
-    scenes = []
-    for sc in ch['scenes']:
-        sc_num = sc['number']
-        img = image_map.get(sc_num)
-        blocks = []
-        for blk in sc['blocks']:
-            if blk['text'].strip():
-                blocks.append({
-                    'type':    blk['type'],
-                    'speaker': blk.get('speaker', ''),
-                    'text':    blk['text'].strip()
-                })
-        scenes.append({
-            'number':     sc_num,
-            'title':      sc['title'],
-            'location':   sc.get('location', ''),
-            'time':       sc.get('time', ''),
-            'image_path': str(img) if img else None,
-            'blocks':     blocks
-        })
+        print('  [!] gen_storybook_dark.js not found'); sys.exit(1)
 
     job = {
-        'title':         book['title'],
-        'author':        book['author'] or 'pageCast Studio',
-        'genre':         book.get('genre', "Children's Fantasy"),
-        'chapter_num':   ch['number'],
-        'chapter_title': ch['title'],
-        'cover_image':   str(image_map['cover']) if image_map.get('cover') else None,
-        'out_path':      str(out_path),
-        'scenes':        scenes
+        'title':       title,
+        'author':      author or 'pageCast Studio',
+        'genre':       genre or '',
+        'cover_image': str(cover_image) if cover_image else None,
+        'out_path':    str(out_path),
+        'chapters':    chapters_json,
     }
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
         json.dump(job, f, ensure_ascii=False, indent=2)
         job_file = f.name
 
     try:
-        r = subprocess.run(
-            [node_cmd, str(gen_script), job_file],
-            capture_output=True, text=True, timeout=120
-        )
+        r = subprocess.run([node_cmd, str(gen_script), job_file],
+                           capture_output=True, text=True, timeout=240)
         if r.returncode != 0 or 'ERROR:' in r.stdout:
             print('  [!] Node error: ' + (r.stderr or r.stdout).strip())
             return False
-        print('  Saved: ' + out_path.name)
-        return True
+        # Pick up actual saved path (may differ if original was locked)
+        actual_path = out_path
+        for line in r.stdout.splitlines():
+            if line.startswith('NOTE:'):
+                print('  [i] ' + line[5:])
+            if line.startswith('OK:'):
+                actual_path = Path(line[3:])
+        print('  Saved: ' + actual_path.name)
+        return actual_path
     finally:
         Path(job_file).unlink(missing_ok=True)
 
-
 # ---------------------------------------------------------------------------
-# PDF CONVERTER
+# PDF CONVERTER  (safe COM -- never closes open Word windows)
 # ---------------------------------------------------------------------------
 
-def _ensure_docx2pdf():
+def _convert_via_word_com(docx_path, pdf_path):
     try:
-        import docx2pdf  # noqa
-        return True
+        import pythoncom, win32com.client
     except ImportError:
-        print('  Installing docx2pdf...')
-        r = subprocess.run(
-            [sys.executable, '-m', 'pip', 'install', 'docx2pdf', '-q'],
-            capture_output=True
-        )
-        return r.returncode == 0
+        print('  Installing pywin32...')
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'pywin32', '-q'], capture_output=True)
+        import pythoncom, win32com.client
+
+    pythoncom.CoInitialize()
+    word_was_running = False
+    word = None
+    try:
+        try:
+            word = win32com.client.GetActiveObject('Word.Application')
+            word_was_running = True
+        except Exception:
+            word = win32com.client.Dispatch('Word.Application')
+            word_was_running = False
+
+        word.Visible = False
+        doc = word.Documents.Open(str(docx_path.resolve()))
+        try:
+            doc.SaveAs(str(pdf_path.resolve()), FileFormat=17)
+        finally:
+            doc.Close(False)
+        return True
+    except Exception as e:
+        print('  [!] Word COM: ' + str(e))
+        return False
+    finally:
+        if word and not word_was_running:
+            try: word.Quit()
+            except Exception: pass
+        try: pythoncom.CoUninitialize()
+        except Exception: pass
 
 
 def convert_to_pdf(docx_path):
-    out_dir = docx_path.parent
+    out_dir  = docx_path.parent
     pdf_path = out_dir / (docx_path.stem + '.pdf')
-    if _ensure_docx2pdf():
-        try:
-            from docx2pdf import convert
-            print('  Converting to PDF via Word...')
-            convert(str(docx_path), str(pdf_path))
+
+    if sys.platform == 'win32':
+        print('  Converting to PDF via Word (your open docs stay open)...')
+        if _convert_via_word_com(docx_path, pdf_path):
             if pdf_path.exists():
                 print('  PDF saved: ' + pdf_path.name)
                 return pdf_path
-        except Exception as e:
-            print('  [!] docx2pdf: ' + str(e))
-    lo_cmd = None
+
     for candidate in ('soffice', 'libreoffice'):
         try:
             r = subprocess.run([candidate, '--version'], capture_output=True, timeout=10)
             if r.returncode == 0:
-                lo_cmd = candidate
+                r2 = subprocess.run([candidate, '--headless', '--convert-to', 'pdf',
+                                     '--outdir', str(out_dir), str(docx_path)],
+                                    capture_output=True, text=True, timeout=240)
+                if r2.returncode == 0 and pdf_path.exists():
+                    print('  PDF saved: ' + pdf_path.name)
+                    return pdf_path
                 break
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-    if lo_cmd is None:
-        print('  [!] PDF conversion unavailable. Run: pip install docx2pdf')
-        return None
-    r = subprocess.run([lo_cmd, '--headless', '--convert-to', 'pdf',
-                        '--outdir', str(out_dir), str(docx_path)],
-                       capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        print('  [!] LibreOffice: ' + r.stderr.strip())
-        return None
-    if pdf_path.exists():
-        print('  PDF saved: ' + pdf_path.name)
-        return pdf_path
+            pass
+
+    print('  [!] PDF conversion unavailable (Windows: needs pywin32; others: install LibreOffice)')
     return None
 
+# ---------------------------------------------------------------------------
+# MANUSCRIPT DISCOVERY
+# ---------------------------------------------------------------------------
+
+def discover_manuscripts(casts_folder, chapter=None):
+    """Return sorted list of (chapter_num, Path) for all _manuscript.docx files."""
+    found = []
+    for p in casts_folder.glob('*manuscript*.docx'):
+        if p.name.startswith('~$'):
+            continue
+        m = re.search(r'[Cc]h(?:apter)?[\s_-]*(\d+)', p.stem)
+        num = int(m.group(1)) if m else 0
+        found.append((num, p))
+    found.sort(key=lambda x: x[0])
+    if chapter is not None:
+        found = [(n, p) for n, p in found if n == chapter]
+    return found
 
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
-def find_pagecast_root():
-    script_dir = Path(__file__).resolve().parent
-    for candidate in (script_dir.parent, script_dir, Path.cwd()):
-        if (candidate / 'docs').exists() or (candidate / '.casts').exists():
-            return candidate
-    return Path.cwd()
-
-
 def main():
     parser = argparse.ArgumentParser(description='pageCast Dark Storybook PDF Producer')
-    parser.add_argument('--book',     help='Book title')
-    parser.add_argument('--txt',      help='Direct path to pageCast .txt file')
-    parser.add_argument('--chapter',  type=int, default=1)
-    parser.add_argument('--out-dir',  help='Output directory')
-    parser.add_argument('--no-pdf',   action='store_true')
+    parser.add_argument('--book',    help='Book title')
+    parser.add_argument('--chapter', type=int, default=None, help='Single chapter number (default: all)')
+    parser.add_argument('--out-dir', help='Output directory')
+    parser.add_argument('--no-pdf',  action='store_true')
     args = parser.parse_args()
 
+    if not args.book:
+        parser.print_help(); sys.exit(1)
+
     root = find_pagecast_root()
+    slug = slugify(args.book)
+    casts_folder = root / '.casts' / slug
+    if not casts_folder.exists():
+        print('Error: Cast folder not found: ' + str(casts_folder)); sys.exit(1)
 
-    if args.txt:
-        txt_path = Path(args.txt).resolve()
-        casts_folder = txt_path.parent
-    elif args.book:
-        slug = slugify(args.book)
-        casts_folder = root / '.casts' / slug
-        if not casts_folder.exists():
-            print('Error: Cast folder not found: ' + str(casts_folder))
-            sys.exit(1)
-        candidates = list(casts_folder.glob('*_Ch%d_pagecast.txt' % args.chapter))
-        if not candidates:
-            candidates = list(casts_folder.glob('*_pagecast.txt'))
-        if not candidates:
-            candidates = list(casts_folder.glob('*.txt'))
-        if not candidates:
-            print('Error: No pageCast .txt file found in ' + str(casts_folder))
-            sys.exit(1)
-        txt_path = candidates[0]
-        for c in candidates:
-            if ('Ch%d' % args.chapter) in c.name:
-                txt_path = c
-                break
-    else:
-        parser.print_help()
-        sys.exit(1)
-
-    if not txt_path.exists():
-        print('Error: File not found: ' + str(txt_path))
-        sys.exit(1)
+    manuscripts = discover_manuscripts(casts_folder, args.chapter)
+    if not manuscripts:
+        print('Error: No _manuscript.docx files found in ' + str(casts_folder)); sys.exit(1)
 
     out_dir = Path(args.out_dir).resolve() if args.out_dir else casts_folder
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print('')
-    print('  pageCast Dark PDF Producer')
+    print('\n  pageCast Dark PDF Producer  (manuscript mode)')
     print('  -----------------------------------------')
-    print('  Source  : ' + txt_path.name)
 
-    book = parse_pagecast(txt_path)
-    if not book['chapters']:
-        print('Error: No chapters found.')
+    book_title  = ''
+    book_author = ''
+    book_genre  = ''
+    cover_image = None
+    chapters_json = []
+
+    for ch_num, ms_path in manuscripts:
+        print('  Reading  : ' + ms_path.name)
+        parsed = parse_manuscript(ms_path)
+
+        if not book_title and parsed['book_title']:
+            book_title = parsed['book_title']
+
+        # Extract chapter title: prefer explicit chapter_heading, then check if
+        # parsed book_title is actually a chapter heading (happens when a chapter
+        # uses ALL-CAPS bold for its own header but has no Heading 1 style --
+        # the parser then mistakes it for the book title)
+        ch_title = parsed['chapter_title']
+        if not ch_title and book_title and parsed['book_title']:
+            ch_title = parsed['book_title']
+        if not ch_title:
+            ch_title = 'Chapter ' + str(ch_num)
+
+        # Find images for this chapter
+        img_map = find_scene_images(casts_folder, ch_num)
+        if not cover_image and img_map.get('cover'):
+            cover_image = img_map['cover']
+
+        # Inject image_path into scene_number paragraphs
+        paragraphs = parsed['paragraphs']
+        for p in paragraphs:
+            if p['type'] == 'scene_number':
+                sc_num = p.get('number', 0)
+                img = img_map.get(sc_num)
+                p['image_path'] = str(img) if img else None
+
+        sc_count  = sum(1 for p in paragraphs if p['type'] == 'scene_number')
+        img_count = sum(1 for p in paragraphs if p['type'] == 'scene_number' and p.get('image_path'))
+        print('  Ch%d      : %s  (%d scenes, %d images)' % (ch_num, ch_title, sc_count, img_count))
+
+        chapters_json.append({
+            'number':     ch_num,
+            'title':      ch_title,
+            'paragraphs': paragraphs,
+        })
+
+    if not book_title:
+        book_title = args.book.title()
+
+    print('  Title    : ' + book_title)
+    print('  Chapters : %d' % len(chapters_json))
+
+    safe = re.sub(r'[^\w\s-]', '', book_title).strip().replace(' ', '')
+    if len(chapters_json) == 1:
+        docx_name = '%s_Ch%d_PageCast.docx' % (safe, chapters_json[0]['number'])
+    else:
+        docx_name = '%s_Complete_PageCast.docx' % safe
+    docx_path = out_dir / docx_name
+
+    print('\n  Building dark-theme document...')
+    result = build_docx(book_title, book_author, book_genre, cover_image, chapters_json, docx_path)
+    if not result:
         sys.exit(1)
-
-    print('  Title   : ' + (book['title'] or '(no title)'))
-
-    ch_idx = 0
-    for idx, ch in enumerate(book['chapters']):
-        if ch['number'] == args.chapter:
-            ch_idx = idx
-            break
-
-    ch = book['chapters'][ch_idx]
-    print('  Chapter : %d -- %s (%d scenes)' % (ch['number'], ch['title'], len(ch['scenes'])))
-
-    image_map = find_images(casts_folder, ch['number'], ch['scenes'])
-    img_count = sum(1 for v in image_map.values() if v is not None)
-    print('  Images  : %d found (cover: %s)' % (img_count, 'yes' if image_map.get('cover') else 'no'))
-
-    safe = re.sub(r'[^\w\s-]', '', book['title']).strip().replace(' ', '')
-    docx_path = out_dir / ('%s_Ch%d_PageCast.docx' % (safe, ch['number']))
-
-    print('')
-    print('  Building dark-theme document...')
-    ok = build_docx(book, ch_idx, image_map, docx_path)
-    if not ok:
-        sys.exit(1)
+    actual_docx = result if isinstance(result, Path) else docx_path
 
     pdf_path = None
     if not args.no_pdf:
-        pdf_path = convert_to_pdf(docx_path)
+        pdf_path = convert_to_pdf(actual_docx)
 
-    print('')
-    print('  -----------------------------------------')
+    print('\n  -----------------------------------------')
     print('  Done!')
     if pdf_path:
         print('  PDF  --> ' + str(pdf_path))
-    print('  DOCX --> ' + str(docx_path))
-    print('')
+    print('  DOCX --> ' + str(actual_docx))
+    print()
 
 
 if __name__ == '__main__':

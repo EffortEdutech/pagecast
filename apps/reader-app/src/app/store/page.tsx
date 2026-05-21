@@ -17,7 +17,18 @@ function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' |
   return (
     <Link href={`/book/${story.id}`} className="card hover:border-accent/40 transition-all duration-200 overflow-hidden group flex flex-col">
       {/* Cover */}
-      <div className={clsx('h-44 bg-gradient-to-br flex flex-col justify-end p-4 relative', story.coverGradient ?? 'from-accent/30 to-accent/10')}>
+      <div className={clsx(
+        'h-44 flex flex-col justify-end p-4 relative overflow-hidden',
+        story.coverImage?.startsWith('http') ? 'bg-black' : `bg-gradient-to-br ${story.coverGradient ?? 'from-accent/30 to-accent/10'}`
+      )}>
+        {story.coverImage?.startsWith('http') && (
+          <img src={story.coverImage} alt={story.title} className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        {story.coverImage && !story.coverImage.startsWith('http') && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-7xl select-none opacity-80">{story.coverImage}</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="relative z-10">
           <div className="flex gap-2 mb-2 flex-wrap">

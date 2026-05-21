@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GLITCH — Scene Prompt Quality (v2)</title>
+<style>
+  body { background:#111; color:#ddd; font-family:monospace; padding:20px; }
+  h1   { color:#e0c87a; }
+  p    { color:#aaa; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th   { background:#222; color:#e0c87a; padding:8px 6px; text-align:left; border-bottom:2px solid #444; }
+  td   { padding:6px; border-bottom:1px solid #2a2a2a; vertical-align:top; }
+  tr:hover td { background:#1a1a1a; }
+</style>
+</head>
+<body>
+<h1>GLITCH — Scene Prompt Quality Report (v2)</h1>
+<p>39 scenes · Style: cinematic photography, DSLR photo, vibrant colours, dramatic</p>
+<p>Fixes: multi-sentence scoring, 5-block narration capture, contraction cleanup, truncation guard</p>
+<table>
+  <tr>
+    <th>Scene</th><th>Title</th><th>Location / Time</th><th>Characters</th>
+    <th>Raw narration (120c)</th><th>Filtered → visual</th><th>Full prompt (180c)</th><th>Status</th>
+  </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch1Sc1</td>
+      <td>The Van</td>
+      <td style="font-size:11px;color:#aaa">Crabb Street intersection, Velmoor<br>8:14 AM, Tuesday</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">Here's what I know about my superpower. It lasts four seconds. Not five. Definitely not ten. Four. I have checked many t…</td>
+      <td style="font-size:10px;color:#ccc">crossing Crabb Street busiest intersection in Velmoor Velmoor is kind of city where most dangerous road is one directly between school only decent bus stop delivery van came through red light at</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Van, crossing Crabb Street busiest intersection in Velmoor Velmoor is kind of city where most dangerous road …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch1Sc2</td>
+      <td>The Alley Test</td>
+      <td style="font-size:11px;color:#aaa">Alley behind Crabb Street, Velmoor<br>8:19 AM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">I went into the alley behind the dry cleaner's and tested it seventeen times. Here is what I learned. First: it works on…</td>
+      <td style="font-size:10px;color:#ccc">Not hard to activate easier than opening new jar of peanut butter never successfully done on first try</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Alley Test, Not hard to activate easier than opening new jar of peanut butter never successfully done on firs…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch1Sc3</td>
+      <td>The Shopping Incident</td>
+      <td style="font-size:11px;color:#aaa">Velmoor High Street<br>8:31 AM</td>
+      <td style="font-size:11px;color:#88ccff">Old Woman, Marcus</td>
+      <td style="font-size:10px;color:#888">My first act of heroism happened eleven minutes later and lasted four seconds. An old woman dropped her shopping bag out…</td>
+      <td style="font-size:10px;color:#ccc">crouched in front of old woman with three cans of baked beans pack of toilet paper clutched to chest breathing hard</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Shopping Incident, crouched in front of old woman with three cans of baked beans pack of toilet paper clutche…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch2Sc1</td>
+      <td>The Dog Problem</td>
+      <td style="font-size:11px;color:#aaa">Outside Marcus's apartment block, Velmoo<br>7:52 AM, Wednesday</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">The dog was outside my building in the morning. I'd gone home the night before telling myself it wasn't my dog. It had f…</td>
+      <td style="font-size:10px;color:#ccc">One ear went up one stayed down half one couldn much</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Dog Problem, One ear went up one stayed down half one couldn much, Outside Marcus's apartment block, Velmoor,…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch2Sc2</td>
+      <td>Disaster Number Two — The Trolley</td>
+      <td style="font-size:11px;color:#aaa">VelMart car park, Velmoor<br>8:20 AM</td>
+      <td style="font-size:11px;color:#88ccff"></td>
+      <td style="font-size:10px;color:#888">The second disaster happened in a supermarket car park. I was cutting through it on the way to school when I saw a shopp…</td>
+      <td style="font-size:10px;color:#ccc">cutting through on way to school saw shopping trolley one of big ones fullsized not one of small baskets rolling down slope towards woman loading car</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Disaster Number Two — Trolley, cutting through on way to school saw shopping trolley one of big ones fullsize…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch2Sc3</td>
+      <td>Bolt Earns His Name</td>
+      <td style="font-size:11px;color:#aaa">Velmoor High Street, alley near Crabb St<br>9:05 AM — (late for school, bu</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">Here is something I had not considered about my power: I can only carry things I can physically reach. I'm thirteen. My …</td>
+      <td style="font-size:10px;color:#ccc">standing in alley behind Crabb Street school officially started calling this field research testing edges of this limitation became relevant</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Bolt Earns His Name, standing in alley behind Crabb Street school officially started calling this field resea…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch2Sc4</td>
+      <td>Disaster Number Three — The Snatcher</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Market, near the textile stalls<br>After school — 4:15 PM</td>
+      <td style="font-size:11px;color:#88ccff">Purse Lady, Marcus</td>
+      <td style="font-size:10px;color:#888">In my defence, this one had been going so well. A man grabbed a woman's bag and ran. Velmoor Market was busy. Nobody was…</td>
+      <td style="font-size:10px;color:#ccc">time came back snatcher moving forward holding bag strap followed less heroic intervention more physics demonstration happens unstoppable force meets thirteenyearold not think this through</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Disaster Number Three — Snatcher, time came back snatcher moving forward holding bag strap followed less hero…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch2Sc5</td>
+      <td>Interference</td>
+      <td style="font-size:11px;color:#aaa">Dredge Lane, Velmoor — quieter side stre<br>5:40 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">I was on the way home, doing one last test freeze before I called it a day, when I felt it. It's hard to describe. In a …</td>
+      <td style="font-size:10px;color:#ccc">In normal freeze there specific quality to stopped world total complete hush like inside photograph</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Interference, In normal freeze there specific quality to stopped world total complete hush like inside photog…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch3Sc1</td>
+      <td>Telling Dex</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, canteen — corner tabl<br>Thursday, 12:15 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">I told Dex at lunch. I showed him the whole thing: the freeze, the four seconds, Bolt sitting under the table being immu…</td>
+      <td style="font-size:10px;color:#ccc">showed him whole thing freeze four seconds Bolt sitting under table immune to physics</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Telling Dex, showed him whole thing freeze four seconds Bolt sitting under table immune to physics, Velmoor S…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch3Sc2</td>
+      <td>Dex's Notebook</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, canteen — corner tabl<br>Thursday, 12:30 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">By the time lunch was half done, Dex had two pages of notes and a numbered list of questions. He read them out while eat…</td>
+      <td style="font-size:10px;color:#ccc">drawn rough diagram of Marcus standing with dotted circles radiating outward labelled FREEZE RADIUS UNKNOWN EFFECTIVE ACTION ZONE 4 SECONDS</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Dex's Notebook, drawn rough diagram of Marcus standing with dotted circles radiating outward labelled FREEZE …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch3Sc3</td>
+      <td>The Tests</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — near the founta<br>Thursday, 4:30 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">We went to the park after school. Dex had a stopwatch, a tape measure, and a hypothesis. The tape measure was to check m…</td>
+      <td style="font-size:10px;color:#ccc">tape measure to check maximum displacement in four seconds</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Tests, tape measure to check maximum displacement in four seconds, Caldwell Park, Velmoor — near the fountain…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch3Sc4</td>
+      <td>Heroism with Commentary</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Market District — near the fruit<br>Thursday, 5:10 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">It happened on the way home, which in my experience is when things always happen. A kid — maybe eight years old — had ch…</td>
+      <td style="font-size:10px;color:#ccc">happened on way home in experience is things always happen</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Heroism with Commentary, happened on way home in experience is things always happen, Velmoor Market District …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch3Sc5</td>
+      <td>What Dex Noticed</td>
+      <td style="font-size:11px;color:#aaa">Velmoor street, walking home<br>Thursday, 5:25 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">I stopped walking. I thought about the alley on Dredge Lane. The flicker in the freeze. The shadow that Bolt had stared …</td>
+      <td style="font-size:10px;color:#ccc">starting to think success rate of twenty percent going to need to improve</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, What Dex Noticed, starting to think success rate of twenty percent going to need to improve, Velmoor street, …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch4Sc1</td>
+      <td>Scanning Mode</td>
+      <td style="font-size:11px;color:#aaa">Various locations around Velmoor<br>Friday through Monday — four d</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">Dex had added a new protocol to PROJECT: STUPID. Every time I activated the freeze, I had to report on three things: wha…</td>
+      <td style="font-size:10px;color:#ccc">Every time activated freeze to report on three things trying to whether detected any shimmer wasn mine</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Scanning Mode, Every time activated freeze to report on three things trying to whether detected any shimmer w…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">✅ Ch4Sc2</td>
+      <td>The Coin</td>
+      <td style="font-size:11px;color:#aaa">Dredge Lane, Velmoor — the spot from las<br>Monday, 4:50 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">It was Bolt who found it. We'd gone back to Dredge Lane on Dex's suggestion. His theory was that repeated exposure to th…</td>
+      <td style="font-size:10px;color:#ccc">Bolt trotted directly to drain grating near newsagent one looking at flicker happened sat down in front of</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Coin, Bolt trotted directly to drain grating near newsagent one looking at flicker happened sat down in front…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch4Sc3</td>
+      <td>Operation Frequency</td>
+      <td style="font-size:11px;color:#aaa">Dex's bedroom, Velmoor<br>Monday, 6:30 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus, Dex</td>
+      <td style="font-size:10px;color:#888">Dex had added a new section to PROJECT: STUPID. It was called OPERATION: FREQUENCY and it took up three pages. There was…</td>
+      <td style="font-size:10px;color:#ccc">Dex added new section to PROJECT STUPID</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Operation Frequency, Dex added new section to PROJECT STUPID, Dex's bedroom, Velmoor, Monday, indoor_quiet, c…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch4Sc4</td>
+      <td>The Passive Ping</td>
+      <td style="font-size:11px;color:#aaa">Dredge Lane, Velmoor<br>Tuesday, 5:40 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">We stood in the lane. It was the exact spot. Same postbox. Same closed newsagent. Same alley between the two buildings, …</td>
+      <td style="font-size:10px;color:#ccc">Same alley between two buildings too dark to see into properly</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Passive Ping, Same alley between two buildings too dark to see into properly, Dredge Lane, Velmoor, Tuesday, …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch4Sc5</td>
+      <td>Seven Hundred Books</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, school library<br>Wednesday, 1:15 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus</td>
+      <td style="font-size:10px;color:#888">The next day, I looked at everyone differently. I had been doing this since Dex told me the other person might be local.…</td>
+      <td style="font-size:10px;color:#ccc">Anyone eyes moved in way started to notice own eyes moving scanning measuring calculating four seconds</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Seven Hundred Books, Anyone eyes moved in way started to notice own eyes moving scanning measuring calculatin…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch5Sc1</td>
+      <td>SUBJECT — UNKNOWN</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, canteen — corner tabl<br>Thursday, 12:20 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">Dex had added a new section to PROJECT: STUPID. It was called SUBJECT: UNKNOWN. It had its own tab. He had drawn a silho…</td>
+      <td style="font-size:10px;color:#ccc">drawn silhouette of person in corner rough outline no features written three question marks next to with increasing size</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, SUBJECT — UNKNOWN, drawn silhouette of person in corner rough outline no features written three question mark…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch5Sc2</td>
+      <td>Two Weeks Before You</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, English classroom — M<br>Thursday, 2:05 PM</td>
+      <td style="font-size:11px;color:#88ccff"></td>
+      <td style="font-size:10px;color:#888">I found the note in English. Not passed to me. Not slipped under the door. It was already there when I sat down — tucked…</td>
+      <td style="font-size:10px;color:#ccc">there sat down tucked under front edge of desk folded once small enough wouldn hadn looking at everything differently this week</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Two Weeks Before You, there sat down tucked under front edge of desk folded once small enough wouldn hadn loo…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch5Sc3</td>
+      <td>She Chooses the Terms</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, side gate — low wall <br>Thursday, 3:40 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus, Seren</td>
+      <td style="font-size:10px;color:#888">She was waiting for me after school. Not dramatically. Not standing in the middle of the path with her arms crossed. She…</td>
+      <td style="font-size:10px;color:#ccc">sitting on low wall near side gate reading book with specific body language of someone sitting there long enough to picked comfortable position isn particularly bothered how long to wait</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, She Chooses Terms, sitting on low wall near side gate reading book with specific body language of someone sit…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch5Sc4</td>
+      <td>What She's Figured Out</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — bench near the <br>Thursday, 4:10 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Marcus</td>
+      <td style="font-size:10px;color:#888">We walked to the park because standing outside school felt too visible and she suggested it in a tone that didn't really…</td>
+      <td style="font-size:10px;color:#ccc">walked to park standing outside school too visible suggested in tone didn leave room disagreement</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, What She's Figured Out, walked to park standing outside school too visible suggested in tone didn leave room …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch5Sc5</td>
+      <td>Different Choices</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — same bench<br>Thursday, 4:35 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Marcus</td>
+      <td style="font-size:10px;color:#888">We sat on the bench. Bolt had found something interesting near the fountain and was investigating it with the focus of a…</td>
+      <td style="font-size:10px;color:#ccc">Bolt found something interesting near fountain investigating with focus of professional</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Different Choices, Bolt found something interesting near fountain investigating with focus of professional, C…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch6Sc1</td>
+      <td>Telling Dex About Seren</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, canteen — corner tabl<br>Friday, 12:25 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">I had been putting off telling Dex about Seren for twenty-four hours. I was not sure why. Partly because his reaction wa…</td>
+      <td style="font-size:10px;color:#ccc">Partly once told him become project once became project lose control of in ways couldn anticipate</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Telling Dex About Seren, Partly once told him become project once became project lose control of in ways coul…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch6Sc2</td>
+      <td>Caldwell Park, Saturday</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — the bench near <br>Saturday, 2:00 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Dex</td>
+      <td style="font-size:10px;color:#888">I told Dex three times before we arrived: be normal. Don't lead with the notebook. Don't ask about activation parameters…</td>
+      <td style="font-size:10px;color:#ccc">mistake not defined normal Seren at bench got there always early starting to notice as arriving second disadvantage not to accept</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Caldwell Park, Saturday, mistake not defined normal Seren at bench got there always early starting to notice …</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch6Sc3</td>
+      <td>The Data</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — the bench<br>Saturday, 2:35 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Dex</td>
+      <td style="font-size:10px;color:#888">They had been comparing notes for half an hour. I had attempted to contribute three times. Each time, Dex had said "Yes,…</td>
+      <td style="font-size:10px;color:#ccc">genuinely useful thing came out of data comparison once stopped trying to participate listened new finding from Seren notes</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Data, genuinely useful thing came out of data comparison once stopped trying to participate listened new find…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch6Sc4</td>
+      <td>The Graduated Response Matrix</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — the bench<br>Saturday, 3:10 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus, Seren</td>
+      <td style="font-size:10px;color:#888">The argument started, as I had expected, around the question of what they were actually going to do. They both looked at…</td>
+      <td style="font-size:10px;color:#ccc">Tier Two Standard Visible Operation up to two seconds single witness acceptable Dex Seren present coordination</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Graduated Response Matrix, Tier Two Standard Visible Operation up to two seconds single witness acceptable De…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch6Sc5</td>
+      <td>North</td>
+      <td style="font-size:11px;color:#aaa">Velmoor street, heading home from the pa<br>Saturday, 4:15 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus, Seren</td>
+      <td style="font-size:10px;color:#888">We walked back through Velmoor together. Dex was on my left. Seren was on my right. Bolt walked ahead, which was unusual…</td>
+      <td style="font-size:10px;color:#ccc">got into habit of doing one every few minutes to check frequency</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, North, got into habit of doing one every few minutes to check frequency, Velmoor street, heading home from th…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch7Sc1</td>
+      <td>Caldwell Street</td>
+      <td style="font-size:11px;color:#aaa">Caldwell district, north Velmoor — Arden<br>Sunday, 10:15 AM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Marcus</td>
+      <td style="font-size:10px;color:#888">Bolt took us directly there. No scanning. No signal tracking. He just walked north from the top of Caldwell Road, turned…</td>
+      <td style="font-size:10px;color:#ccc">walked north from top of Caldwell Road turned onto Arden Street went forty metres along pavement sat down in front of terraced house with small front garden red door</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Caldwell Street, walked north from top of Caldwell Road turned onto Arden Street went forty metres along pave…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch7Sc2</td>
+      <td>Tea</td>
+      <td style="font-size:11px;color:#aaa">Dot's front room, Arden Street<br>Sunday, 10:20 AM</td>
+      <td style="font-size:11px;color:#88ccff">Dot, Dex</td>
+      <td style="font-size:10px;color:#888">Her name was Dot. She made us tea without asking if we wanted any, in a kitchen that smelled of toast and something flor…</td>
+      <td style="font-size:10px;color:#ccc">made tea without asking any in kitchen smelled of toast something floral brought out on tray with biscuits</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Tea, made tea without asking any in kitchen smelled of toast something floral brought out on tray with biscui…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch7Sc3</td>
+      <td>The Pattern</td>
+      <td style="font-size:11px;color:#aaa">Dot's front room, Arden Street<br>Sunday, 11:05 AM</td>
+      <td style="font-size:11px;color:#88ccff">Dot, Marcus</td>
+      <td style="font-size:10px;color:#888">We were putting on our coats when Dot said it. Very calmly. Not urgently. In the tone of someone mentioning a thing they…</td>
+      <td style="font-size:10px;color:#ccc">In tone of someone mentioning thing meaning to bring up right moment arrived</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Pattern, In tone of someone mentioning thing meaning to bring up right moment arrived, Dot's front room, Arde…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc1</td>
+      <td>Volume 2</td>
+      <td style="font-size:11px;color:#aaa">Velmoor Secondary, canteen — corner tabl<br>Monday, 12:30 PM</td>
+      <td style="font-size:11px;color:#88ccff">Marcus, Dex</td>
+      <td style="font-size:10px;color:#888">Dex had named the new section. It was called ORIGIN: VELMOOR and it took up four pages of the notebook — everything Dot …</td>
+      <td style="font-size:10px;color:#ccc">called ORIGIN VELMOOR took up four pages of notebook everything Dot told them filed organised</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Volume 2, called ORIGIN VELMOOR took up four pages of notebook everything Dot told them filed organised, Velm…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc2</td>
+      <td>The Construction Site</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street, Velmoor — outside the n<br>Thursday, 4:30 PM</td>
+      <td style="font-size:11px;color:#88ccff"></td>
+      <td style="font-size:10px;color:#888">Bolt had been restless for four days. Not his usual directional restlessness — not pointing somewhere with that compass-…</td>
+      <td style="font-size:10px;color:#ccc">On Wednesday made Marcus walk route home never taken doubling back through market district sat in front of construction site on Merchant Street three full minutes before Marcus get him moving again</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Construction Site, On Wednesday made Marcus walk route home never taken doubling back through market district…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc3</td>
+      <td>Dex's Assessment</td>
+      <td style="font-size:11px;color:#aaa">Caldwell Park, Velmoor — the bench<br>Thursday, 5:15 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Marcus</td>
+      <td style="font-size:10px;color:#888">He told them that evening. Bolt was lying in the grass nearby, watching them. His ears were up.…</td>
+      <td style="font-size:10px;color:#ccc">Bolt lying in grass nearby watching them</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Dex's Assessment, Bolt lying in grass nearby watching them, Caldwell Park, Velmoor — the bench, Thursday, par…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc4</td>
+      <td>Merchant Street, Friday</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street, Velmoor — Friday market<br>Friday, 4:30 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Seren</td>
+      <td style="font-size:10px;color:#888">The market was busy. Not chaotic — just the normal organised density of a Friday afternoon in a city that had been doing…</td>
+      <td style="font-size:10px;color:#ccc">Two children running slightly too fast near flower stand father called after them in tone suggested this normal</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Merchant Street, Friday, Two children running slightly too fast near flower stand father called after them in…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc5</td>
+      <td>4:47 PM</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street — same position<br>Friday, 4:47 PM</td>
+      <td style="font-size:11px;color:#88ccff">Dex</td>
+      <td style="font-size:10px;color:#888">A lorry turned onto Merchant Street from the north end. Heavy. Probably a delivery vehicle. It shouldn't have come this …</td>
+      <td style="font-size:10px;color:#ccc">shouldn come this way market barriers supposed to redirect traffic</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, 4:47 PM, shouldn come this way market barriers supposed to redirect traffic, Merchant Street — same position,…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc6</td>
+      <td>Inside the Freeze — First Run</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street — in the freeze<br>4:47 PM (frozen)</td>
+      <td style="font-size:11px;color:#88ccff">Dex, Seren</td>
+      <td style="font-size:10px;color:#888">Everything stopped. The lorry, mid-roll. The market stalls, their awnings mid-flutter in the wind that no longer moved. …</td>
+      <td style="font-size:10px;color:#ccc">couple first got hands on shoulders moved them sideways out of primary drop zone two metres to right where stall behind them give cover</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Inside Freeze — First Run, couple first got hands on shoulders moved them sideways out of primary drop zone t…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc7</td>
+      <td>Inside the Freeze — Second Run</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street — second freeze<br>4:47 PM (frozen again)</td>
+      <td style="font-size:11px;color:#88ccff">Dex</td>
+      <td style="font-size:10px;color:#888">Fifteen-second cooldown. Marcus used it to run. The west join had separated further when time unfroze. He could see the …</td>
+      <td style="font-size:10px;color:#ccc">see section swinging now slow inevitable kind of motion fast in real time</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, Inside Freeze — Second Run, see section swinging now slow inevitable kind of motion fast in real time, Mercha…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+
+    <tr>
+      <td style="white-space:nowrap">— Ch8Sc8</td>
+      <td>After</td>
+      <td style="font-size:11px;color:#aaa">Merchant Street south side, then walking<br>Friday, 5:05 PM</td>
+      <td style="font-size:11px;color:#88ccff">Seren, Marcus</td>
+      <td style="font-size:10px;color:#888">They were gone before the construction workers came running. There was no reason to stay. They hadn't been seen — or rat…</td>
+      <td style="font-size:10px;color:#ccc">hadn seen seen in way anyone on busy street is seen nobody looking three teenagers on far side of road there fallen scaffolding to deal with</td>
+      <td style="font-size:10px;color:#e0c87a;word-break:break-word">cinematic photography, DSLR photo, vibrant colours, dramatic lighting, After, hadn seen seen in way anyone on busy street is seen nobody looking three teenagers on far side of road…</td>
+      <td><span style="color:#6bcb77;font-weight:bold">OK</span></td>
+    </tr>
+</table>
+</body>
+</html>

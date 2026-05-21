@@ -49,8 +49,8 @@ export default function PricingPage() {
               Gentle access for multilingual Casts.
             </h1>
             <p className="text-text-secondary text-lg mt-5 max-w-2xl mx-auto leading-relaxed">
-              Begin with Starter Moments, let committed Explorers unlock Casts,
-              then grow recurring access through Cast Pass.
+              Start free — no card needed. Unlock the stories you love with a one-time purchase,
+              or go unlimited with Cast Pass.
             </p>
           </div>
         </section>
@@ -104,9 +104,9 @@ export default function PricingPage() {
         <section className="max-w-6xl mx-auto px-6 pb-12">
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              { icon: Globe2, title: 'Global discovery', text: 'TikTok, Amazon, marketplaces, and QR codes all point back to PageCast.' },
-              { icon: Headphones, title: 'Multilingual Casts', text: 'Cast language can vary by audience, region, and campaign.' },
-              { icon: CreditCard, title: 'Owned unlocks', text: 'Explorers unlock inside PageCast so relationships and My Casts stay with us.' },
+              { icon: Globe2, title: 'Find stories anywhere', text: 'Discover Casts from TikTok, Amazon, QR codes, and beyond — it all starts here.' },
+              { icon: Headphones, title: 'Stories in your language', text: 'Casts are available in multiple languages. Read and listen in the one that feels right.' },
+              { icon: CreditCard, title: 'Your library, your way', text: 'Casts you unlock are saved to My Casts — yours to revisit anytime, on any device.' },
             ].map(({ icon: Icon, title, text }) => (
               <div key={title} className="card p-5">
                 <Icon size={19} className="text-accent mb-3" />
