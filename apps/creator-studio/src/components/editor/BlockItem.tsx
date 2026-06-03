@@ -215,19 +215,7 @@ export function BlockItem({
   })()
 
   const updateStoryContent = (updates: Partial<StoryBlock>) => {
-    const invalidatesAudio =
-      'text' in updates ||
-      'characterId' in updates ||
-      'emotion' in updates ||
-      'style' in updates ||
-      'attribution' in updates ||
-      'voiceSpeed' in updates ||
-      'performanceTag' in updates
-
-    onUpdate({
-      ...updates,
-      ...(invalidatesAudio && block.audioUrl ? { audioUrl: undefined } : {}),
-    } as Partial<StoryBlock>)
+    onUpdate(updates as Partial<StoryBlock>)
   }
 
   const handleSfxSelect = async (selection: SfxSelection) => {

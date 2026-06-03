@@ -57,6 +57,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
   const [gradient,  setGradient]  = useState(story.coverGradient ?? GRADIENTS[0].value)
   const [emoji,     setEmoji]     = useState((story as any).coverImage ?? '📖')
   const [language,  setLanguage]  = useState(story.language ?? 'en')
+  const [title,     setTitle]     = useState(story.title ?? '')
   const [desc,      setDesc]      = useState(story.description ?? '')
   const [rightsDraft, setRightsDraft] = useState<BookRights>(rights)
   const [saving,    setSaving]    = useState(false)
@@ -87,9 +88,16 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
   }
 
   const handleSave = async () => {
+    const cleanTitle = title.trim()
+    if (!cleanTitle) {
+      setError('Cast title is required.')
+      return
+    }
+
     setSaving(true)
     setError(null)
     const ok = await onSave({
+      title:           cleanTitle,
       genre:           genre || undefined,
       ageRating:       ageRating,
       durationMinutes: estTime ? parseInt(estTime) : undefined,
@@ -122,6 +130,17 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
               {error}
             </div>
           )}
+
+          {/* Title */}
+          <div>
+            <label className="label">Cast Title</label>
+            <input
+              className="input text-sm"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Cast title"
+            />
+          </div>
 
           {/* Description */}
           <div>

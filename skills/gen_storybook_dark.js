@@ -21,9 +21,12 @@ const {
   AlignmentType, Footer, Header,
   PageNumber, BorderStyle,
   ExternalHyperlink, PageBreak,
+  HorizontalPositionRelativeFrom, HorizontalPositionAlign,
+  VerticalPositionRelativeFrom,
+  TextWrappingType,
 } = docxMod;
 
-// Palette
+// ── Palette ──────────────────────────────────────────────────────────────────
 const C = {
   BG:          '0F0F14',
   TITLE:       'FFFFFF',
@@ -50,6 +53,7 @@ const sp = (before, after, line) => {
   return s;
 };
 
+// ── Paragraph builders ───────────────────────────────────────────────────────
 function pcTitle(text) {
   return new Paragraph({ alignment: AlignmentType.CENTER, spacing: sp(480, 360),
     children: [new TextRun({ text, font: FONT_TITLE, size: 64, bold: true, color: C.TITLE })] });
@@ -113,11 +117,17 @@ function doPageBreak() {
   return new Paragraph({ children: [new PageBreak()] });
 }
 
-// Image loader
-const CONTENT_W_EMU = 6121830;
-const COVER_MAX_H   = 5000000;
-const SCENE_MAX_H   = 3600000;
+// ── Image loaders ─────────────────────────────────────────────────────────────
+// EMU: 1 inch = 914400. 1 pt = 12700. A4 page = 595 x 842 pt.
+const CONTENT_W_EMU = 6121830;  // A4 content width (~6.7 in)
+const SCENE_MAX_H   = 3600000;  // scene image max height (~3.9 in)
+const PAGE_W_PT     = 595;      // A4 full page width in points
+const PAGE_H_PT     = 842;      // A4 full page height in points
 
+/**
+ * Inline scene image — constrained to content width, max height in EMU.
+ * Returns a centred Paragraph or null.
+ */
 function loadImage(imgPath, maxH) {
   if (!imgPath || !fs.existsSync(imgPath)) return null;
   try {
@@ -130,7 +140,7 @@ function loadImage(imgPath, maxH) {
       while (i < data.length - 10) {
         if (data[i] !== 0xFF) break;
         const m = data[i + 1];
-        if (m >= 0xC0 && m <= 0xC3) { ph = data.readUInt16BE(i+5); pw = data.readUInt16BE(i+7); break; }
+        if (m >= 0xC0 && m <= 0xC3) { ph = data.readUInt16BE(i + 5); pw = data.readUInt16BE(i + 7); break; }
         i += 2 + data.readUInt16BE(i + 2);
       }
     } else if (ext === 'png') {
@@ -148,7 +158,44 @@ function loadImage(imgPath, maxH) {
   }
 }
 
-// Read job
+/**
+ * Cover image as a full-page floating "Behind Text" ImageRun.
+ * Positioned: left-aligned to page, pulled ~62pt above its anchor paragraph,
+ * so it fills the page behind the cover text.
+ * Returns an ImageRun (to be placed inside the cover title paragraph), or null.
+ */
+function loadCoverImageRun(imgPath) {
+  if (!imgPath || !fs.existsSync(imgPath)) return null;
+  try {
+    const data = fs.readFileSync(imgPath);
+    const ext  = path.extname(imgPath).toLowerCase().replace('.', '');
+    const type = ext === 'jpg' ? 'jpeg' : ext;
+    return new ImageRun({
+      type, data,
+      transformation: { width: PAGE_W_PT, height: PAGE_H_PT },
+      floating: {
+        horizontalPosition: {
+          relative: HorizontalPositionRelativeFrom.PAGE,
+          align:    HorizontalPositionAlign.LEFT,
+        },
+        verticalPosition: {
+          relative: VerticalPositionRelativeFrom.PARAGRAPH,
+          offset:   -792218,   // pull image ~62pt above the anchor paragraph → top of page
+        },
+        wrap:    { type: TextWrappingType.NONE },
+        margins: { top: 0, bottom: 0, left: 114300, right: 114300 },
+        behindDocument: true,
+        allowOverlap:   true,
+        lockAnchor:     false,
+      },
+    });
+  } catch (e) {
+    console.error('  [warn] cover image skipped:', imgPath, e.message);
+    return null;
+  }
+}
+
+// ── Read job ──────────────────────────────────────────────────────────────────
 const jobFile = process.argv[2];
 if (!jobFile) { console.error('Usage: node gen_storybook_dark.js <job.json>'); process.exit(1); }
 const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
@@ -159,26 +206,53 @@ const chaptersData = job.chapters || [{
 
 const children = [];
 
-// Cover page
+// ── Page 1: Cover page ────────────────────────────────────────────────────────
+// Image anchor + title text live in the SAME paragraph so the image floats
+// behind the title without needing spacers. Layout matches the user-edited reference.
+{
+  const coverRun = loadCoverImageRun(job.cover_image);
+  const titleRun = new TextRun({
+    text: job.title, font: FONT_TITLE, size: 64, bold: true, color: 'FFFFFF',
+  });
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: sp(160, 160),
+    children: coverRun ? [coverRun, titleRun] : [titleRun],
+  }));
+}
+// "pageCast Studio" — italic, grey
+children.push(new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: sp(0, 560),
+  children: [new TextRun({ text: 'pageCast Studio', font: FONT_BODY, size: 28, italics: true, color: C.SUBTITLE })]
+}));
+// Blue divider line (bottom border on an empty paragraph)
+children.push(new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: sp(120, 240),
+  border: { bottom: { style: BorderStyle.SINGLE, size: 15, space: 1, color: C.DIVIDER } },
+  children: [],
+}));
 children.push(pcEmpty());
-const coverImg = loadImage(job.cover_image, COVER_MAX_H);
-if (coverImg) { children.push(coverImg); children.push(pcEmpty()); }
-children.push(pcTitle(job.title));
-if (job.author) children.push(pcSubtitle(job.author));
-if (job.genre)  children.push(pcMeta(job.genre));
-children.push(pcDivider());
-children.push(pcEmpty());
-children.push(pcMeta(chaptersData.length === 1
-  ? 'Chapter ' + chaptersData[0].number
-  : chaptersData.length + ' Chapters'));
+// Chapter count — grey
+children.push(new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: sp(0, 100),
+  children: [new TextRun({
+    text: chaptersData.length === 1
+      ? 'Chapter ' + chaptersData[0].number
+      : chaptersData.length + ' Chapters',
+    font: FONT_BODY, size: 19, color: C.META,
+  })]
+}));
 children.push(doPageBreak());
 
-// Render one manuscript paragraph into children[]
+// ── Render one manuscript paragraph ──────────────────────────────────────────
 function renderManuscriptParagraph(p) {
   const text = (p.text || '').trim();
   switch (p.type) {
-    case 'title':           return;   // already on cover
-    case 'subtitle':        return;   // already on cover
+    case 'title':           return;   // already on cover / title page
+    case 'subtitle':        return;   // already on title page
     case 'chapter_heading': return;   // already rendered as pcChapter
     case 'centered':
       if (text) children.push(pcMeta(text));
@@ -200,7 +274,7 @@ function renderManuscriptParagraph(p) {
   }
 }
 
-// Chapters
+// ── Chapters ──────────────────────────────────────────────────────────────────
 for (let ci = 0; ci < chaptersData.length; ci++) {
   const ch = chaptersData[ci];
   children.push(pcChapter('Chapter ' + ch.number));
@@ -208,7 +282,7 @@ for (let ci = 0; ci < chaptersData.length; ci++) {
   children.push(pcEmpty());
 
   if (ch.paragraphs && ch.paragraphs.length) {
-    // Manuscript mode: proper prose
+    // Manuscript mode
     for (const p of ch.paragraphs) {
       renderManuscriptParagraph(p);
     }
@@ -222,12 +296,12 @@ for (let ci = 0; ci < chaptersData.length; ci++) {
       if (scImg) { children.push(scImg); children.push(pcEmpty()); }
       let hasContent = false;
       for (const blk of sc.blocks) {
-        const text = (blk.text || '').trim();
-        if (!text) continue;
+        const blkText = (blk.text || '').trim();
+        if (!blkText) continue;
         hasContent = true;
-        if (blk.type === 'narration')     children.push(pcBody(text));
-        else if (blk.type === 'dialogue') children.push(pcDialogue(blk.speaker || '', text));
-        else if (blk.type === 'thought')  children.push(pcThought(text));
+        if (blk.type === 'narration')     children.push(pcBody(blkText));
+        else if (blk.type === 'dialogue') children.push(pcDialogue(blk.speaker || '', blkText));
+        else if (blk.type === 'thought')  children.push(pcThought(blkText));
       }
       if (hasContent) children.push(pcSceneBreak());
       children.push(pcEmpty());
@@ -237,12 +311,11 @@ for (let ci = 0; ci < chaptersData.length; ci++) {
   if (ci < chaptersData.length - 1) children.push(doPageBreak());
 }
 
-// Header (blank)
+// ── Header / Footer ───────────────────────────────────────────────────────────
 const blankHeader = new Header({
   children: [new Paragraph({ children: [new TextRun({ text: '', color: C.BG })] })]
 });
 
-// Footer
 function makeFooter(showPageNum) {
   const runs = [
     new TextRun({ text: 'Unlock more stories at ', font: FONT_BODY, size: 16, color: C.FOOTER }),
@@ -260,15 +333,16 @@ function makeFooter(showPageNum) {
   })] });
 }
 
+// ── Build & save ──────────────────────────────────────────────────────────────
 const doc = new Document({
   background: { color: C.BG },
   sections: [{
     properties: {
       titlePage: true,
       page: {
-        size:    { width: 11906, height: 16838 },
-        margin:  { top: 1247, right: 1134, bottom: 1247, left: 1134 },
-        pageNumbers: { start: 0 },   // cover = page 0 (hidden), content starts at 1
+        size:        { width: 11906, height: 16838 },
+        margin:      { top: 1247, right: 1134, bottom: 1247, left: 1134 },
+        pageNumbers: { start: 0 },
       }
     },
     headers: { default: blankHeader, first: blankHeader },
@@ -285,7 +359,7 @@ Packer.toBuffer(doc).then(buf => {
     if (fs.existsSync(job.out_path)) fs.unlinkSync(job.out_path);
     fs.renameSync(tmpPath, job.out_path);
   } catch (e) {
-    // File locked (open in Word) -- save with timestamp suffix instead
+    // File locked in Word — save with timestamp suffix
     const ext  = path.extname(job.out_path);
     const base = job.out_path.slice(0, -ext.length);
     const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);

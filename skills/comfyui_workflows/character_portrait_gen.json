@@ -1,0 +1,200 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 16,
+  "nodes": [
+    {
+      "id": 4,
+      "type": "CheckpointLoaderSimple",
+      "pos": [26, 474],
+      "size": {"0": 340, "1": 130},
+      "flags": {}, "order": 0, "mode": 0,
+      "inputs": [
+        {"localized_name": "ckpt_name", "name": "ckpt_name", "type": "COMBO", "widget": {"name": "ckpt_name"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "MODEL", "type": "MODEL",  "links": [1, 11], "slot_index": 0},
+        {"name": "CLIP",  "type": "CLIP",   "links": [3, 5, 12], "slot_index": 1},
+        {"name": "VAE",   "type": "VAE",    "links": [8, 13], "slot_index": 2}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "CheckpointLoaderSimple"},
+      "widgets_values": ["juggernaut_xl_v9_lightning.safetensors"]
+    },
+    {
+      "id": 5,
+      "type": "EmptyLatentImage",
+      "pos": [480, 700],
+      "size": {"0": 315, "1": 106},
+      "flags": {}, "order": 1, "mode": 0,
+      "inputs": [
+        {"localized_name": "width",      "name": "width",      "type": "INT", "widget": {"name": "width"},      "link": null},
+        {"localized_name": "height",     "name": "height",     "type": "INT", "widget": {"name": "height"},     "link": null},
+        {"localized_name": "batch_size", "name": "batch_size", "type": "INT", "widget": {"name": "batch_size"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "LATENT", "type": "LATENT", "links": [2], "slot_index": 0}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "EmptyLatentImage"},
+      "widgets_values": [768, 1024, 1]
+    },
+    {
+      "id": 6,
+      "type": "CLIPTextEncode",
+      "title": "POSITIVE — Edit character description here",
+      "pos": [430, 160],
+      "size": {"0": 422, "1": 260},
+      "flags": {}, "order": 2, "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 3}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [4, 14], "slot_index": 0}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": [
+        "full body character design sheet, ArtStation concept art, digital illustration, [REPLACE: character description, e.g. 'a young Indonesian boy, age 10, short dark hair, dark brown eyes, wearing a blue batik shirt and dark pants, black sneakers'], standing upright, A-pose arms slightly away from body, looking directly at camera, neutral calm expression, front facing, centered full body composition, head to toe visible, complete outfit clearly shown, soft studio lighting, plain white background, clear sharp face, detailed eyes, detailed clothing and accessories, symmetrical, correct human anatomy, 8k, high quality, character reference sheet turnaround"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "title": "NEGATIVE — do not edit",
+      "pos": [430, 450],
+      "size": {"0": 422, "1": 180},
+      "flags": {}, "order": 3, "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 5}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [6, 15], "slot_index": 0}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": [
+        "blurry face, bad face, ugly face, deformed face, melted face, asymmetric eyes, cross-eyed, missing eyes, no eyes, extra limbs, extra arms, extra legs, missing limbs, deformed hands, extra fingers, fused fingers, malformed hands, bad anatomy, low quality, watermark, text, sunglasses, hat covering face, hair covering face, turned away from camera, side view, back view, profile view, looking away, closed eyes, dark background, busy background, multiple characters, cropped body, cut off legs, cut off feet, partial body, close-up face only, portrait crop, headshot only"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "KSampler",
+      "title": "KSampler — CHANGE SEED to get different looks, keep on FIXED",
+      "pos": [900, 380],
+      "size": {"0": 315, "1": 262},
+      "flags": {}, "order": 4, "mode": 0,
+      "inputs": [
+        {"name": "model",        "type": "MODEL",        "link": 1},
+        {"name": "positive",     "type": "CONDITIONING", "link": 4},
+        {"name": "negative",     "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT",       "link": 2}
+      ],
+      "outputs": [
+        {"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "KSampler"},
+      "widgets_values": [42, "fixed", 4, 1.5, "euler", "sgm_uniform", 1.0]
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [1260, 430],
+      "size": {"0": 210, "1": 46},
+      "flags": {}, "order": 5, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 7},
+        {"name": "vae",     "type": "VAE",    "link": 8}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [9], "slot_index": 0}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "VAEDecode"},
+      "widgets_values": []
+    },
+    {
+      "id": 11,
+      "type": "UltralyticsDetectorProvider",
+      "pos": [900, 700],
+      "size": {"0": 315, "1": 74},
+      "flags": {}, "order": 6, "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "BBOX_DETECTOR",  "type": "BBOX_DETECTOR",  "links": [10], "slot_index": 0},
+        {"name": "SEGM_DETECTOR",  "type": "SEGM_DETECTOR",  "links": [],   "slot_index": 1}
+      ],
+      "properties": {"cnr_id": "comfyui-impact-pack", "ver": "8.10.5", "Node name for S&R": "UltralyticsDetectorProvider"},
+      "widgets_values": ["bbox/face_yolov8m.pt"]
+    },
+    {
+      "id": 12,
+      "type": "FaceDetailer",
+      "title": "FaceDetailer — auto face enhancement (do not edit)",
+      "pos": [1520, 300],
+      "size": {"0": 370, "1": 750},
+      "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "image",            "type": "IMAGE",         "link": 9},
+        {"name": "model",            "type": "MODEL",         "link": 11},
+        {"name": "clip",             "type": "CLIP",          "link": 12},
+        {"name": "vae",              "type": "VAE",           "link": 13},
+        {"name": "positive",         "type": "CONDITIONING",  "link": 14},
+        {"name": "negative",         "type": "CONDITIONING",  "link": 15},
+        {"name": "bbox_detector",    "type": "BBOX_DETECTOR", "link": 10},
+        {"name": "sam_model_opt",    "type": "SAM_MODEL",     "link": null},
+        {"name": "segm_detector_opt","type": "SEGM_DETECTOR", "link": null},
+        {"name": "detailer_hook",    "type": "DETAILER_HOOK", "link": null}
+      ],
+      "outputs": [
+        {"name": "image",           "type": "IMAGE",         "links": [16], "slot_index": 0},
+        {"name": "cropped_refined", "type": "IMAGE",         "links": [],   "slot_index": 1},
+        {"name": "cropped_enhanced_alpha", "type": "IMAGE",  "links": [],   "slot_index": 2},
+        {"name": "mask",            "type": "MASK",          "links": [],   "slot_index": 3},
+        {"name": "detailer_pipe",   "type": "DETAILER_PIPE", "links": [],   "slot_index": 4},
+        {"name": "cnet_images",     "type": "IMAGE",         "links": [],   "slot_index": 5}
+      ],
+      "properties": {"cnr_id": "comfyui-impact-pack", "ver": "8.10.5", "Node name for S&R": "FaceDetailer"},
+      "widgets_values": [
+        512, "bbox", 768,
+        42, "fixed",
+        8, 2.0, "euler", "normal", 0.45,
+        5, true, true,
+        0.5, 10, 3.0,
+        "center-1", 0, 0.93, 0, 0.7, "False",
+        10, "CUDA", "", 1
+      ]
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "title": "OUTPUT → rename this file to CHARNAME.jpg and copy to .casts/CHARACTER_REFS/",
+      "pos": [1920, 380],
+      "size": {"0": 420, "1": 270},
+      "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "images",          "type": "IMAGE",  "link": 16},
+        {"localized_name": "filename_prefix", "name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null}
+      ],
+      "outputs": [],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.22.2", "Node name for S&R": "SaveImage"},
+      "widgets_values": ["char_portrait"]
+    }
+  ],
+  "links": [
+    [1,  4,  0, 3,  0, "MODEL"],
+    [2,  5,  0, 3,  3, "LATENT"],
+    [3,  4,  1, 6,  0, "CLIP"],
+    [4,  6,  0, 3,  1, "CONDITIONING"],
+    [5,  4,  1, 7,  0, "CLIP"],
+    [6,  7,  0, 3,  2, "CONDITIONING"],
+    [7,  3,  0, 8,  0, "LATENT"],
+    [8,  4,  2, 8,  1, "VAE"],
+    [9,  8,  0, 12, 0, "IMAGE"],
+    [10, 11, 0, 12, 6, "BBOX_DETECTOR"],
+    [11, 4,  0, 12, 1, "MODEL"],
+    [12, 4,  1, 12, 2, "CLIP"],
+    [13, 4,  2, 12, 3, "VAE"],
+    [14, 6,  0, 12, 4, "CONDITIONING"],
+    [15, 7,  0, 12, 5, "CONDITIONING"],
+    [16, 12, 0, 9,  0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {"ds": {"scale": 0.5, "offset": [0, 0]}},
+  "version": 0.4
+}

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { BookOpen, Headphones, Layers, ChevronRight, Check, X, Star, ArrowRight, Menu, BookMarked } from 'lucide-react'
 import { stripPerformanceTagsForDisplay } from '@/lib/performanceTags'
+import { clsx } from 'clsx'
 
 // ── Scroll-triggered fade-in ──────────────────────────────────────────────────
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -160,11 +161,11 @@ export default function LandingPage() {
               {EXCERPT.map((block, i) => (
                 <div key={i} className={block.type === 'dialogue' ? 'pl-3 border-l-2' : ''} style={block.type === 'dialogue' ? {borderColor: block.color} : {}}>
                   {block.type === 'narration' ? (
-                    <span className="text-[#B8B6C8]">{stripPerformanceTagsForDisplay(block.text)}</span>
+                    <span className="text-[#B8B6C8] whitespace-pre-line">{stripPerformanceTagsForDisplay(block.text)}</span>
                   ) : (
                     <div>
                       <span className="text-[9px] font-bold uppercase tracking-widest mr-2" style={{color: block.color}}>{block.char}</span>
-                      <span className={block.type === 'thought' ? 'italic' : ''} style={{color: block.type === 'thought' ? block.color : '#F0EFF8'}}>{stripPerformanceTagsForDisplay(block.text)}</span>
+                      <span className={clsx(block.type === 'thought' ? 'italic' : '', 'whitespace-pre-line')} style={{color: block.type === 'thought' ? block.color : '#F0EFF8'}}>{stripPerformanceTagsForDisplay(block.text)}</span>
                     </div>
                   )}
                 </div>

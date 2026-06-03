@@ -116,7 +116,7 @@ function BlockView({
         active && 'block-active px-4 py-3',
         past && 'block-past'
       )}>
-        <p className={clsx('text-text-secondary italic', fontClass)}>
+        <p className={clsx('text-text-secondary italic whitespace-pre-line', fontClass)}>
           {displayText}
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
           {active && <span className="ml-2 inline-block align-middle"><Waveform /></span>}
@@ -138,7 +138,7 @@ function BlockView({
             <span className="opacity-60">✦</span> {char.displayName} thinks
           </span>
         )}
-        <p className={clsx('text-text-secondary italic pl-3 border-l-2', fontClass)}
+        <p className={clsx('text-text-secondary italic pl-3 border-l-2 whitespace-pre-line', fontClass)}
           style={{ borderColor: (char?.color ?? '#5C5A6A') + '50' }}>
           {displayText}
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
@@ -166,7 +166,7 @@ function BlockView({
             {active && <Waveform />}
           </span>
         )}
-        <p className={clsx('text-text-primary pl-2', fontClass)}>
+        <p className={clsx('text-text-primary pl-2 whitespace-pre-line', fontClass)}>
           "{displayText}"
           {block.audioUrl && <InlineAudioButton audioUrl={block.audioUrl} />}
         </p>
@@ -187,7 +187,7 @@ function BlockView({
         {isPoem ? (
           <pre className={clsx('text-text-primary whitespace-pre-wrap font-serif', fontClass)}>{displayText}</pre>
         ) : (
-          <p className={clsx('text-text-primary font-serif italic', fontClass)}>"{displayText}"</p>
+          <p className={clsx('text-text-primary font-serif italic whitespace-pre-line', fontClass)}>"{displayText}"</p>
         )}
         {b.attribution && (
           <p className="text-text-muted text-xs mt-3 text-right">— {b.attribution}</p>
@@ -1491,7 +1491,7 @@ export default function ReaderPage() {
             {block && (
               <div className="relative z-10 max-w-2xl w-full text-center animate-fade-in">
                 {block.type === 'narration' && (
-                  <p className={clsx('text-white/70 italic', `font-${prefs.fontSize}`, 'reader-text text-lg leading-loose')}>
+                  <p className={clsx('text-white/70 italic whitespace-pre-line', `font-${prefs.fontSize}`, 'reader-text text-lg leading-loose')}>
                     {stripPerformanceTagsForDisplay((block as any).text)}
                   </p>
                 )}
@@ -1505,7 +1505,7 @@ export default function ReaderPage() {
                           {char.displayName}
                         </span>
                       )}
-                      <p className={clsx('text-white', `font-${prefs.fontSize}`, 'reader-text text-2xl leading-loose font-serif italic')}>
+                      <p className={clsx('text-white whitespace-pre-line', `font-${prefs.fontSize}`, 'reader-text text-2xl leading-loose font-serif italic')}>
                         "{stripPerformanceTagsForDisplay((block as any).text)}"
                       </p>
                     </div>
@@ -1514,7 +1514,7 @@ export default function ReaderPage() {
   
                 {block.type === 'quote' && (
                   <div className="text-center">
-                    <p className={clsx('text-white/90 font-serif italic text-xl leading-relaxed', `font-${prefs.fontSize}`, 'reader-text')}>
+                    <p className={clsx('text-white/90 font-serif italic text-xl leading-relaxed whitespace-pre-line', `font-${prefs.fontSize}`, 'reader-text')}>
                       "{stripPerformanceTagsForDisplay((block as any).text)}"
                     </p>
                     {(block as any).attribution && (

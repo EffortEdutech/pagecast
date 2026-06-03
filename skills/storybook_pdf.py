@@ -97,6 +97,25 @@ def classify_paragraph(p):
             return 'scene_number', str(ORDINALS[m.group(1)])
         return 'scene_number', '0'
 
+    # Scene heading: bold + italic + center  (e.g. "I. The Town That Remembers")
+    # This is the primary format the storybook-writer skill produces for scenes.
+    if center and bold and italic:
+        roman = {
+            'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,
+            'VIII':8,'IX':9,'X':10,'XI':11,'XII':12,'XIII':13,
+            'XIV':14,'XV':15,'XVI':16,'XVII':17,'XVIII':18,
+        }
+        # Try Arabic digit first: "1. Title" or "1 Title"
+        m_arab = re.match(r'^(\d+)[.\s]', text)
+        if m_arab:
+            return 'scene_number', str(int(m_arab.group(1)))
+        # Try Roman numeral at start: "I. Title" or "II. Title"
+        m_rom = re.match(r'^(X{0,3}(?:IX|IV|V?I{0,3}))[.\s]', text.upper())
+        if m_rom and m_rom.group(1) in roman:
+            return 'scene_number', str(roman[m_rom.group(1)])
+        # Bold+italic+center without a number → treat as scene break label
+        return 'scene_break', text
+
     if center and bold and len(text) > 4:
         return 'title', text                          # title-case or ALL CAPS heading
 
@@ -176,22 +195,31 @@ def parse_manuscript(docx_path):
 def find_scene_images(casts_folder, chapter_num):
     """
     Returns dict: {scene_num -> Path, 'cover' -> Path|None}
+    Cover image is looked up in (in priority order):
+      1. <casts_folder>/cover.jpg   (root — where generate_images.py saves it)
+      2. <casts_folder>/images/cover.jpg  (legacy location)
     """
     images_dir = casts_folder / 'images'
     result = {'cover': None}
-    if not images_dir.exists():
-        return result
 
-    for ext in ('.jpg', '.jpeg', '.png'):
-        p = images_dir / ('cover' + ext)
-        if p.exists():
-            result['cover'] = p
+    # Cover image: check cast folder root first, then images/ subfolder
+    for search_dir in (casts_folder, images_dir):
+        if not search_dir.exists():
+            continue
+        for ext in ('.jpg', '.jpeg', '.png'):
+            p = search_dir / ('cover' + ext)
+            if p.exists():
+                result['cover'] = p
+                break
+        if result['cover']:
             break
 
-    for img in sorted(images_dir.iterdir()):
-        m = re.match(r'Ch(\d+)_Sc(\d+)_', img.name)
-        if m and int(m.group(1)) == chapter_num:
-            result[int(m.group(2))] = img
+    # Scene images: always in images/ subfolder
+    if images_dir.exists():
+        for img in sorted(images_dir.iterdir()):
+            m = re.match(r'Ch(\d+)_Sc(\d+)_', img.name)
+            if m and int(m.group(1)) == chapter_num:
+                result[int(m.group(2))] = img
 
     return result
 
@@ -333,11 +361,31 @@ def discover_manuscripts(casts_folder, chapter=None):
 
 def main():
     parser = argparse.ArgumentParser(description='pageCast Dark Storybook PDF Producer')
-    parser.add_argument('--book',    help='Book title')
-    parser.add_argument('--chapter', type=int, default=None, help='Single chapter number (default: all)')
-    parser.add_argument('--out-dir', help='Output directory')
-    parser.add_argument('--no-pdf',  action='store_true')
+    parser.add_argument('--book',     help='Book title (builds DOCX + PDF from manuscripts)')
+    parser.add_argument('--chapter',  type=int, default=None, help='Single chapter number (default: all)')
+    parser.add_argument('--out-dir',  help='Output directory')
+    parser.add_argument('--no-pdf',   action='store_true', help='Build DOCX only, skip PDF conversion')
+    parser.add_argument('--pdf-from', metavar='DOCX',
+                        help='Convert an existing .docx directly to PDF (skips manuscript build). '
+                             'Use this after manually editing a DOCX produced with --no-pdf.')
     args = parser.parse_args()
+
+    # ── Mode: convert an existing edited DOCX to PDF ────────────────────────
+    if args.pdf_from:
+        docx_path = Path(args.pdf_from).resolve()
+        if not docx_path.exists():
+            print(f'Error: File not found: {docx_path}'); sys.exit(1)
+        if not docx_path.suffix.lower() == '.docx':
+            print(f'Error: Expected a .docx file, got: {docx_path.name}'); sys.exit(1)
+        print(f'\n  pageCast PDF Converter')
+        print(f'  Source: {docx_path.name}')
+        pdf_path = convert_to_pdf(docx_path)
+        if pdf_path:
+            print(f'\n  ✅  PDF --> {pdf_path}')
+        else:
+            print(f'\n  ❌  PDF conversion failed.')
+            sys.exit(1)
+        return
 
     if not args.book:
         parser.print_help(); sys.exit(1)
