@@ -34,16 +34,16 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
+    @apply min-h-10 bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
   }
   .btn-secondary {
-    @apply bg-bg-elevated hover:bg-bg-hover border border-bg-border text-text-primary font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
+    @apply min-h-10 bg-bg-elevated hover:bg-bg-hover border border-bg-border text-text-primary font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
   }
   .btn-ghost {
-    @apply hover:bg-bg-elevated text-text-secondary hover:text-text-primary font-medium px-3 py-1.5 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
+    @apply min-h-9 hover:bg-bg-elevated text-text-secondary hover:text-text-primary font-medium px-3 py-1.5 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
   }
   .btn-danger {
-    @apply bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
+    @apply min-h-10 bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium px-4 py-2 rounded-lg transition-all duration-150 text-sm flex items-center gap-2;
   }
   .card {
     @apply bg-bg-card border border-bg-border rounded-xl;
@@ -52,7 +52,7 @@ body {
     @apply bg-bg-elevated border border-bg-border rounded-xl shadow-elevated;
   }
   .input {
-    @apply bg-bg-elevated border border-bg-border text-text-primary placeholder-text-muted rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-accent transition-colors;
+    @apply min-h-10 bg-bg-elevated border border-bg-border text-text-primary placeholder-text-muted rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-accent transition-colors;
   }
   .label {
     @apply text-text-secondary text-xs font-medium uppercase tracking-wide mb-1.5 block;

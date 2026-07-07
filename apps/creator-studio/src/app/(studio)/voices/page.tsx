@@ -459,15 +459,15 @@ function AddCharacterModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="card-elevated w-full max-w-md p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center">
+      <div className="card-elevated max-h-[92dvh] w-full max-w-md space-y-5 overflow-y-auto p-5 sm:p-6">
         <div>
           <h2 className="text-text-primary font-bold text-lg">Add Cast Member</h2>
           <p className="text-text-secondary text-sm mt-1">Create a new character or narrator for this story.</p>
         </div>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Name</label>
               <input className="input" placeholder="e.g. Maya" value={name}
@@ -549,7 +549,7 @@ function AddCharacterModal({
           </p>
         )}
 
-        <div className="flex gap-2 justify-end">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn-primary" disabled={!name.trim() || saving} onClick={handleAdd}>
             {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : <><Plus size={15} /> Add to Cast</>}
@@ -912,10 +912,10 @@ export default function VoicesPage() {
         )}
       </Header>
 
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-y-auto lg:overflow-hidden lg:flex">
 
         {/* ── Left panel: cast + settings ── */}
-        <div className="w-72 shrink-0 border-r border-bg-border flex flex-col overflow-hidden">
+        <div className="flex max-h-[45dvh] shrink-0 flex-col overflow-hidden border-b border-bg-border lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
 
           {/* Story selector */}
           <div className="p-4 border-b border-bg-border">
@@ -1163,8 +1163,8 @@ export default function VoicesPage() {
         </div>
 
         {/* ── Voice library browser ── */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="flex justify-end">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 sm:p-5">
+          <div className="flex justify-start sm:justify-end">
             <button
               className="btn-secondary text-xs"
               onClick={syncElevenLabsVoices}

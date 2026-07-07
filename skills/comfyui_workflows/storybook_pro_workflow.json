@@ -1,0 +1,1146 @@
+{
+  "last_node_id": 18,
+  "last_link_id": 29,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        60,
+        240
+      ],
+      "size": [
+        280,
+        142
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            3,
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "juggernautXL_v9.safetensors"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "LoraLoader",
+      "pos": [
+        380,
+        200
+      ],
+      "size": [
+        280,
+        176
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoader"
+      },
+      "widgets_values": [
+        "mira_storybook_v3.safetensors",
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "id": 3,
+      "type": "LoraLoader",
+      "pos": [
+        700,
+        200
+      ],
+      "size": [
+        280,
+        176
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            11,
+            12,
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoader"
+      },
+      "widgets_values": [
+        "watercolor_picturebook_v2.safetensors",
+        0.6,
+        0.7
+      ]
+    },
+    {
+      "id": 4,
+      "type": "IPAdapterUnifiedLoader",
+      "pos": [
+        1020,
+        200
+      ],
+      "size": [
+        280,
+        120
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "IPADAPTER",
+          "type": "IPADAPTER",
+          "slot_index": 1,
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "IPAdapterUnifiedLoader"
+      },
+      "widgets_values": [
+        "PLUS (high strength)"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "LoadImage",
+      "pos": [
+        1020,
+        460
+      ],
+      "size": [
+        240,
+        120
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "watercolor_plate_03.png"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "IPAdapterAdvanced",
+      "pos": [
+        1320,
+        240
+      ],
+      "size": [
+        280,
+        226
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 7
+        },
+        {
+          "name": "ipadapter",
+          "type": "IPADAPTER",
+          "link": 8
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            10,
+            23
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "IPAdapterAdvanced"
+      },
+      "widgets_values": [
+        0.55,
+        "style transfer",
+        0,
+        0.7
+      ]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [
+        1680,
+        40
+      ],
+      "size": [
+        360,
+        166
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            13,
+            26
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "watercolor storybook illustration, mira_v3 girl with curly red hair and a yellow raincoat, standing in a wildflower meadow at dawn, soft pastel palette, hand-painted edges"
+      ]
+    },
+    {
+      "id": 8,
+      "type": "CLIPTextEncode",
+      "pos": [
+        1680,
+        380
+      ],
+      "size": [
+        360,
+        166
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            14,
+            27
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "photograph, 3d render, plastic, deformed, extra limbs, text, watermark, harsh contrast"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "LoadImage",
+      "pos": [
+        1680,
+        670
+      ],
+      "size": [
+        240,
+        120
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "scene_07_pose.png"
+      ]
+    },
+    {
+      "id": 10,
+      "type": "OpenposePreprocessor",
+      "pos": [
+        1980,
+        670
+      ],
+      "size": [
+        240,
+        182
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenposePreprocessor"
+      },
+      "widgets_values": [
+        "enable",
+        "enable",
+        "enable",
+        1024
+      ]
+    },
+    {
+      "id": 11,
+      "type": "ControlNetLoader",
+      "pos": [
+        2280,
+        670
+      ],
+      "size": [
+        280,
+        98
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CONTROL_NET",
+          "type": "CONTROL_NET",
+          "slot_index": 0,
+          "links": [
+            17
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ControlNetLoader"
+      },
+      "widgets_values": [
+        "control-lora-openposeXL2-rank256.safetensors"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "ControlNetApplyAdvanced",
+      "pos": [
+        2280,
+        360
+      ],
+      "size": [
+        280,
+        220
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 13
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 14
+        },
+        {
+          "name": "control_net",
+          "type": "CONTROL_NET",
+          "link": 17
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "slot_index": 1,
+          "links": [
+            19
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ControlNetApplyAdvanced"
+      },
+      "widgets_values": [
+        0.85,
+        0,
+        0.9
+      ]
+    },
+    {
+      "id": 13,
+      "type": "EmptyLatentImage",
+      "pos": [
+        2280,
+        80
+      ],
+      "size": [
+        240,
+        154
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            20
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        1024,
+        1280,
+        1
+      ]
+    },
+    {
+      "id": 14,
+      "type": "KSampler",
+      "pos": [
+        2640,
+        240
+      ],
+      "size": [
+        300,
+        332
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 10
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 18
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 19
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            21
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        938472,
+        "fixed",
+        30,
+        6.5,
+        "dpmpp_2m_sde",
+        "karras",
+        1
+      ]
+    },
+    {
+      "id": 15,
+      "type": "VAEDecode",
+      "pos": [
+        3000,
+        240
+      ],
+      "size": [
+        220,
+        92
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 21
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 16,
+      "type": "UltralyticsDetectorProvider",
+      "pos": [
+        3000,
+        560
+      ],
+      "size": [
+        240,
+        98
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "BBOX_DETECTOR",
+          "type": "BBOX_DETECTOR",
+          "slot_index": 0,
+          "links": [
+            28
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UltralyticsDetectorProvider"
+      },
+      "widgets_values": [
+        "bbox/face_yolov8m.pt"
+      ]
+    },
+    {
+      "id": 17,
+      "type": "FaceDetailer",
+      "pos": [
+        3280,
+        240
+      ],
+      "size": [
+        320,
+        314
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 22
+        },
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 23
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 24
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 25
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 26
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 27
+        },
+        {
+          "name": "bbox_detector",
+          "type": "BBOX_DETECTOR",
+          "link": 28
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            29
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FaceDetailer"
+      },
+      "widgets_values": [
+        768,
+        0.45,
+        5,
+        0.5
+      ]
+    },
+    {
+      "id": 18,
+      "type": "SaveImage",
+      "pos": [
+        3680,
+        240
+      ],
+      "size": [
+        260,
+        98
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 29
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "mira_scene_pro"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      1,
+      1,
+      2,
+      1,
+      "CLIP"
+    ],
+    [
+      3,
+      1,
+      2,
+      15,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      2,
+      0,
+      3,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      2,
+      1,
+      3,
+      1,
+      "CLIP"
+    ],
+    [
+      6,
+      3,
+      0,
+      4,
+      0,
+      "MODEL"
+    ],
+    [
+      7,
+      4,
+      0,
+      6,
+      0,
+      "MODEL"
+    ],
+    [
+      8,
+      4,
+      1,
+      6,
+      1,
+      "IPADAPTER"
+    ],
+    [
+      9,
+      5,
+      0,
+      6,
+      2,
+      "IMAGE"
+    ],
+    [
+      10,
+      6,
+      0,
+      14,
+      0,
+      "MODEL"
+    ],
+    [
+      11,
+      3,
+      1,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      12,
+      3,
+      1,
+      8,
+      0,
+      "CLIP"
+    ],
+    [
+      13,
+      7,
+      0,
+      12,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      14,
+      8,
+      0,
+      12,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      15,
+      9,
+      0,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      10,
+      0,
+      12,
+      3,
+      "IMAGE"
+    ],
+    [
+      17,
+      11,
+      0,
+      12,
+      2,
+      "CONTROL_NET"
+    ],
+    [
+      18,
+      12,
+      0,
+      14,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      19,
+      12,
+      1,
+      14,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      20,
+      13,
+      0,
+      14,
+      3,
+      "LATENT"
+    ],
+    [
+      21,
+      14,
+      0,
+      15,
+      0,
+      "LATENT"
+    ],
+    [
+      22,
+      15,
+      0,
+      17,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      6,
+      0,
+      17,
+      1,
+      "MODEL"
+    ],
+    [
+      24,
+      3,
+      1,
+      17,
+      2,
+      "CLIP"
+    ],
+    [
+      25,
+      1,
+      2,
+      17,
+      3,
+      "VAE"
+    ],
+    [
+      26,
+      7,
+      0,
+      17,
+      4,
+      "CONDITIONING"
+    ],
+    [
+      27,
+      8,
+      0,
+      17,
+      5,
+      "CONDITIONING"
+    ],
+    [
+      28,
+      16,
+      0,
+      17,
+      6,
+      "BBOX_DETECTOR"
+    ],
+    [
+      29,
+      17,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "title": "MODEL STACK",
+      "bounding": [
+        40,
+        140,
+        940,
+        280
+      ],
+      "color": "#3F6B3F",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "STYLE REFERENCE",
+      "bounding": [
+        1000,
+        140,
+        620,
+        540
+      ],
+      "color": "#2C5F8D",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "PROMPT",
+      "bounding": [
+        1660,
+        0,
+        400,
+        620
+      ],
+      "color": "#5D4037",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "POSE CONTROL",
+      "bounding": [
+        1660,
+        620,
+        920,
+        240
+      ],
+      "color": "#7B2D8E",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "SAMPLING",
+      "bounding": [
+        2260,
+        0,
+        760,
+        540
+      ],
+      "color": "#7A3E3E",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "FACE REFINE",
+      "bounding": [
+        2980,
+        140,
+        640,
+        420
+      ],
+      "color": "#6A1B9A",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "OUTPUT",
+      "bounding": [
+        3660,
+        180,
+        300,
+        220
+      ],
+      "color": "#3D5A80",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds_storybook_pipeline": {
+      "variation": "Hybrid Pro",
+      "difficulty": "Advanced",
+      "note": "Generated from the Storybook Character Pipeline mockup. Custom-node packs may be required — see the side panel."
+    }
+  },
+  "version": 0.4
+}

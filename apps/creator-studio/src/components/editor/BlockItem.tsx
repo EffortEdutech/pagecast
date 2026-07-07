@@ -260,7 +260,7 @@ export function BlockItem({
     <div className={clsx('rounded-xl border border-bg-border overflow-hidden transition-all', meta.bg)}>
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
         <div {...dragHandleProps} className="text-text-muted hover:text-text-secondary cursor-grab active:cursor-grabbing p-0.5 shrink-0">
           <GripVertical size={14} />
         </div>
@@ -280,7 +280,7 @@ export function BlockItem({
           </span>
         )}
 
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="ml-auto flex items-center gap-1">
           {onInsertAbove && (
             <AddBlockMenu
               compact
@@ -344,7 +344,7 @@ export function BlockItem({
           {/* DIALOGUE — character + emotion + auto textarea */}
           {block.type === 'dialogue' && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                 <div>
                   <label className="label">Character</label>
                   <select
@@ -429,7 +429,7 @@ export function BlockItem({
           {/* QUOTE — style + voice + auto textarea + attribution */}
           {block.type === 'quote' && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                 <div>
                   <label className="label">Style</label>
                   <select

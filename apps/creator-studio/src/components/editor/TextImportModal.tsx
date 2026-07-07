@@ -357,8 +357,8 @@ export function TextImportModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="card-elevated w-full max-w-6xl max-h-[90vh] flex flex-col animate-slide-up mx-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm animate-fade-in sm:items-center">
+      <div className="card-elevated flex max-h-[92dvh] w-full max-w-6xl flex-col animate-slide-up">
 
         {/* ── Header ── */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-bg-border shrink-0">
@@ -374,10 +374,10 @@ export function TextImportModal({
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
 
           {/* ── Left: Input ── */}
-          <div className="w-1/2 flex flex-col border-r border-bg-border">
+          <div className="flex min-h-[42dvh] flex-col border-b border-bg-border lg:min-h-0 lg:w-1/2 lg:border-b-0 lg:border-r">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-bg-border shrink-0 flex-wrap">
               <select
                 className="input text-xs py-1 flex-1 min-w-0"
@@ -456,7 +456,7 @@ export function TextImportModal({
           </div>
 
           {/* ── Right: Preview ── */}
-          <div className="w-1/2 flex flex-col overflow-hidden">
+          <div className="flex min-h-[34dvh] flex-col overflow-hidden lg:min-h-0 lg:w-1/2">
             <div className="px-4 py-3 border-b border-bg-border shrink-0">
               <span className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">
                 Preview

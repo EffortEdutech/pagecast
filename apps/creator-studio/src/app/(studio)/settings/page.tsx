@@ -200,7 +200,7 @@ export default function SettingsPage() {
   return (
     <>
       <Header title="Settings" />
-      <div className="flex-1 overflow-y-auto p-6 max-w-2xl space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 sm:p-6 md:max-w-2xl">
 
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
@@ -214,7 +214,7 @@ export default function SettingsPage() {
             <User size={15} className="text-accent" />
             <h2 className="text-text-primary font-semibold">Creator Profile</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Display Name</label>
               <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your display name" />
@@ -317,7 +317,7 @@ export default function SettingsPage() {
             <BookOpen size={15} className="text-info" />
             <h2 className="text-text-primary font-semibold">Cast Settings</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Default Language</label>
               <select className="input" value={language} onChange={e => setLanguage(e.target.value)}>
@@ -375,7 +375,7 @@ export default function SettingsPage() {
                   )
 
                   return (
-                    <div key={index} className="grid grid-cols-[72px_1fr] gap-3 items-center">
+                    <div key={index} className="grid gap-2 sm:grid-cols-[72px_1fr] sm:items-center">
                       <label className="label mb-0">Slot {index + 1}</label>
                       <select
                         className="input"
@@ -395,7 +395,7 @@ export default function SettingsPage() {
                 })}
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <button
                   className="btn-secondary min-w-32 justify-center"
                   onClick={handleSaveGuestCasts}
@@ -414,7 +414,7 @@ export default function SettingsPage() {
         </section>
 
         {/* Save */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             className="btn-primary min-w-32 justify-center"
             onClick={handleSave}

@@ -104,8 +104,8 @@ export default function ComplianceRecordsPage() {
           Refresh
         </button>
       </Header>
-      <main className="flex-1 overflow-y-auto p-6 max-w-6xl space-y-6">
-        <section className="card p-6">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-6xl space-y-6">
+        <section className="card p-4 sm:p-6">
           <p className="text-accent text-xs font-semibold uppercase tracking-widest mb-2">Records and exports</p>
           <h1 className="text-text-primary text-2xl font-bold tracking-tight">Compliance exports and retention</h1>
           <p className="text-text-secondary text-sm leading-relaxed mt-3 max-w-3xl">

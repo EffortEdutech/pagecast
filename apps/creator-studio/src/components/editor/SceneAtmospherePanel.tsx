@@ -361,7 +361,7 @@ export function SceneAtmospherePanel({
   }
 
   return (
-    <aside className="w-60 shrink-0 border-l border-bg-border bg-bg-secondary overflow-y-auto flex flex-col">
+    <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto border-t border-bg-border bg-bg-secondary lg:max-h-none lg:w-60 lg:border-l lg:border-t-0 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-bg-border shrink-0">
         <span className="text-text-muted text-[10px] font-semibold uppercase tracking-wide">Scene Atmosphere</span>

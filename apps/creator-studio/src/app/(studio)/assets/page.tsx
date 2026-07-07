@@ -346,12 +346,12 @@ export default function AssetsPage() {
         </button>
       </Header>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-5 sm:p-6">
         <div className="rounded-lg border border-bg-border bg-bg-card p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex min-w-0 items-center gap-2">
               <BookOpen size={14} className="text-text-muted" />
-              <select className="input text-sm py-1 pr-8" value={bookId} onChange={e => setBookId(e.target.value)}>
+              <select className="input min-w-0 text-sm py-1 pr-8" value={bookId} onChange={e => setBookId(e.target.value)}>
                 <option value="all">All books</option>
                 {stories.map(story => (
                   <option key={story.id} value={story.id}>{story.title}</option>
@@ -364,13 +364,13 @@ export default function AssetsPage() {
               {assets.length} file{assets.length !== 1 ? 's' : ''} · {formatBytes(totalSize)}
             </div>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 sm:ml-auto">
               <input ref={sfxInputRef} type="file" accept="audio/*" className="hidden" onChange={handleSfxUpload} />
               <button
                 type="button"
                 onClick={() => sfxInputRef.current?.click()}
                 disabled={bookId === 'all' || uploadingSfx}
-                className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40"
+                className="btn-primary w-full justify-center px-3 py-1.5 text-xs disabled:opacity-40 sm:w-auto"
                 title={bookId === 'all' ? 'Choose one book before uploading SFX' : 'Upload SFX audio'}
               >
                 {uploadingSfx ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
@@ -379,8 +379,8 @@ export default function AssetsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap mt-4">
-            <div className="flex gap-1 overflow-x-auto">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex gap-1 overflow-x-auto pb-1">
               {(['all', 'voice', 'sfx', 'music', 'image', 'other'] as FilterType[]).map(type => {
                 const meta = type === 'all'
                   ? { icon: FolderOpen, label: 'All', color: 'text-text-secondary' }
@@ -410,7 +410,7 @@ export default function AssetsPage() {
                 )
               })}
             </div>
-            <div className="flex-1 max-w-sm relative">
+            <div className="relative w-full max-w-sm sm:flex-1">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 className="input pl-8 text-sm"
@@ -441,8 +441,8 @@ export default function AssetsPage() {
             </p>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <table className="w-full">
+          <div className="card overflow-x-auto">
+            <table className="min-w-[720px] w-full">
               <thead>
                 <tr className="border-b border-bg-border">
                   <th className="text-left px-4 py-3 text-text-muted text-[10px] font-semibold uppercase tracking-wide">Asset</th>

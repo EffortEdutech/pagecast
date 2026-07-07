@@ -114,9 +114,9 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-start sm:justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-80 h-full bg-bg-secondary border-l border-bg-border flex flex-col shadow-elevated animate-slide-down overflow-hidden">
+      <div className="relative flex h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-xl border border-bg-border bg-bg-secondary shadow-elevated animate-slide-down sm:h-full sm:w-96 sm:rounded-none sm:border-y-0 sm:border-r-0 sm:border-l">
         <div className="flex items-center justify-between px-5 py-4 border-b border-bg-border shrink-0">
           <span className="text-text-primary font-semibold text-sm">Book Settings</span>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
@@ -124,7 +124,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 sm:px-5">
           {error && (
             <div className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger">
               {error}
@@ -155,7 +155,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
           </div>
 
           {/* Genre + Age Rating */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Genre</label>
               <select className="input text-sm" value={genre} onChange={e => setGenre(e.target.value)}>
@@ -180,7 +180,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Estimated time</label>
               <input
@@ -360,7 +360,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="label">Territory</label>
                 <input
@@ -435,7 +435,7 @@ export function BookSettingsPanel({ story, rights, onClose, onSave }: Props) {
               I confirm I control the audio, adaptation, narration, music, SFX, and synthetic voice rights needed to publish this Cast.
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex items-start gap-2 text-xs text-text-secondary">
                 <input
                   type="checkbox"

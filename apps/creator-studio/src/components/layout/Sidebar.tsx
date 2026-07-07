@@ -38,8 +38,18 @@ export function Sidebar() {
   const displayEmail = user?.email ?? ''
   const initials     = displayName.charAt(0).toUpperCase()
 
+  const navLinks = NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+    const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+    return { href, Icon, label, active }
+  })
+
+  const mobileLinks = navLinks.filter(({ href }) =>
+    ['/dashboard', '/voices', '/assets', '/compliance-queue', '/settings'].includes(href)
+  )
+
   return (
-    <aside className="w-56 shrink-0 bg-bg-secondary border-r border-bg-border flex flex-col h-screen">
+    <>
+    <aside className="hidden w-56 shrink-0 bg-bg-secondary border-r border-bg-border lg:flex flex-col h-screen">
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-bg-border gap-3 shrink-0">
         <div className="w-7 h-7 bg-accent rounded-lg flex items-center justify-center shrink-0">
@@ -53,9 +63,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
-          return (
+        {navLinks.map(({ href, Icon, label, active }) => (
             <Link key={href} href={href}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group',
@@ -68,8 +76,7 @@ export function Sidebar() {
               {label}
               {active && <ChevronRight size={12} className="ml-auto text-accent/60" />}
             </Link>
-          )
-        })}
+        ))}
 
         {/* Voice credits placeholder */}
         <div className="mt-4 mx-1 p-3 rounded-lg bg-bg-card border border-bg-border">
@@ -106,5 +113,24 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-bg-border bg-bg-secondary/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur lg:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+        {mobileLinks.map(({ href, Icon, label, active }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-label={label}
+            className={clsx(
+              'flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-medium transition-colors',
+              active ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-bg-elevated hover:text-text-primary'
+            )}
+          >
+            <Icon size={17} />
+            <span className="max-w-full truncate">{label.replace('Compliance Queue', 'Queue').replace('Characters & Voices', 'Voices')}</span>
+          </Link>
+        ))}
+      </div>
+    </nav>
+    </>
   )
 }

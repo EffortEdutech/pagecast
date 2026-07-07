@@ -17,11 +17,11 @@ export default async function StudioLayout({ children }: { children: React.React
   }
 
   return (
-    <div className="flex h-screen bg-bg-primary overflow-hidden">
+    <div className="flex h-dvh bg-bg-primary overflow-hidden">
       <BooksSync />
       <ConsentGate />
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-20 lg:pb-0">
         {children}
       </div>
     </div>

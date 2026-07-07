@@ -374,8 +374,8 @@ export default function ComplianceCasePage() {
     return (
       <>
         <Header title="Compliance Case" />
-        <main className="flex-1 overflow-y-auto p-6">
-          <section className="card p-6 text-danger">Invalid compliance case type.</section>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <section className="card p-4 sm:p-6 text-danger">Invalid compliance case type.</section>
         </main>
       </>
     )
@@ -389,7 +389,7 @@ export default function ComplianceCasePage() {
           Refresh
         </button>
       </Header>
-      <main className="flex-1 overflow-y-auto p-6 max-w-6xl space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-6xl space-y-6">
         <Link href="/compliance-queue" className="inline-flex items-center gap-2 text-text-secondary hover:text-text-primary text-sm">
           <ArrowLeft size={14} />
           Back to queue
@@ -409,7 +409,7 @@ export default function ComplianceCasePage() {
           </div>
         ) : item ? (
           <>
-            <section className="card p-6">
+            <section className="card p-4 sm:p-6">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div>
                   <p className="text-accent text-xs font-semibold uppercase tracking-widest mb-2">{humanize(kind)}</p>

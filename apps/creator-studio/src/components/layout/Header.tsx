@@ -23,16 +23,18 @@ export function Header({ title, children }: HeaderProps) {
   const resolvedTitle = title ?? PAGE_TITLES[pathname] ?? 'Creator Studio'
 
   return (
-    <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-bg-border bg-bg-secondary/80 backdrop-blur-sm">
-      <h1 className="text-text-primary font-semibold text-base">{resolvedTitle}</h1>
-      <div className="flex items-center gap-2">
-        {children}
-        <button className="btn-ghost px-2 py-1.5">
-          <HelpCircle size={16} />
-        </button>
-        <button className="btn-ghost px-2 py-1.5">
-          <Bell size={16} />
-        </button>
+    <header className="min-h-14 shrink-0 border-b border-bg-border bg-bg-secondary/90 px-3 py-2 backdrop-blur-sm sm:px-4 lg:px-6">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h1 className="min-w-0 truncate text-sm font-semibold text-text-primary sm:text-base">{resolvedTitle}</h1>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          {children}
+          <button className="btn-ghost px-2 py-1.5" aria-label="Help">
+            <HelpCircle size={16} />
+          </button>
+          <button className="btn-ghost px-2 py-1.5" aria-label="Notifications">
+            <Bell size={16} />
+          </button>
+        </div>
       </div>
     </header>
   )

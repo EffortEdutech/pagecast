@@ -15,12 +15,12 @@ import type { Story } from '@/types'
 
 function StatCard({ icon: Icon, label, value, sub, color }: { icon: any, label: string, value: string, sub?: string, color: string }) {
   return (
-    <div className="card p-4 flex items-center gap-4">
-      <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', color)}>
+    <div className="card flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
+      <div className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl', color)}>
         <Icon size={18} />
       </div>
-      <div>
-        <div className="text-text-primary font-bold text-xl leading-tight">{value}</div>
+      <div className="min-w-0">
+        <div className="text-lg font-bold leading-tight text-text-primary sm:text-xl">{value}</div>
         <div className="text-text-secondary text-xs">{label}</div>
         {sub && <div className="text-text-muted text-[10px] mt-0.5">{sub}</div>}
       </div>
@@ -51,7 +51,7 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
   }
 
   return (
-    <div className="card hover:border-accent/30 transition-all duration-200 overflow-hidden group">
+    <div className="card group overflow-hidden transition-all duration-200 hover:border-accent/30">
       {/* Cover */}
       <div className={clsx('h-32 bg-gradient-to-br flex items-center justify-center relative', coverColors[colorIdx])}>
         <BookOpen size={36} className="text-white/20" />
@@ -64,7 +64,7 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
           </span>
         </div>
         {/* Quick actions overlay */}
-        <div className="absolute inset-0 bg-bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-bg-primary/60 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <button onClick={onEdit} className="btn-primary text-xs px-3 py-1.5">
             <Edit3 size={13} /> Edit
           </button>
@@ -147,8 +147,8 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
   const parsedPrice = Math.max(0.5, Number(price) || 4.99)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="card-elevated w-full max-w-md p-6 space-y-5 animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in sm:items-center">
+      <div className="card-elevated max-h-[92dvh] w-full max-w-md space-y-5 overflow-y-auto p-5 animate-slide-up sm:p-6">
         <div>
           <h2 className="text-text-primary font-bold text-lg">New Story</h2>
           <p className="text-text-secondary text-sm mt-1">Give your story a title and a brief description.</p>
@@ -167,7 +167,7 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
               onChange={e => setDesc(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Access</label>
               <select className="input" value={accessMode} onChange={e => setAccessMode(e.target.value as 'free' | 'paid')}>
@@ -190,7 +190,7 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
             )}
           </div>
         </div>
-        <div className="flex gap-2 justify-end">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -245,7 +245,7 @@ export default function DashboardPage() {
         </button>
       </Header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 space-y-5 sm:p-6 sm:space-y-6">
         {/* DB error banner */}
         {booksError && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
@@ -255,7 +255,7 @@ export default function DashboardPage() {
 
         {/* Welcome */}
         <div>
-          <h2 className="text-text-primary font-bold text-xl">
+          <h2 className="text-lg font-bold text-text-primary sm:text-xl">
             Welcome back, {displayName} 👋
           </h2>
           <p className="text-text-secondary text-sm mt-1">
@@ -267,7 +267,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           <StatCard icon={BookOpen} label="Total Stories" value={String(stories.length)} color="bg-accent/20 text-accent" />
           <StatCard icon={TrendingUp} label="Published" value={String(stories.filter((s: Story) => s.status === 'published').length)} color="bg-success/20 text-success" />
           <StatCard icon={Users} label="Est. Readers" value="—" sub="Awaiting launch" color="bg-info/20 text-info" />
@@ -276,13 +276,13 @@ export default function DashboardPage() {
 
         {/* Filter tabs + stories */}
         <div className="space-y-4">
-          <div className="flex items-center gap-1 border-b border-bg-border pb-3">
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-bg-border pb-3">
             {(['all', 'draft', 'published'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={clsx(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-all',
+                  'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-all',
                   filter === f
                     ? 'bg-accent/15 text-accent'
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'

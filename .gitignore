@@ -69,3 +69,7 @@ pageCast info.xlsx
 # ─── Office temp/lock files ──────────────────────────────────
 ~$*
 *.tmp
+
+# Graphify generated graph output
+graphify-out/
+.graphify-work/
