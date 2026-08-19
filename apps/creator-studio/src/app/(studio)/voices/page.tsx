@@ -5,7 +5,7 @@ import { useBooks } from '@/hooks/useBooks'
 import { Header } from '@/components/layout/Header'
 import {
   Mic, Play, Square, Plus, Check, Trash2, Loader2, AlertCircle,
-  Volume2, Users, Settings2, ChevronRight,
+  Volume2, Users, Settings2, ChevronRight, ImagePlus, RefreshCw,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -15,6 +15,10 @@ import {
   deleteCharacter as dbDeleteCharacter,
 } from '@/lib/supabase/characters'
 import * as BooksApi from '@/lib/supabase/books'
+import { createClient } from '@/lib/supabase/client'
+import { startCharacterPortraitRun, runPortraitPreflight, planCharacterPortraitJobs, fetchLocalManifest } from '@/lib/imageQueue'
+import { draftCharacterPortraitPrompt } from '@/lib/imagePrompts'
+import type { Story } from '@/types'
 import {
   CATEGORIES,
   GEMINI_VOICES,
@@ -560,6 +564,126 @@ function AddCharacterModal({
   )
 }
 
+// ── Character reference portrait (ComfyUI) ──────────────────────────────────────
+
+const PORTRAIT_STATUS_LABEL: Record<string, string> = {
+  none: 'No model sheet yet',
+  generating: 'Generating…',
+  pending_review: 'Candidate awaiting review',
+  approved: 'Approved',
+  failed: 'Last attempt failed',
+}
+
+function CharacterPortraitSection({
+  char,
+  story,
+  storeUpdate,
+}: {
+  char: Character
+  story: Story
+  storeUpdate: (storyId: string, charId: string, updates: Partial<Character>) => void
+}) {
+  const [prompt, setPrompt] = useState(char.portraitPrompt ?? draftCharacterPortraitPrompt(char, story))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const status = char.portraitStatus ?? 'none'
+  const isBusy = busy || status === 'generating'
+
+  const runGenerate = async (force: boolean) => {
+    setError(null)
+    setBusy(true)
+    const supabase = createClient()
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { setError('Not signed in.'); setBusy(false); return }
+
+    const effectivePrompt = prompt.trim() || draftCharacterPortraitPrompt(char, story)
+    const manifest = await fetchLocalManifest(story.title)
+    const jobs = planCharacterPortraitJobs(story, manifest, force ? { forceCharacterIds: new Set([char.id]) } : {})
+    const job = jobs.find(j => j.character.id === char.id) ?? { character: char, mode: 'generate' as const, prompt: effectivePrompt, localPath: `CHARACTER_REFS/${char.displayName}.jpg` }
+    job.prompt = effectivePrompt
+
+    const started = await startCharacterPortraitRun(story.id, data.user.id, story, [job], {
+      onJobStatus: (_jobId, targetId, jobStatus, resultUrl, err) => {
+        if (targetId !== char.id) return
+        if (jobStatus === 'running') storeUpdate(story.id, char.id, { portraitStatus: 'generating' })
+        if (jobStatus === 'succeeded') {
+          if (resultUrl) {
+            storeUpdate(story.id, char.id, { portraitStatus: 'approved', portraitUrl: resultUrl, portraitPrompt: effectivePrompt })
+          } else {
+            storeUpdate(story.id, char.id, { portraitStatus: 'pending_review', portraitPrompt: effectivePrompt })
+          }
+          setBusy(false)
+        }
+        if (jobStatus === 'failed') {
+          storeUpdate(story.id, char.id, { portraitStatus: 'failed' })
+          setError(err ?? 'Generation failed.')
+          setBusy(false)
+        }
+        if (jobStatus === 'skipped') setBusy(false)
+      },
+    })
+    if (!started) { setError('Could not start generation — check your connection.'); setBusy(false) }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-bg-border space-y-2" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between">
+        <p className="text-text-muted text-[10px] uppercase tracking-wide font-medium">Character Model Sheet</p>
+        <span className={clsx('text-[10px] font-medium', {
+          'text-text-muted': status === 'none',
+          'text-gold': status === 'generating' || status === 'pending_review',
+          'text-success': status === 'approved',
+          'text-danger': status === 'failed',
+        })}>
+          {PORTRAIT_STATUS_LABEL[status]}
+        </span>
+      </div>
+
+      {char.portraitUrl && (
+        <img src={char.portraitUrl} alt={char.displayName} className="w-full max-w-xs aspect-[3/2] object-cover rounded-lg border border-bg-border" />
+      )}
+      {char.portraitUrl && (
+        <p className="text-text-muted text-[10px]">Front / three-quarter / back turnaround — used as the reference for every scene this character appears in.</p>
+      )}
+      {status === 'pending_review' && !char.portraitUrl && (
+        <p className="text-text-muted text-[10px]">
+          A candidate was saved to <code className="text-[10px]">.casts/&lt;slug&gt;/CHARACTER_REFS/{char.displayName}.*</code> in your local folder.
+          Keep the file there to approve it — the next run will sync it in. Delete or move it to reject and generate a fresh one.
+        </p>
+      )}
+
+      {(status === 'none' || status === 'failed' || status === 'pending_review') && (
+        <textarea
+          className="input text-xs w-full min-h-16 resize-y"
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          placeholder="Describe this character's appearance for the model sheet…"
+          disabled={isBusy}
+        />
+      )}
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          className="btn-ghost text-[10px] px-2 py-1 border border-bg-border hover:border-gold/50 hover:text-gold disabled:opacity-50"
+          onClick={() => runGenerate(status === 'approved')}
+          disabled={isBusy}
+        >
+          {isBusy
+            ? <><Loader2 size={10} className="animate-spin" /> Generating…</>
+            : status === 'none'
+              ? <><ImagePlus size={10} /> Generate Model Sheet</>
+              : status === 'pending_review'
+                ? <><RefreshCw size={10} /> Check Folder / Regenerate</>
+                : <><RefreshCw size={10} /> Regenerate</>}
+        </button>
+      </div>
+
+      {error && <p className="text-danger text-[10px] flex items-center gap-1"><AlertCircle size={10} /> {error}</p>}
+    </div>
+  )
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function VoicesPage() {
@@ -580,6 +704,9 @@ export default function VoicesPage() {
   const [sampleUrls,      setSampleUrls]       = useState<Record<string, string>>({})
   const [samplingVoiceId, setSamplingVoiceId]  = useState<string | null>(null)
   const [elevenVoiceTags, setElevenVoiceTags]  = useState<VoiceLanguageTags>({})
+  const [bulkPortraitBusy, setBulkPortraitBusy] = useState(false)
+  const [bulkPortraitError, setBulkPortraitError] = useState<string | null>(null)
+  const [bulkPortraitProgress, setBulkPortraitProgress] = useState<{ done: number; total: number } | null>(null)
 
   // Select first story once books load
   useEffect(() => {
@@ -676,6 +803,38 @@ export default function VoicesPage() {
     await dbUpdateCharacter(charId, { voiceId, voiceLabel })
     setSavingVoice(null)
   }, [selectedStoryId, storeUpdate])
+
+  const handleGenerateMissingPortraits = useCallback(async () => {
+    if (!story) return
+    setBulkPortraitError(null)
+    setBulkPortraitBusy(true)
+
+    const preflight = await runPortraitPreflight(story)
+    if (preflight.blockers.length > 0) { setBulkPortraitError(preflight.blockers[0]); setBulkPortraitBusy(false); return }
+
+    setBulkPortraitProgress({ done: 0, total: preflight.jobs.length })
+
+    const supabase = createClient()
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) { setBulkPortraitError('Not signed in.'); setBulkPortraitBusy(false); return }
+
+    const started = await startCharacterPortraitRun(story.id, data.user.id, story, preflight.jobs, {
+      onJobStatus: (_jobId, targetId, jobStatus, resultUrl) => {
+        if (jobStatus === 'running') storeUpdate(story.id, targetId, { portraitStatus: 'generating' })
+        if (jobStatus === 'succeeded') {
+          storeUpdate(story.id, targetId, resultUrl
+            ? { portraitStatus: 'approved', portraitUrl: resultUrl }
+            : { portraitStatus: 'pending_review' })
+        }
+        if (jobStatus === 'failed') storeUpdate(story.id, targetId, { portraitStatus: 'failed' })
+      },
+      onProgress: p => {
+        setBulkPortraitProgress({ done: p.completed + p.failed + p.skipped, total: p.total })
+        if (p.completed + p.failed + p.skipped >= p.total) setBulkPortraitBusy(false)
+      },
+    })
+    if (!started) { setBulkPortraitError('Could not start generation — check your connection.'); setBulkPortraitBusy(false) }
+  }, [story, storeUpdate])
 
   const handleElevenLabsLanguageChange = useCallback((voiceId: string, language: VoiceLanguageTag) => {
     setElevenVoiceTags(prev => {
@@ -946,11 +1105,24 @@ export default function VoicesPage() {
           {/* Cast tab */}
           {activeTab === 'cast' && (
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 gap-2">
                 <span className="label mb-0">
                   Cast {loadingChars ? <Loader2 size={10} className="inline animate-spin ml-1" /> : `(${story?.characters.length ?? 0})`}
                 </span>
+                <button
+                  className="btn-ghost text-[10px] px-2 py-1 border border-bg-border hover:border-gold/50 hover:text-gold disabled:opacity-50 shrink-0"
+                  onClick={handleGenerateMissingPortraits}
+                  disabled={bulkPortraitBusy || !story?.characters.some(c => c.role !== 'narrator')}
+                  title="Generate a model sheet for every character that doesn't have one yet"
+                >
+                  {bulkPortraitBusy
+                    ? <><Loader2 size={10} className="animate-spin" /> {bulkPortraitProgress ? `${bulkPortraitProgress.done}/${bulkPortraitProgress.total}` : 'Generating…'}</>
+                    : <><ImagePlus size={10} /> Generate Missing Model Sheets</>}
+                </button>
               </div>
+              {bulkPortraitError && (
+                <p className="text-danger text-[10px] flex items-center gap-1 mb-1"><AlertCircle size={10} /> {bulkPortraitError}</p>
+              )}
 
               {story?.characters.map(char => (
                 <div key={char.id}
@@ -959,10 +1131,18 @@ export default function VoicesPage() {
                   onClick={() => setEditingCharId(char.id === editingCharId ? null : char.id)}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                      style={{ backgroundColor: char.color + '30', color: char.color }}>
-                      {char.displayName.charAt(0)}
-                    </div>
+                    {char.portraitUrl ? (
+                      <img
+                        src={char.portraitUrl}
+                        alt={char.displayName}
+                        className="w-8 h-8 rounded-full object-cover shrink-0 border border-bg-border"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ backgroundColor: char.color + '30', color: char.color }}>
+                        {char.displayName.charAt(0)}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-text-primary text-sm font-medium truncate">{char.displayName}</div>
                       <div className="text-text-muted text-[10px] flex items-center gap-1">
@@ -1076,6 +1256,10 @@ export default function VoicesPage() {
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {editingCharId === char.id && char.role !== 'narrator' && story && (
+                    <CharacterPortraitSection char={char} story={story} storeUpdate={storeUpdate} />
                   )}
                 </div>
               ))}

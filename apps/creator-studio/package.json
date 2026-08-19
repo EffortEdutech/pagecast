@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start -p 3801",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -15,6 +16,7 @@
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.44.4",
     "clsx": "^2.1.1",
+    "idb-keyval": "^6.2.1",
     "lucide-react": "^0.400.0",
     "next": "^14.2.35",
     "pdfjs-dist": "^5.4.296",

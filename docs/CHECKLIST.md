@@ -163,6 +163,8 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | T.8 | Import into book | ✅ | handleImport() in studio page |
 | T.9 | Dialogue placeholder (characterId: '' — assign after import) | ✅ | |
 | T.10 | PDF text extraction | ⬜ | Currently: convert to .txt first |
+| T.11 | Folder import — whole story from a `script/` folder | ✅ | TextImportModal "Import folder" + Dashboard "Import Folder": reads every `*_pagecast.txt` in a folder (e.g. `.casts/<story>/script`), sorts by trailing filename number, concatenates, parses in one pass → N chapters from N files. `lib/textParser.ts`: `concatenatePageCastFiles()`, `isPageCastFile()` |
+| T.12 | Auto-create cast from `::CAST` block on import | ✅ | `parsePageCast()` now captures `::CAST` + `::PAGECAST_BOOK` metadata instead of discarding it. `lib/importPipeline.ts`: `autoCreateMissingCast()` creates missing characters (name/role/color/voice — color + voice are best-effort guesses, always editable in Voices after import), `buildCharacterNameMap()` / `resolveBlockCharacter()` resolve dialogue/thought characterId hints. Wired into both the existing-book import (`studio/[bookId]` `handleImport`) and the new-book folder import (Dashboard) |
 
 ---
 
@@ -300,4 +302,6 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | B.3 | Library page uses real Supabase books | ✅ | `usePublishedBooks` hook replaces `DEMO_STORIES.filter()` |
 | B.4 | Stripe `apiVersion` mismatch | ✅ | Updated to `2026-04-22.dahlia` (installed package version) |
 | B.5 | `story-001` non-UUID 400 errors | ✅ | `studioStore` seed removed; UUID regex guard in voices page |
+| B.6 | Dashboard book-card dropdown menu clipped | ✅ | `overflow-hidden` on the whole card (needed only for the cover graphic's rounded corners) was cutting off the 3-dot menu after one row. Moved `overflow-hidden` onto just the cover div |
+| B.7 | Dashboard "Delete" in book-card dropdown did nothing | ✅ | `confirmDelete` state was set but never rendered — no confirmation dialog existed, so the delete never fired. Added an actual confirm-delete modal wired to `onDelete()` |
 

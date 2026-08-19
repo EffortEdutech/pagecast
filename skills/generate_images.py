@@ -48,8 +48,37 @@ COMFYUI_DEFAULT_MODEL = "juggernaut_xl_v9_lightning.safetensors"
 # generate_images.py auto-detects this folder when using --backend comfyui.
 CHAR_REFS_FOLDER = "CHARACTER_REFS"
 
-# Module-level upload cache so each character image is uploaded only once per run
+# Prop / location reference images live here: .casts/PROP_REFS/PROPNAME.jpg
+# Same book-overrides-series shadowing rule as CHARACTER_REFS.
+PROP_REFS_FOLDER = "PROP_REFS"
+
+# Module-level upload cache so each character/prop image is uploaded only once per run
 _COMFYUI_UPLOAD_CACHE = {}  # {local_path_str: comfyui_filename}
+
+# Cache of ComfyUI /object_info lookups so identity-mode auto-detection only
+# hits the server once per class_type per run.
+_COMFYUI_NODE_CACHE = {}  # {(comfyui_url, class_type): bool}
+
+# Negative prompt for character model-sheet / portrait generation (txt2img + FaceDetailer).
+# Mirrors comfyui_workflows/api/character_portrait_gen.json's NEGATIVE node exactly.
+PORTRAIT_NEGATIVE = (
+    "blurry face, bad face, ugly face, deformed face, melted face, asymmetric eyes, "
+    "cross-eyed, missing eyes, no eyes, extra limbs, extra arms, extra legs, missing limbs, "
+    "deformed hands, extra fingers, fused fingers, malformed hands, bad anatomy, low quality, "
+    "watermark, text, sunglasses, hat covering face, hair covering face, turned away from camera, "
+    "side view, back view, profile view, looking away, closed eyes, dark background, busy background, "
+    "multiple characters, cropped body, cut off legs, cut off feet, partial body, close-up face only, "
+    "portrait crop, headshot only"
+)
+
+PORTRAIT_TEMPLATE = (
+    "full body character design sheet, ArtStation concept art, digital illustration, {desc}, "
+    "standing upright, A-pose arms slightly away from body, looking directly at camera, "
+    "neutral calm expression, front facing, centered full body composition, head to toe visible, "
+    "complete outfit clearly shown, soft studio lighting, plain white background, clear sharp face, "
+    "detailed eyes, detailed clothing and accessories, symmetrical, correct human anatomy, 8k, "
+    "high quality, character reference sheet turnaround"
+)
 
 # Pollinations model options
 # flux-realism is the best free model for human anatomy on Pollinations.ai
@@ -463,222 +492,339 @@ def _upload_char_ref_to_comfyui(image_path, comfyui_url):
         conn.close()
 
 
-def _comfyui_wf_txt2img(prompt, w, h, model_name, seed):
-    """Plain text-to-image API workflow (no character references)."""
+def _sampler_settings_for_model(model_name):
+    """
+    Picks KSampler steps/cfg/sampler/scheduler by checkpoint type — both a
+    'main' preset (the base image) and a 'detail' preset (FaceDetailer's
+    internal regional resample).
+
+    Lightning/Turbo/LCM checkpoints (e.g. juggernaut_xl_v9_lightning.safetensors)
+    are distilled specifically for ultra-low step counts (4-8) at low CFG (~1.5-2) —
+    more steps doesn't help and can even hurt. Standard SDXL checkpoints (e.g.
+    juggernautXL_v9.safetensors) need the normal ~25-30 steps at CFG ~5-7 to
+    resolve fine detail — faces especially. Confirmed via the ComfyUI folder
+    audit that both checkpoint types are installed side by side, so switching
+    --comfyui-model is enough to trade render speed for quality; no separate
+    flag needed.
+    """
+    name = (model_name or '').lower()
+    is_fast = 'lightning' in name or 'turbo' in name or 'lcm' in name or 'hyper' in name
+    if is_fast:
+        return {
+            "main":   {"steps": 4, "cfg": 1.5, "sampler_name": "euler", "scheduler": "sgm_uniform"},
+            "detail": {"steps": 8, "cfg": 2.0, "sampler_name": "euler", "scheduler": "normal"},
+        }
     return {
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": model_name}},
-        "5": {"class_type": "EmptyLatentImage",  "inputs": {"width": w, "height": h, "batch_size": 1}},
-        "6": {"class_type": "CLIPTextEncode",    "inputs": {"clip": ["4", 1], "text": prompt}},
-        "7": {"class_type": "CLIPTextEncode",    "inputs": {"clip": ["4", 1], "text": NEGATIVE_PROMPT}},
-        "3": {"class_type": "KSampler",          "inputs": {
-            "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
-            "latent_image": ["5", 0], "seed": seed,
-            "steps": 4, "cfg": 1.5, "sampler_name": "euler", "scheduler": "sgm_uniform", "denoise": 1.0,
-        }},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-        "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "pagecast"}},
+        "main":   {"steps": 30, "cfg": 6.0, "sampler_name": "dpmpp_2m", "scheduler": "karras"},
+        "detail": {"steps": 12, "cfg": 5.0, "sampler_name": "dpmpp_2m", "scheduler": "karras"},
     }
 
 
-def _comfyui_wf_single_char(prompt, w, h, model_name, seed, char1_comfy):
+class _NodeGraph:
+    """Tiny builder for ComfyUI API-format prompt graphs — allocates sequential
+    string node IDs so composable graph pieces (identity lock, style lock,
+    prop lock) can be chained without hand-tracking ID collisions."""
+    def __init__(self):
+        self.graph = {}
+        self._next_id = 1
+
+    def add(self, class_type, inputs):
+        nid = str(self._next_id)
+        self._next_id += 1
+        self.graph[nid] = {"class_type": class_type, "inputs": inputs}
+        return nid
+
+
+def _comfyui_object_info(comfyui_url, class_type):
+    """Checks whether a ComfyUI node class is registered (i.e. its custom node
+    package is installed), via GET /object_info/<class_type>. Cached per run.
+    Never raises — any failure (offline, unexpected shape) is treated as
+    'not available' so callers can safely fall back to the proven path."""
+    key = (comfyui_url, class_type)
+    if key in _COMFYUI_NODE_CACHE:
+        return _COMFYUI_NODE_CACHE[key]
+    found = False
+    try:
+        url = comfyui_url + "/object_info/" + urllib.parse.quote(class_type)
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.loads(resp.read())
+            found = bool(data) and class_type in data
+    except Exception:
+        found = False
+    _COMFYUI_NODE_CACHE[key] = found
+    return found
+
+
+def _resolve_identity_mode(identity_mode, comfyui_url, char_count, debug=False):
     """
-    IP-Adapter scene workflow — one character reference, dual-adapter chain.
-    Face adapter (weight 0.7) locks face identity.
-    Style adapter (weight 0.35) locks clothing and colour palette.
-    char1_comfy: filename returned by _upload_char_ref_to_comfyui().
+    identity_mode: 'auto' | 'ipadapter' | 'instantid'
+    Returns the effective mode to actually use. InstantID only applies to
+    single-character shots (it conditions on one face per generation) — for
+    2-character scenes it always falls back to the proven dual-IPAdapter chain.
     """
-    return {
-        "1":  {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": model_name}},
-        "2":  {"class_type": "CLIPVisionLoader",       "inputs": {"clip_name": "CLIP-ViT-H-14.safetensors"}},
-        "3":  {"class_type": "IPAdapterModelLoader",   "inputs": {"ipadapter_file": "ip-adapter-plus-face_sdxl_vit-h.safetensors"}},
-        "14": {"class_type": "IPAdapterModelLoader",   "inputs": {"ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"}},
-        "4":  {"class_type": "LoadImage",              "inputs": {"image": char1_comfy}},
-        "5":  {"class_type": "IPAdapterAdvanced",      "inputs": {
-            "model": ["1", 0], "ipadapter": ["3", 0], "image": ["4", 0], "clip_vision": ["2", 0],
-            "weight": 0.7, "weight_type": "linear", "combine_embeds": "concat",
-            "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
-        }},
-        "15": {"class_type": "IPAdapterAdvanced",      "inputs": {
-            "model": ["5", 0], "ipadapter": ["14", 0], "image": ["4", 0], "clip_vision": ["2", 0],
-            "weight": 0.35, "weight_type": "linear", "combine_embeds": "concat",
-            "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
-        }},
-        "6":  {"class_type": "EmptyLatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}},
-        "7":  {"class_type": "CLIPTextEncode",   "inputs": {"clip": ["1", 1], "text": prompt}},
-        "8":  {"class_type": "CLIPTextEncode",   "inputs": {"clip": ["1", 1], "text": NEGATIVE_PROMPT}},
-        "9":  {"class_type": "KSampler",         "inputs": {
-            "model": ["15", 0], "positive": ["7", 0], "negative": ["8", 0],
-            "latent_image": ["6", 0], "seed": seed,
-            "steps": 4, "cfg": 1.5, "sampler_name": "euler", "scheduler": "sgm_uniform", "denoise": 1.0,
-        }},
-        "10": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0], "vae": ["1", 2]}},
-        "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": "pagecast"}},
-    }
+    if char_count != 1:
+        return 'ipadapter'
+    if identity_mode == 'ipadapter':
+        return 'ipadapter'
+    if identity_mode == 'instantid':
+        return 'instantid'
+    # auto
+    has_instantid = _comfyui_object_info(comfyui_url, 'ApplyInstantID')
+    if debug:
+        print("    InstantID node detected: {}".format(has_instantid))
+    return 'instantid' if has_instantid else 'ipadapter'
 
 
-def _comfyui_wf_dual_char(prompt, w, h, model_name, seed, char1_comfy, char2_comfy):
+def _comfyui_wf_build(prompt, w, h, model_name, seed,
+                       char_refs=None, prop_ref=None,
+                       identity_mode='ipadapter',
+                       instantid_model='ip-adapter.bin',
+                       instantid_controlnet='instantid_controlnet.safetensors',
+                       instantid_provider='CPU',
+                       negative_prompt=None,
+                       face_detail=True):
     """
-    IP-Adapter scene workflow — two character references chained in series.
-    char1_comfy, char2_comfy: filenames returned by _upload_char_ref_to_comfyui().
+    Composable SDXL ComfyUI API-format graph builder.
+
+    char_refs: list of 0-2 ComfyUI-side filenames (from _upload_char_ref_to_comfyui).
+      0 → plain txt2img.
+      1 → face + style IPAdapter (or InstantID + light style pass, if identity_mode
+          resolves to 'instantid').
+      2 → dual face IPAdapter chain (proven scene_dual_character.json shape;
+          InstantID is not used for 2 characters — see _resolve_identity_mode).
+    prop_ref: optional ComfyUI-side filename for a prop/location reference —
+      chained as one more IPAdapter-plus pass (weight 0.5) after identity/style,
+      so recurring props/locations (matched via [PROP: Name] tag or Location
+      text) stay visually consistent across scenes. Works with 0, 1, or 2
+      character refs.
+    face_detail: when True (default), runs FaceDetailer on every detected face
+      before saving — the base KSampler is only 4 steps (Lightning checkpoint),
+      which is fast but leaves faces mushy/deformed, especially several small
+      faces in a wide/crowd shot. FaceDetailer crops each detected face and
+      re-samples it at higher effective resolution, using the SAME
+      identity-locked model + conditioning as the main pass so the touch-up
+      doesn't drift off the reference. This is the same fix already used in
+      _comfyui_wf_portrait — scenes/cover just never had it wired in before.
+
+    With char_refs=None/[], prop_ref=None, identity_mode='ipadapter' and
+    face_detail=False, this produces the exact same node shape as the
+    original hand-authored _comfyui_wf_txt2img/_single_char/_dual_char
+    functions it replaces.
     """
-    return {
-        "1":  {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": model_name}},
-        "2":  {"class_type": "CLIPVisionLoader",       "inputs": {"clip_name": "CLIP-ViT-H-14.safetensors"}},
-        "3":  {"class_type": "IPAdapterModelLoader",   "inputs": {"ipadapter_file": "ip-adapter-plus-face_sdxl_vit-h.safetensors"}},
-        "4":  {"class_type": "LoadImage",              "inputs": {"image": char1_comfy}},
-        "12": {"class_type": "LoadImage",              "inputs": {"image": char2_comfy}},
-        "5":  {"class_type": "IPAdapterAdvanced",      "inputs": {
-            "model": ["1", 0], "ipadapter": ["3", 0], "image": ["4", 0], "clip_vision": ["2", 0],
-            "weight": 0.65, "weight_type": "linear", "combine_embeds": "concat",
-            "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
-        }},
-        "13": {"class_type": "IPAdapterAdvanced",      "inputs": {
-            "model": ["5", 0], "ipadapter": ["3", 0], "image": ["12", 0], "clip_vision": ["2", 0],
-            "weight": 0.65, "weight_type": "linear", "combine_embeds": "concat",
-            "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
-        }},
-        "6":  {"class_type": "EmptyLatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}},
-        "7":  {"class_type": "CLIPTextEncode",   "inputs": {"clip": ["1", 1], "text": prompt}},
-        "8":  {"class_type": "CLIPTextEncode",   "inputs": {"clip": ["1", 1], "text": NEGATIVE_PROMPT}},
-        "9":  {"class_type": "KSampler",         "inputs": {
-            "model": ["13", 0], "positive": ["7", 0], "negative": ["8", 0],
-            "latent_image": ["6", 0], "seed": seed,
-            "steps": 4, "cfg": 1.5, "sampler_name": "euler", "scheduler": "sgm_uniform", "denoise": 1.0,
-        }},
-        "10": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0], "vae": ["1", 2]}},
-        "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": "pagecast"}},
-    }
+    char_refs = char_refs or []
+    negative_prompt = negative_prompt if negative_prompt is not None else NEGATIVE_PROMPT
+    g = _NodeGraph()
+    ckpt = g.add("CheckpointLoaderSimple", {"ckpt_name": model_name})
+    model_link = [ckpt, 0]
+    clip_link = [ckpt, 1]
+    vae_link = [ckpt, 2]
 
+    clip_vision_id = [None]
 
-def download_image_comfyui(prompt, dest_path, width, height,
-                           comfyui_url=COMFYUI_DEFAULT_URL,
-                           model_name=COMFYUI_DEFAULT_MODEL,
-                           char_refs=None,
-                           force_workflow=None,
-                           debug=False):
-    """
-    Generate an image using a local ComfyUI instance (Juggernaut XL Lightning).
+    def clip_vision():
+        if clip_vision_id[0] is None:
+            clip_vision_id[0] = g.add("CLIPVisionLoader", {"clip_name": "CLIP-ViT-H-14.safetensors"})
+        return [clip_vision_id[0], 0]
 
-    char_refs: optional dict {char_name: local_image_path} — when supplied the
-    function uploads the reference images once (cached) and switches to an
-    IP-Adapter workflow so characters look consistent across every scene.
-      * 1 entry  → scene_single_character IPAdapter workflow
-      * 2 entries → scene_dual_character  IPAdapter workflow (chained)
-      * absent   → plain txt2img workflow
-    """
-    client_id = str(uuid.uuid4())
+    use_instantid = (identity_mode == 'instantid' and len(char_refs) == 1)
+    char_img_nodes = []
 
-    # SDXL requires dimensions as multiples of 64, minimum 512
-    def snap64(v):
-        return max(512, (v // 64) * 64)
-
-    w    = snap64(width)
-    h    = snap64(height)
-    seed = int(time.time() * 1000) % (2 ** 31)
-
-    # ── Upload character references ─────────────────────────────────────────────
-    comfy_chars = []  # ComfyUI-side filenames for character refs
-    if char_refs:
-        for char_name, local_path in list(char_refs.items())[:2]:
-            try:
-                comfy_name = _upload_char_ref_to_comfyui(local_path, comfyui_url)
-                comfy_chars.append(comfy_name)
-                if debug:
-                    print("    Char ref uploaded: {} → {}".format(char_name, comfy_name))
-            except Exception as e:
-                print("    Warning: could not upload char ref '{}': {}".format(char_name, e))
-
-    # ── Select workflow: forced override, or auto by character count ────────────
-    _fw = force_workflow or ''
-    if _fw == 'txt2img_juggernaut':
-        workflow = _comfyui_wf_txt2img(prompt, w, h, model_name, seed)
-        wf_label = 'txt2img (forced)'
-    elif _fw == 'scene_single_character':
-        if comfy_chars:
-            workflow = _comfyui_wf_single_char(prompt, w, h, model_name, seed, comfy_chars[0])
-            wf_label = 'single-character IP-Adapter (forced)'
-        else:
-            workflow = _comfyui_wf_txt2img(prompt, w, h, model_name, seed)
-            wf_label = 'txt2img (forced single — no char refs)'
-    elif _fw == 'scene_dual_character':
-        if len(comfy_chars) >= 2:
-            workflow = _comfyui_wf_dual_char(prompt, w, h, model_name, seed,
-                                              comfy_chars[0], comfy_chars[1])
-            wf_label = 'dual-character IP-Adapter (forced)'
-        elif len(comfy_chars) == 1:
-            workflow = _comfyui_wf_single_char(prompt, w, h, model_name, seed, comfy_chars[0])
-            wf_label = 'single-character IP-Adapter (forced dual — degraded)'
-        else:
-            workflow = _comfyui_wf_txt2img(prompt, w, h, model_name, seed)
-            wf_label = 'txt2img (forced dual — no char refs)'
+    if use_instantid:
+        instantid_loader  = g.add("InstantIDModelLoader", {"instantid_file": instantid_model})
+        face_analysis     = g.add("InstantIDFaceAnalysis", {"provider": instantid_provider})
+        controlnet_loader = g.add("ControlNetLoader", {"control_net_name": instantid_controlnet})
+        face_img = g.add("LoadImage", {"image": char_refs[0]})
+        char_img_nodes.append(face_img)
+        pos_txt = g.add("CLIPTextEncode", {"clip": clip_link, "text": prompt})
+        neg_txt = g.add("CLIPTextEncode", {"clip": clip_link, "text": negative_prompt})
+        apply_instantid = g.add("ApplyInstantID", {
+            "instantid": [instantid_loader, 0], "insightface": [face_analysis, 0],
+            "control_net": [controlnet_loader, 0], "image": [face_img, 0],
+            "model": model_link, "positive": [pos_txt, 0], "negative": [neg_txt, 0],
+            "weight": 0.8, "start_at": 0.0, "end_at": 1.0,
+        })
+        model_link    = [apply_instantid, 0]
+        positive_cond = [apply_instantid, 1]
+        negative_cond = [apply_instantid, 2]
+        style_loader = g.add("IPAdapterModelLoader", {"ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"})
+        style_apply = g.add("IPAdapterAdvanced", {
+            "model": model_link, "ipadapter": [style_loader, 0], "image": [face_img, 0],
+            "clip_vision": clip_vision(), "weight": 0.3, "weight_type": "linear",
+            "combine_embeds": "concat", "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
+        })
+        model_link = [style_apply, 0]
     else:
-        # Auto-select by character count
-        if len(comfy_chars) >= 2:
-            workflow = _comfyui_wf_dual_char(prompt, w, h, model_name, seed,
-                                              comfy_chars[0], comfy_chars[1])
-            wf_label = 'dual-character IP-Adapter'
-        elif len(comfy_chars) == 1:
-            workflow = _comfyui_wf_single_char(prompt, w, h, model_name, seed, comfy_chars[0])
-            wf_label = 'single-character IP-Adapter'
-        else:
-            workflow = _comfyui_wf_txt2img(prompt, w, h, model_name, seed)
-            wf_label = 'txt2img'
+        pos_txt = g.add("CLIPTextEncode", {"clip": clip_link, "text": prompt})
+        neg_txt = g.add("CLIPTextEncode", {"clip": clip_link, "text": negative_prompt})
+        positive_cond = [pos_txt, 0]
+        negative_cond = [neg_txt, 0]
+        if char_refs:
+            face_loader = g.add("IPAdapterModelLoader", {"ipadapter_file": "ip-adapter-plus-face_sdxl_vit-h.safetensors"})
+            per_char_weight = 0.7 if len(char_refs) == 1 else 0.65
+            for ref in char_refs[:2]:
+                img_node = g.add("LoadImage", {"image": ref})
+                char_img_nodes.append(img_node)
+                face_apply = g.add("IPAdapterAdvanced", {
+                    "model": model_link, "ipadapter": [face_loader, 0], "image": [img_node, 0],
+                    "clip_vision": clip_vision(), "weight": per_char_weight, "weight_type": "linear",
+                    "combine_embeds": "concat", "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
+                })
+                model_link = [face_apply, 0]
+            if len(char_refs) == 1:
+                style_loader = g.add("IPAdapterModelLoader", {"ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"})
+                style_apply = g.add("IPAdapterAdvanced", {
+                    "model": model_link, "ipadapter": [style_loader, 0], "image": [char_img_nodes[0], 0],
+                    "clip_vision": clip_vision(), "weight": 0.35, "weight_type": "linear",
+                    "combine_embeds": "concat", "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
+                })
+                model_link = [style_apply, 0]
 
+    if prop_ref:
+        prop_loader = g.add("IPAdapterModelLoader", {"ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"})
+        prop_img = g.add("LoadImage", {"image": prop_ref})
+        prop_apply = g.add("IPAdapterAdvanced", {
+            "model": model_link, "ipadapter": [prop_loader, 0], "image": [prop_img, 0],
+            "clip_vision": clip_vision(), "weight": 0.5, "weight_type": "linear",
+            "combine_embeds": "concat", "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only",
+        })
+        model_link = [prop_apply, 0]
+
+    samp = _sampler_settings_for_model(model_name)
+    latent = g.add("EmptyLatentImage", {"width": w, "height": h, "batch_size": 1})
+    sampler = g.add("KSampler", {
+        "model": model_link, "positive": positive_cond, "negative": negative_cond,
+        "latent_image": [latent, 0], "seed": seed, "denoise": 1.0,
+        **samp["main"],
+    })
+    decode = g.add("VAEDecode", {"samples": [sampler, 0], "vae": vae_link})
+
+    final_image = [decode, 0]
+    if face_detail:
+        bbox = g.add("UltralyticsDetectorProvider", {"model_name": "bbox/face_yolov8m.pt"})
+        detail = g.add("FaceDetailer", {
+            "image": final_image, "model": model_link, "clip": clip_link, "vae": vae_link,
+            "positive": positive_cond, "negative": negative_cond, "bbox_detector": [bbox, 0],
+            "guide_size": 512, "guide_size_for": "bbox", "max_size": 1024, "seed": seed,
+            "denoise": 0.45, **samp["detail"],
+            "feather": 5, "noise_mask": True, "force_inpaint": True, "bbox_threshold": 0.45,
+            "bbox_dilation": 10, "bbox_crop_factor": 3, "sam_detection_hint": "center-1",
+            "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0,
+            "sam_mask_hint_threshold": 0.7, "sam_mask_hint_use_negative": "False",
+            "drop_size": 10, "wildcard": "", "cycle": 1, "inpaint_model": 1,
+            "noise_mask_feather": 20, "tiled_encode": False, "tiled_decode": False,
+        })
+        final_image = [detail, 0]
+
+    g.add("SaveImage", {"images": final_image, "filename_prefix": "pagecast"})
+    return g.graph
+
+
+def _comfyui_wf_portrait(prompt, w, h, model_name, seed):
+    """Text-to-image + FaceDetailer canon portrait generator — same node
+    shape as comfyui_workflows/api/character_portrait_gen.json, built
+    programmatically so it can run headless from the CLI."""
+    g = _NodeGraph()
+    ckpt = g.add("CheckpointLoaderSimple", {"ckpt_name": model_name})
+    latent = g.add("EmptyLatentImage", {"width": w, "height": h, "batch_size": 1})
+    pos = g.add("CLIPTextEncode", {"clip": [ckpt, 1], "text": prompt})
+    neg = g.add("CLIPTextEncode", {"clip": [ckpt, 1], "text": PORTRAIT_NEGATIVE})
+    samp = _sampler_settings_for_model(model_name)
+    sampler = g.add("KSampler", {
+        "model": [ckpt, 0], "positive": [pos, 0], "negative": [neg, 0],
+        "latent_image": [latent, 0], "seed": seed, "denoise": 1.0,
+        **samp["main"],
+    })
+    decode = g.add("VAEDecode", {"samples": [sampler, 0], "vae": [ckpt, 2]})
+    bbox = g.add("UltralyticsDetectorProvider", {"model_name": "bbox/face_yolov8m.pt"})
+    detail = g.add("FaceDetailer", {
+        "image": [decode, 0], "model": [ckpt, 0], "clip": [ckpt, 1], "vae": [ckpt, 2],
+        "positive": [pos, 0], "negative": [neg, 0], "bbox_detector": [bbox, 0],
+        "guide_size": 512, "guide_size_for": "bbox", "max_size": 768, "seed": seed,
+        "denoise": 0.45, **samp["detail"],
+        "feather": 5, "noise_mask": True, "force_inpaint": True, "bbox_threshold": 0.5,
+        "bbox_dilation": 10, "bbox_crop_factor": 3, "sam_detection_hint": "center-1",
+        "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0,
+        "sam_mask_hint_threshold": 0.7, "sam_mask_hint_use_negative": "False",
+        "drop_size": 10, "wildcard": "CUDA", "cycle": 1, "inpaint_model": 1,
+        "noise_mask_feather": 20, "tiled_encode": False, "tiled_decode": False,
+    })
+    g.add("SaveImage", {"images": [detail, 0], "filename_prefix": "char_portrait"})
+    return g.graph
+
+
+def _comfyui_submit_and_poll(workflow, dest_path, comfyui_url, debug=False, max_wait=300):
+    """Shared submit-to-/prompt + poll-/history + fetch-/view logic, used by
+    both scene/cover generation and character portrait generation."""
+    client_id = str(uuid.uuid4())
     payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode("utf-8")
 
-    if debug:
-        print("    ComfyUI: {} | model: {} | {}x{} | wf: {}".format(
-            comfyui_url, model_name, w, h, wf_label))
-        print("    Prompt ({} chars): {}...".format(len(prompt), prompt[:120]))
-
-    # ── Submit prompt ──────────────────────────────────────────────────────────
     try:
         req = urllib.request.Request(
-            comfyui_url + "/prompt",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+            comfyui_url + "/prompt", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST",
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read())
             prompt_id = result.get("prompt_id")
+            node_errors = result.get("node_errors") or {}
+            if node_errors:
+                # ComfyUI accepted the HTTP request (200, sometimes even with a
+                # prompt_id attached) but the graph itself failed validation --
+                # this prompt will NEVER produce output, so fail fast instead of
+                # polling /history for up to max_wait (this used to silently
+                # burn the full timeout per item, e.g. 300s x 18 characters).
+                details = "; ".join(
+                    "{}: {}".format(node_id, [e.get("message", e) for e in info.get("errors", [])])
+                    for node_id, info in node_errors.items()
+                )
+                print("    ComfyUI validation error: {}".format(details or node_errors))
+                return False
             if not prompt_id:
                 print("    ComfyUI error: {}".format(result))
                 return False
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+            print("    ComfyUI validation error ({}): {}".format(e.code, body.get("error", body)))
+        except Exception:
+            print("    ComfyUI submit error: {}".format(e))
+        return False
     except Exception as e:
         print("    ComfyUI submit error: {}".format(e))
         return False
 
-    if debug:
-        print("    prompt_id: {}".format(prompt_id))
+    print("    Submitted to ComfyUI (prompt_id {}) -- waiting for render...".format(prompt_id[:8]))
 
-    # ── Poll /history until done ───────────────────────────────────────────────
-    max_wait      = 300   # seconds
     poll_interval = 2
-    elapsed       = 0
-
+    heartbeat_every = 15  # seconds -- keeps the log visibly alive during slow renders (e.g. FaceDetailer)
+    elapsed = 0
+    last_heartbeat = 0
     while elapsed < max_wait:
         time.sleep(poll_interval)
         elapsed += poll_interval
+        if elapsed - last_heartbeat >= heartbeat_every:
+            last_heartbeat = elapsed
+            print("    ... still rendering ({}s elapsed)".format(elapsed))
         try:
-            with urllib.request.urlopen(
-                comfyui_url + "/history/" + prompt_id, timeout=10
-            ) as resp:
+            with urllib.request.urlopen(comfyui_url + "/history/" + prompt_id, timeout=10) as resp:
                 history = json.loads(resp.read())
                 if prompt_id not in history:
                     continue
+                status = history[prompt_id].get("status", {})
+                if status.get("status_str") == "error":
+                    err_msgs = [m for m in status.get("messages", []) if isinstance(m, (list, tuple)) and m and m[0] == "execution_error"]
+                    print("    ComfyUI execution error: {}".format(err_msgs or status))
+                    return False
                 outputs = history[prompt_id].get("outputs", {})
                 for node_output in outputs.values():
                     if "images" not in node_output:
                         continue
-                    img_info  = node_output["images"][0]
-                    filename  = img_info["filename"]
+                    img_info = node_output["images"][0]
+                    filename = img_info["filename"]
                     subfolder = img_info.get("subfolder", "")
-                    img_type  = img_info.get("type", "output")
-                    params    = urllib.parse.urlencode({
-                        "filename": filename,
-                        "subfolder": subfolder,
-                        "type": img_type,
+                    img_type = img_info.get("type", "output")
+                    params = urllib.parse.urlencode({
+                        "filename": filename, "subfolder": subfolder, "type": img_type,
                     })
                     img_url = comfyui_url + "/view?" + params
                     try:
@@ -697,6 +843,110 @@ def download_image_comfyui(prompt, dest_path, width, height,
 
     print("    Timeout: ComfyUI took more than {}s".format(max_wait))
     return False
+
+
+def download_image_comfyui(prompt, dest_path, width, height,
+                           comfyui_url=COMFYUI_DEFAULT_URL,
+                           model_name=COMFYUI_DEFAULT_MODEL,
+                           char_refs=None,
+                           prop_ref_path=None,
+                           identity_mode='auto',
+                           instantid_model='ip-adapter.bin',
+                           instantid_controlnet='instantid_controlnet.safetensors',
+                           instantid_provider='CPU',
+                           force_workflow=None,
+                           face_detail=True,
+                           debug=False):
+    """
+    Generate an image using a local ComfyUI instance (Juggernaut XL Lightning).
+
+    char_refs: optional dict {char_name: local_image_path} — when supplied the
+    function uploads the reference images once (cached) and switches to an
+    identity-locked workflow so characters look consistent across every scene.
+    prop_ref_path: optional local Path to a prop/location reference image —
+    chained as an extra IPAdapter pass for prop/location consistency.
+    identity_mode: 'auto' (default, prefers InstantID for single-character
+    shots when detected on the running ComfyUI instance), 'ipadapter'
+    (proven, always available), or 'instantid' (force, single-character only).
+    face_detail: when True (default), adds a FaceDetailer pass over every
+    detected face — the base 4-step Lightning sampler alone tends to produce
+    mushy/deformed faces, especially several small ones in a wide shot.
+    """
+    # SDXL requires dimensions as multiples of 64, minimum 512
+    def snap64(v):
+        return max(512, (v // 64) * 64)
+
+    w    = snap64(width)
+    h    = snap64(height)
+    seed = int(time.time() * 1000) % (2 ** 31)
+
+    # ── Upload character + prop references ──────────────────────────────────
+    comfy_chars = []
+    if char_refs:
+        for char_name, local_path in list(char_refs.items())[:2]:
+            try:
+                comfy_name = _upload_char_ref_to_comfyui(local_path, comfyui_url)
+                comfy_chars.append(comfy_name)
+                if debug:
+                    print("    Char ref uploaded: {} → {}".format(char_name, comfy_name))
+            except Exception as e:
+                print("    Warning: could not upload char ref '{}': {}".format(char_name, e))
+
+    comfy_prop = None
+    if prop_ref_path:
+        try:
+            comfy_prop = _upload_char_ref_to_comfyui(prop_ref_path, comfyui_url)
+            if debug:
+                print("    Prop ref uploaded: {}".format(comfy_prop))
+        except Exception as e:
+            print("    Warning: could not upload prop ref: {}".format(e))
+
+    # ── Force-workflow override (legacy CLI compatibility) ──────────────────
+    _fw = force_workflow or ''
+    if _fw == 'txt2img_juggernaut':
+        comfy_chars, wf_note = [], ' (forced txt2img)'
+    elif _fw == 'scene_single_character':
+        comfy_chars, wf_note = (comfy_chars[:1] or comfy_chars), ' (forced single)'
+    elif _fw == 'scene_dual_character':
+        wf_note = ' (forced dual)'
+    else:
+        wf_note = ''
+
+    mode = _resolve_identity_mode(identity_mode, comfyui_url, len(comfy_chars), debug=debug)
+    workflow = _comfyui_wf_build(
+        prompt, w, h, model_name, seed,
+        char_refs=comfy_chars, prop_ref=comfy_prop, identity_mode=mode,
+        instantid_model=instantid_model, instantid_controlnet=instantid_controlnet,
+        instantid_provider=instantid_provider, face_detail=face_detail,
+    )
+
+    if debug:
+        wf_label = '{}-char / {}{}{}{}'.format(
+            len(comfy_chars), mode, '+prop' if comfy_prop else '', wf_note,
+            '+facedetail' if face_detail else '')
+        print("    ComfyUI: {} | model: {} | {}x{} | wf: {}".format(
+            comfyui_url, model_name, w, h, wf_label))
+        print("    Prompt ({} chars): {}...".format(len(prompt), prompt[:120]))
+
+    return _comfyui_submit_and_poll(workflow, dest_path, comfyui_url, debug=debug, max_wait=300)
+
+
+def download_portrait_comfyui(prompt, dest_path, width, height,
+                              comfyui_url=COMFYUI_DEFAULT_URL,
+                              model_name=COMFYUI_DEFAULT_MODEL,
+                              debug=False):
+    """Generate a character model-sheet portrait (txt2img + FaceDetailer,
+    no reference image — this establishes the canon look)."""
+    def snap64(v):
+        return max(512, (v // 64) * 64)
+    w = snap64(width)
+    h = snap64(height)
+    seed = int(time.time() * 1000) % (2 ** 31)
+    workflow = _comfyui_wf_portrait(prompt, w, h, model_name, seed)
+    if debug:
+        print("    ComfyUI portrait: {} | model: {} | {}x{}".format(comfyui_url, model_name, w, h))
+        print("    Prompt ({} chars): {}...".format(len(prompt), prompt[:120]))
+    return _comfyui_submit_and_poll(workflow, dest_path, comfyui_url, debug=debug, max_wait=300)
 
 
 def download_image(prompt, dest_path, width, height, api_key="", model=DEFAULT_MODEL,
@@ -776,6 +1026,9 @@ def parse_pagecast(pagecast_path):
         char_names = [m.group(1).strip()
                       for m in re.finditer(r'\[DIALOGUE:\s*([^|]+)', block, re.IGNORECASE)]
 
+        prop_match = re.search(r'\[PROP:\s*([^\]]+)\]', block, re.IGNORECASE)
+        explicit_prop = prop_match.group(1).strip() if prop_match else ""
+
         narration_matches = re.findall(r'\[NARRATION\][ \t]*\r?\n(.*?)(?=\[|\Z)', block, re.DOTALL)
         narration_lines = []
         for match in narration_matches:
@@ -800,10 +1053,65 @@ def parse_pagecast(pagecast_path):
             "music":         get_meta("Music"),
             "narration":     narration,
             "characters":    list(dict.fromkeys(char_names))[:2],
+            "all_characters": list(dict.fromkeys(char_names)),
+            "prop":          explicit_prop,
             "slug":          slugify(scene_title),
         })
 
     return genre, scenes
+
+
+def extract_all_character_names(scenes):
+    """Full, uncapped, de-duplicated character list across all scenes —
+    used for character-portrait generation (unlike scene['characters'],
+    which is capped at 2 for reference-image resolution)."""
+    seen = []
+    for sc in scenes:
+        for name in sc.get("all_characters", sc.get("characters", [])):
+            if name and name not in seen and name.lower() != 'narrator':
+                seen.append(name)
+    return seen
+
+
+def _resolve_prop_for_scene(scene, all_props):
+    """Matches a scene to a PROP_REFS entry: an explicit [PROP: Name] tag
+    takes priority; otherwise falls back to a case-insensitive substring
+    match of any known prop/location name against the scene's Location text."""
+    if not all_props:
+        return None, None
+    explicit = scene.get("prop", "")
+    if explicit:
+        for name, path in all_props.items():
+            if name.lower() == explicit.lower():
+                return name, path
+    loc = scene.get("location", "").lower()
+    if loc:
+        for name, path in all_props.items():
+            if name.lower() in loc:
+                return name, path
+    return None, None
+
+
+def _portrait_prompt_from_file(name, char_refs_dir):
+    """Mirrors pageCast_gui.py's _character_prompt() file lookup: a prompt
+    written by the storybook-image-prompt skill or by hand, saved beside the
+    portrait itself."""
+    for suffix in ('.prompt.txt', '.txt', '.md'):
+        p = char_refs_dir / (name + suffix)
+        if p.exists():
+            try:
+                return p.read_text(encoding='utf-8', errors='replace').strip()
+            except Exception:
+                pass
+    return ""
+
+
+def _generic_portrait_prompt(name):
+    """Low-quality fallback used only when no [char:Name] prompt block and no
+    CHARACTER_REFS/Name.prompt.txt file exists. Callers should print a note
+    pointing at the storybook-image-prompt skill when this path is used."""
+    desc = "a character named {} — no visual description available yet, please refine".format(name)
+    return PORTRAIT_TEMPLATE.format(desc=desc)
 
 
 def read_prompts_file(path):
@@ -835,12 +1143,77 @@ def read_prompts_file(path):
             cur_key = 'cover'
             cur = {}
             continue
+        cm = re.match(r'^\[char:(.+)\]$', line, re.IGNORECASE)
+        if cm:
+            if cur_key and cur:
+                result[cur_key] = cur
+            cur_key = 'char:' + cm.group(1).strip()
+            cur = {}
+            continue
         if '=' in line and cur_key is not None:
             k, _, v = line.partition('=')
             cur[k.strip()] = v.strip()
     if cur_key and cur:
         result[cur_key] = cur
     return result
+
+
+def generate_character_portraits(folder, scenes, prompts_data, all_refs,
+                                 comfyui_url, comfyui_model, overwrite, debug):
+    """
+    Generates one canon model-sheet portrait per character found in dialogue
+    tags that doesn't already have a CHARACTER_REFS image (book- or
+    series-level). Prompt source, in priority order:
+      1. [char:Name] block in <Book>_image_prompts.txt (storybook-image-prompt skill)
+      2. CHARACTER_REFS/Name.prompt.txt (or .txt/.md)
+      3. Generic template fallback (flagged with a note to refine it)
+    """
+    char_refs_dir = folder / CHAR_REFS_FOLDER
+    char_refs_dir.mkdir(parents=True, exist_ok=True)
+
+    names = extract_all_character_names(scenes)
+    if not names:
+        print("No characters found in dialogue tags — nothing to generate.")
+        return
+
+    print("Characters found: {}".format(", ".join(names)))
+    print()
+
+    ok = skip = fail = 0
+    for name in names:
+        existing = all_refs.get(name)
+        dest = existing if existing else (char_refs_dir / (re.sub(r'[\\/:*?"<>|]', '_', name) + '.jpg'))
+        if existing and not overwrite:
+            print("{}  [reference exists -- skipping]".format(name))
+            skip += 1
+            continue
+
+        block = prompts_data.get('char:' + name, {})
+        prompt = block.get('prompt', '')
+        source = 'image_prompts.txt [char:{}]'.format(name)
+        if not prompt:
+            prompt = _portrait_prompt_from_file(name, char_refs_dir)
+            source = 'CHARACTER_REFS/{}.prompt.txt'.format(name)
+        if not prompt:
+            prompt = _generic_portrait_prompt(name)
+            source = 'generic fallback'
+            print("{}  Note: no prompt found -- using a generic placeholder.".format(name))
+            print("       Run the storybook-image-prompt skill, or write CHARACTER_REFS/{}.prompt.txt, for a real description.".format(name))
+
+        print("{}  Generating portrait (prompt: {})...".format(name, source))
+        ok_gen = download_portrait_comfyui(
+            prompt=prompt, dest_path=Path(dest), width=768, height=1024,
+            comfyui_url=comfyui_url, model_name=comfyui_model, debug=debug,
+        )
+        if ok_gen:
+            print("  Saved: {}".format(dest))
+            ok += 1
+        else:
+            fail += 1
+        debug = False  # only first image gets debug output
+
+    print()
+    print("Done. Generated: {}  Skipped: {}  Failed: {}".format(ok, skip, fail))
 
 
 def main():
@@ -891,6 +1264,33 @@ def main():
                              "Use the JSON stem name, e.g. txt2img_juggernaut, "
                              "scene_single_character, scene_dual_character. "
                              "Empty string (default) = auto by character count.")
+    parser.add_argument("--mode", default="scenes", choices=["scenes", "characters"],
+                        help="scenes (default): generate scene images + cover. "
+                             "characters: generate missing character model-sheet "
+                             "portraits into CHARACTER_REFS/ instead (comfyui backend only).")
+    parser.add_argument("--identity-mode", default="auto",
+                        choices=["auto", "ipadapter", "instantid"],
+                        help="Face identity-lock technique for single-character scenes/cover "
+                             "(comfyui backend only). auto (default): use InstantID if your "
+                             "ComfyUI has it installed, else fall back to IPAdapter-plus-face. "
+                             "2-character scenes always use the proven dual-IPAdapter chain "
+                             "regardless of this setting -- InstantID conditions on one face "
+                             "per generation.")
+    parser.add_argument("--instantid-model", default="ip-adapter.bin",
+                        help="InstantID model filename in ComfyUI models/instantid/ "
+                             "(only used when identity-mode resolves to instantid).")
+    parser.add_argument("--instantid-controlnet", default="instantid_controlnet.safetensors",
+                        help="InstantID ControlNet filename in ComfyUI models/controlnet/ "
+                             "(only used when identity-mode resolves to instantid).")
+    parser.add_argument("--instantid-provider", default="CPU", choices=["CPU", "CUDA"],
+                        help="InstantIDFaceAnalysis provider (default CPU -- safe default; "
+                             "use CUDA if your ComfyUI's insightface build supports GPU).")
+    parser.add_argument("--no-face-detail", action="store_true",
+                        help="Skip the FaceDetailer touch-up pass on scenes/cover (comfyui "
+                             "backend only). On by default -- the base 4-step Lightning "
+                             "sampler alone tends to produce mushy/deformed faces, especially "
+                             "several small ones in a wide shot. Turning it off is faster but "
+                             "noticeably lower face quality.")
     args = parser.parse_args()
 
     # Resolve HF token
@@ -921,11 +1321,13 @@ def main():
                 print("Model: {}".format(model))
             else:
                 print("Warning: --model-pick must be 1-{}".format(len(MODEL_PRESETS)))
-        elif sys.stdin.isatty() and not args.model_pick and args.model == DEFAULT_MODEL:
+        elif sys.stdin.isatty() and not args.model_pick and args.model == DEFAULT_MODEL and args.mode != "characters":
             model = pick_model_interactive()
     args.model = model
 
     # Resolve style: --style-pick > --style > interactive > genre default
+    # (--mode characters never needs this -- each character portrait's look
+    # comes from its own [char:Name] prompt block, not a scene-wide style.)
     style_override = args.style or ""
     if args.style_pick:
         n = args.style_pick
@@ -934,14 +1336,16 @@ def main():
             print("Style: {}".format(STYLE_PRESETS[n - 1][1]))
         else:
             print("Warning: --style-pick must be 1-{}".format(len(STYLE_PRESETS)))
-    elif sys.stdin.isatty() and not args.style and not args.style_pick:
+    elif sys.stdin.isatty() and not args.style and not args.style_pick and args.mode != "characters":
         style_override = pick_style_interactive()
 
     # Determine base folder
     if args.folder:
         folder = Path(args.folder)
     else:
-        folder = Path(args.pagecast).parent
+        # book folder is one level up if the given file lives in script/
+        _pc_parent = Path(args.pagecast).parent
+        folder = _pc_parent.parent if _pc_parent.name.lower() == "script" else _pc_parent
 
     if not folder.exists():
         print("Error: folder not found: {}".format(folder))
@@ -973,6 +1377,20 @@ def main():
             print("Char refs: none found (checked {} and {})".format(
                 _book_refs_dir, _series_refs_dir))
 
+    # Prop / location reference images -- same book-overrides-series shadowing
+    # rule as CHARACTER_REFS. Matched per scene via [PROP: Name] tag or a
+    # substring match against the scene's Location text (see _resolve_prop_for_scene).
+    _book_props_dir   = folder / PROP_REFS_FOLDER
+    _series_props_dir = folder.parent / PROP_REFS_FOLDER
+    _all_props = {}
+    for _d in (_series_props_dir, _book_props_dir):
+        if _d.exists():
+            for _f in _d.iterdir():
+                if _f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.webp'):
+                    _all_props[_f.stem] = _f
+    if args.backend == "comfyui" and _all_props:
+        print("Prop/location refs found: {}".format(", ".join(sorted(_all_props.keys()))))
+
     # Find prompts file (auto-detect *_image_prompts.txt in folder)
     prompts_data = {}
     if args.prompts:
@@ -988,13 +1406,16 @@ def main():
             print("Prompts: {}".format(pf.name))
             break
 
-    # Parse pagecast file(s)
+    # Parse pagecast file(s) -- live in <folder>/script/ (falls back to folder
+    # root for any book not yet migrated to the script/ layout)
     genre = ""
     scenes = []
     if args.pagecast:
         genre, scenes = parse_pagecast(Path(args.pagecast))
     else:
-        for pf in sorted(folder.glob("*_pagecast.txt")):
+        script_dir = folder / "script"
+        pagecast_dir = script_dir if script_dir.exists() else folder
+        for pf in sorted(pagecast_dir.glob("*_pagecast.txt")):
             g, sc = parse_pagecast(pf)
             if not genre:
                 genre = g
@@ -1003,6 +1424,24 @@ def main():
     if not scenes:
         print("Error: no scenes found. Check --folder or --pagecast path.")
         sys.exit(1)
+
+    if args.mode == "characters":
+        if args.backend != "comfyui":
+            print("Error: --mode characters requires --backend comfyui (character model "
+                  "sheets need a real ComfyUI render, not a text-to-image API call).")
+            sys.exit(1)
+        print()
+        print("Book    : {}".format(folder.name))
+        print("Mode    : character model sheets -> {}".format(char_refs_dir))
+        print("Backend : ComfyUI (local GPU)")
+        print("URL     : {}".format(args.comfyui_url))
+        print("Model   : {}".format(args.comfyui_model))
+        print()
+        generate_character_portraits(
+            folder, scenes, prompts_data, _all_refs,
+            args.comfyui_url, args.comfyui_model, args.overwrite, args.debug,
+        )
+        return
 
     # Resolve style from genre if not already set
     genre_style = detect_style(genre)
@@ -1059,6 +1498,8 @@ def main():
                         comfyui_url=args.comfyui_url,
                         model_name=args.comfyui_model,
                         char_refs=None,
+                        identity_mode=args.identity_mode,
+                        face_detail=not args.no_face_detail,
                         debug=args.debug,
                     )
                 else:
@@ -1132,6 +1573,9 @@ def main():
                 for name in scene.get("characters", [])[:2]
                 if name in _all_refs
             }
+            prop_name, prop_path = _resolve_prop_for_scene(scene, _all_props)
+            if prop_path and args.debug:
+                print("    Prop match: {} -> {}".format(prop_name, prop_path))
             ok = download_image_comfyui(
                 prompt=prompt,
                 dest_path=dest,
@@ -1140,6 +1584,12 @@ def main():
                 comfyui_url=args.comfyui_url,
                 model_name=args.comfyui_model,
                 char_refs=scene_char_refs if scene_char_refs else None,
+                prop_ref_path=prop_path,
+                identity_mode=args.identity_mode,
+                instantid_model=args.instantid_model,
+                instantid_controlnet=args.instantid_controlnet,
+                instantid_provider=args.instantid_provider,
+                face_detail=not args.no_face_detail,
                 force_workflow=args.force_workflow or None,
                 debug=args.debug,
             )

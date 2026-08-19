@@ -31,9 +31,34 @@ export interface ParsedChapter {
   scenes: ParsedScene[]
 }
 
+export interface ParsedCastMember {
+  /** Display name, e.g. "Mak Cempaka" */
+  name: string
+  /** Slug/id used as the characterId hint in DIALOGUE/THOUGHT tags, e.g. "mak_cempaka" */
+  slug: string
+  /** Raw role string from the CAST line, e.g. "narrator" | "main_character" | "supporting" */
+  role: string
+  /** Raw voice descriptor from the CAST line, e.g. "adult_female_warm_loud" — not a real voiceId */
+  voiceDescriptor?: string
+  /** Raw color word from the CAST line, e.g. "amber" */
+  colorWord?: string
+}
+
+export interface ParsedBookMeta {
+  title?: string
+  author?: string
+  language?: string
+  genre?: string
+  defaultNarrator?: string
+}
+
 export interface ParsedImport {
   format:   ParseFormat
   chapters: ParsedChapter[]
+  /** Cast members declared in ::CAST blocks (pagecast format only), deduped by slug */
+  cast?: ParsedCastMember[]
+  /** Book metadata declared in the first ::PAGECAST_BOOK block encountered (pagecast format only) */
+  meta?: ParsedBookMeta
   stats: {
     blocks:     number
     chapters:   number
@@ -260,6 +285,30 @@ function titleFromHash(line: string): string {
   return line.replace(/^#{1,6}\s*/, '').trim()
 }
 
+/** Parses one ::CAST line: "Mak Cempaka: mak_cempaka | role=supporting | voice=... | color=gold" */
+function parseCastLine(line: string): ParsedCastMember | null {
+  const m = line.match(/^([^:]+):\s*([^|]+)(?:\|(.*))?$/)
+  if (!m) return null
+  const name = m[1].trim()
+  const slug = m[2].trim()
+  if (!name || !slug) return null
+  const options = m[3]
+  return {
+    name,
+    slug,
+    role: optionValue(options, 'role') ?? 'character',
+    voiceDescriptor: optionValue(options, 'voice'),
+    colorWord: optionValue(options, 'color'),
+  }
+}
+
+/** Parses one ::PAGECAST_BOOK metadata line: "Title: Kampung Awan Club" */
+function parseMetaLine(line: string): { key: string; value: string } | null {
+  const m = line.match(/^([A-Za-z][A-Za-z \-]*):\s*(.+)$/)
+  if (!m) return null
+  return { key: m[1].trim().toLowerCase(), value: m[2].trim() }
+}
+
 function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: string | undefined, options: string | undefined, body: string[]) {
   const text = body.join('\n').trim()
   const name = tag.toUpperCase()
@@ -307,10 +356,15 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
   }
 }
 
-function parsePageCast(text: string): ParsedChapter[] {
+function parsePageCast(text: string): { chapters: ParsedChapter[]; cast: ParsedCastMember[]; meta: ParsedBookMeta } {
   const chapters: ParsedChapter[] = []
+  const castBySlug = new Map<string, ParsedCastMember>()
+  const meta: ParsedBookMeta = {}
   const lines = text.split('\n')
-  let skipMetadata = false
+  // Which metadata block we're currently inside, if any. Concatenated multi-file
+  // imports contain one of each per file — every block is captured (cast merges
+  // by slug across files; book meta keeps the first non-empty value per field).
+  let metaBlock: 'book' | 'cast' | null = null
   let activeTag: { name: string; target?: string; options?: string; body: string[] } | null = null
 
   const flush = () => {
@@ -322,13 +376,34 @@ function parsePageCast(text: string): ParsedChapter[] {
   for (const rawLine of lines) {
     const line = rawLine.trim()
 
-    if (/^::PAGECAST_|^::CAST\b/i.test(line)) {
+    if (/^::PAGECAST_/i.test(line)) {
       flush()
-      skipMetadata = true
+      metaBlock = 'book'
       continue
     }
-    if (skipMetadata) {
-      if (line === '::') skipMetadata = false
+    if (/^::CAST\b/i.test(line)) {
+      flush()
+      metaBlock = 'cast'
+      continue
+    }
+    if (metaBlock) {
+      if (line === '::') { metaBlock = null; continue }
+      if (!line) continue
+      if (metaBlock === 'book') {
+        const kv = parseMetaLine(line)
+        if (kv) {
+          if (kv.key === 'title'             && !meta.title)           meta.title = kv.value
+          else if (kv.key === 'author'       && !meta.author)          meta.author = kv.value
+          else if (kv.key === 'language'     && !meta.language)        meta.language = kv.value
+          else if (kv.key === 'genre'        && !meta.genre)           meta.genre = kv.value
+          else if (kv.key === 'default narrator' && !meta.defaultNarrator) meta.defaultNarrator = kv.value
+        }
+      } else {
+        const member = parseCastLine(line)
+        if (member && !castBySlug.has(member.slug.toLowerCase())) {
+          castBySlug.set(member.slug.toLowerCase(), member)
+        }
+      }
       continue
     }
     if (!line) {
@@ -370,7 +445,7 @@ function parsePageCast(text: string): ParsedChapter[] {
   }
 
   flush()
-  return chapters
+  return { chapters, cast: Array.from(castBySlug.values()), meta }
 }
 
 // ── Novel / prose parser ──────────────────────────────────────────────────────
@@ -576,9 +651,17 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
   const usedFormat = detected
 
   let chapters: ParsedChapter[]
+  let cast: ParsedCastMember[] | undefined
+  let meta: ParsedBookMeta | undefined
+
   if      (usedFormat === 'script')   chapters = parseScript(clean)
   else if (usedFormat === 'markdown') chapters = parseMarkdown(clean)
-  else if (usedFormat === 'pagecast') chapters = parsePageCast(clean)
+  else if (usedFormat === 'pagecast') {
+    const result = parsePageCast(clean)
+    chapters = result.chapters
+    cast     = result.cast
+    meta     = result.meta
+  }
   else                                chapters = parseProse(clean)
 
   // Ensure structure is never empty
@@ -605,6 +688,8 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
   return {
     format: usedFormat as ParseFormat,
     chapters,
+    cast,
+    meta,
     stats: {
       blocks,
       chapters:   chapters.length,
@@ -657,4 +742,121 @@ export function formatParsedImportAsPageCastText(result: ParsedImport): string {
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+}
+
+// ── Folder import (multi-file pagecast concatenation) ──────────────────────────
+
+/** True if the given text contains a ::PAGECAST_BOOK marker (case-insensitive). */
+export function isPageCastFile(text: string): boolean {
+  return /^::PAGECAST_BOOK\b/im.test(text)
+}
+
+/**
+ * Extracts the trailing number in a filename (e.g. "HH_S1Cl01_pagecast.txt" → 1,
+ * "Glitch_Ch7_pagecast.txt" → 7). Falls back to +Infinity (sorts last) when no
+ * digits are present, so unnumbered files land at the end rather than the start.
+ */
+function trailingFileNumber(filename: string): number {
+  const matches = filename.match(/\d+/g)
+  if (!matches || matches.length === 0) return Number.POSITIVE_INFINITY
+  return parseInt(matches[matches.length - 1], 10)
+}
+
+export interface FolderFile {
+  name: string
+  text: string
+}
+
+export interface ConcatenatedFolderImport {
+  /** Combined text, ready for parseText(combinedText, 'pagecast') */
+  combinedText: string
+  /** Filenames in the order they were concatenated */
+  order: string[]
+}
+
+/**
+ * Sorts a set of *_pagecast.txt files into castlet/chapter order (by the trailing
+ * number in each filename — Cl01…Cl08, Ch1…Ch8, S1Cl01…S1Cl08, etc.) and joins them
+ * into a single text blob. Each file keeps its own ::PAGECAST_BOOK / ::CAST metadata
+ * block — parsePageCast() already skips/consumes those wherever they appear and
+ * treats every top-level "# " header as a new chapter, so N files in → N chapters out.
+ */
+export function concatenatePageCastFiles(files: FolderFile[]): ConcatenatedFolderImport {
+  const sorted = [...files].sort((a, b) => {
+    const na = trailingFileNumber(a.name)
+    const nb = trailingFileNumber(b.name)
+    if (na !== nb) return na - nb
+    return a.name.localeCompare(b.name)
+  })
+  return {
+    combinedText: sorted.map(f => normalizeImportedText(f.text)).join('\n\n'),
+    order: sorted.map(f => f.name),
+  }
+}
+
+// ── Casting helpers (best-effort color/voice guesses from CAST metadata) ───────
+
+/**
+ * Fallback palette — mirrors CHARACTER_COLORS in app/(studio)/voices/page.tsx so
+ * auto-created characters look consistent with manually-added ones.
+ */
+export const FALLBACK_CHARACTER_COLORS = [
+  '#A98BFF', '#4DB8FF', '#F5C842', '#3DD68C', '#F05F6E', '#FF9F43', '#C44AE8', '#48DBFB',
+]
+
+const NAMED_COLOR_HEX: Record<string, string> = {
+  amber: '#F5C842', gold: '#F5C842', yellow: '#F5C842',
+  teal: '#2DD4BF', cyan: '#48DBFB', sky: '#4DB8FF', blue: '#4DB8FF', navy: '#1E3A8A',
+  lavender: '#C9A9FF', purple: '#A98BFF', violet: '#A98BFF', indigo: '#6366F1',
+  orange: '#FF9F43', coral: '#FF7F6E', red: '#F05F6E', crimson: '#DC2626', maroon: '#7F1D1D',
+  brown: '#A9713D', tan: '#D2B48C',
+  green: '#3DD68C', mint: '#3DD68C', olive: '#7A7A3D',
+  pink: '#FF8FC7', rose: '#FF8FC7', magenta: '#C44AE8',
+  gray: '#9896A8', grey: '#9896A8', silver: '#C4C4CC',
+  black: '#2A2A33', white: '#F5F5F7',
+}
+
+/** Best-effort named-color → hex lookup, with a stable cycling fallback for unknown words. */
+export function hexForColorWord(word: string | undefined, fallbackIndex = 0): string {
+  const key = (word ?? '').trim().toLowerCase()
+  return NAMED_COLOR_HEX[key] ?? FALLBACK_CHARACTER_COLORS[fallbackIndex % FALLBACK_CHARACTER_COLORS.length]
+}
+
+/**
+ * Best-effort mapping from a free-text CAST voice descriptor (e.g. "young_boy_confident",
+ * "elderly_male_dramatic") to one of the real catalog voice IDs in lib/voiceLibrary.ts.
+ * Never authoritative — always shown as editable in the Voices page afterward.
+ */
+export function guessVoiceId(descriptor: string | undefined, role?: string): string | undefined {
+  const d = (descriptor ?? '').toLowerCase()
+  const isNarratorRole = (role ?? '').toLowerCase().includes('narrator')
+
+  const isFemale = /female|girl|woman/.test(d)
+  const isMale   = /\bmale\b|boy|\bman\b/.test(d)
+  const isChild  = /child|young_(boy|girl)|\bkid\b/.test(d)
+  const isElder  = /elder|elderly|old_/.test(d)
+
+  if (isNarratorRole)                     return d.includes('deep') ? 'ai_narrator_deep' : 'ai_narrator_warm'
+  if (/villain|evil|menacing/.test(d))    return 'ai_villain'
+  if (/whisper/.test(d))                  return 'ai_whisper'
+  if (/robot|mechanical/.test(d))         return 'ai_robot'
+  if (/creature|fantasy|magical/.test(d)) return 'ai_fantasy'
+  if (/cartoon|comic/.test(d))            return 'ai_cartoon'
+
+  if (isChild) return isFemale ? 'ai_child_female' : 'ai_child_male'
+  if (isElder) return isFemale ? 'ai_elder_female' : 'ai_elder_male'
+
+  if (isFemale) {
+    if (/warm/.test(d))   return 'ai_female_warm'
+    if (/bright/.test(d)) return 'ai_female_bright'
+    return 'ai_female_soft'
+  }
+  if (isMale) {
+    if (/gruff/.test(d)) return 'ai_male_gruff'
+    if (/calm/.test(d))  return 'ai_male_calm'
+    return 'ai_male_deep'
+  }
+  if (/dramatic/.test(d)) return 'ai_dramatic'
+
+  return undefined
 }

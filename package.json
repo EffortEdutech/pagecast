@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "creator-studio": "npm run dev --prefix apps/creator-studio",
-    "reader-app": "npm run dev --prefix apps/reader-app"
+    "reader-app": "npm run dev --prefix apps/reader-app",
+    "typecheck": "npm run typecheck --prefix apps/creator-studio"
   }
 }

@@ -301,13 +301,19 @@ def main():
 
     if args.folder:
         base = Path(args.folder)
-        files = sorted(base.glob("*_pagecast.txt"))
+        # pagecast .txt files live in <base>/script/ (falls back to the folder
+        # root for any book not yet migrated to the script/ layout)
+        script_dir = base / "script"
+        search_dir = script_dir if script_dir.exists() else base
+        files = sorted(search_dir.glob("*_pagecast.txt"))
         if not files:
-            print(f"Error: no *_pagecast.txt files found in {base}")
+            print(f"Error: no *_pagecast.txt files found in {search_dir}")
             sys.exit(1)
     else:
         files = [Path(args.pagecast)]
-        base  = Path(args.pagecast).parent
+        # book folder is one level up if the given file lives in script/
+        _pc_parent = Path(args.pagecast).parent
+        base = _pc_parent.parent if _pc_parent.name.lower() == "script" else _pc_parent
 
     all_scenes = []
     book_title = base.name

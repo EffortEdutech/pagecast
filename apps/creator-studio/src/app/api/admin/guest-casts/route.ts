@@ -45,8 +45,12 @@ export async function POST(req: NextRequest) {
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const body = await req.json().catch(() => null)
+  // No fixed slot cap -- admin can put as many published Starter Casts on the
+  // shelf as they want. MAX_GUEST_SLOTS is just a sanity ceiling against a
+  // malformed/abusive payload, not a real product limit.
+  const MAX_GUEST_SLOTS = 100
   const castIds = Array.isArray(body?.castIds)
-    ? [...new Set(body.castIds.filter((id: unknown) => typeof id === 'string'))].slice(0, 3)
+    ? [...new Set(body.castIds.filter((id: unknown) => typeof id === 'string'))].slice(0, MAX_GUEST_SLOTS)
     : []
 
   const { data: selected, error: selectedError } = castIds.length

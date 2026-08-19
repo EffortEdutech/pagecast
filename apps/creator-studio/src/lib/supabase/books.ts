@@ -46,6 +46,9 @@ export interface DbCharacter {
   avatar_emoji: string | null
   sort_order: number
   created_at: string
+  portrait_url?: string | null
+  portrait_status?: string | null
+  portrait_prompt?: string | null
 }
 
 // Converters
@@ -76,6 +79,9 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
       voiceId:       c.voice_id ?? 'ai_female_soft',
       voiceLabel:    c.voice_label ?? '',
       defaultVolume: 1,
+      portraitUrl:    c.portrait_url ?? undefined,
+      portraitStatus: (c.portrait_status ?? 'none') as Character['portraitStatus'],
+      portraitPrompt: c.portrait_prompt ?? undefined,
     })),
     chapters: [],
     createdAt: book.created_at,

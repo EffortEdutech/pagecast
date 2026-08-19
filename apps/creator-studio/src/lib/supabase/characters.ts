@@ -8,15 +8,18 @@ import type { Character } from '@/types'
 
 // DB row shape for the characters table
 interface DbCharacter {
-  id:          string
-  book_id:     string
-  name:        string
-  role:        string | null
-  color:       string | null
-  voice_id:    string | null
-  voice_label: string | null
-  sort_order:  number
-  created_at:  string
+  id:               string
+  book_id:          string
+  name:             string
+  role:             string | null
+  color:            string | null
+  voice_id:         string | null
+  voice_label:      string | null
+  sort_order:       number
+  created_at:       string
+  portrait_url?:    string | null
+  portrait_status?: string | null
+  portrait_prompt?: string | null
 }
 
 function dbToCharacter(row: DbCharacter): Character {
@@ -30,6 +33,9 @@ function dbToCharacter(row: DbCharacter): Character {
     voiceId:       row.voice_id ?? 'ai_female_soft',
     voiceLabel:    row.voice_label ?? '',
     defaultVolume: 1,
+    portraitUrl:    row.portrait_url ?? undefined,
+    portraitStatus: (row.portrait_status ?? 'none') as Character['portraitStatus'],
+    portraitPrompt: row.portrait_prompt ?? undefined,
   }
 }
 
@@ -81,6 +87,9 @@ export async function updateCharacter(
   if (updates.color      !== undefined) patch.color       = updates.color
   if (updates.voiceId    !== undefined) patch.voice_id    = updates.voiceId
   if (updates.voiceLabel !== undefined) patch.voice_label = updates.voiceLabel
+  if (updates.portraitUrl    !== undefined) patch.portrait_url    = updates.portraitUrl
+  if (updates.portraitStatus !== undefined) patch.portrait_status = updates.portraitStatus
+  if (updates.portraitPrompt !== undefined) patch.portrait_prompt = updates.portraitPrompt
   if (Object.keys(patch).length === 0) return
   const { error } = await supabase.from('characters').update(patch).eq('id', characterId)
   if (error) console.error('[characters] update:', error)

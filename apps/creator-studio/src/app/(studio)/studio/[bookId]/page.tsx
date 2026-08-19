@@ -11,15 +11,18 @@ import { TextImportModal } from '@/components/editor/TextImportModal'
 import type { ImportDestination } from '@/components/editor/TextImportModal'
 import { Header } from '@/components/layout/Header'
 import { BookSettingsPanel } from '@/components/editor/BookSettingsPanel'
+import { GenerateAllModal } from '@/components/editor/GenerateAllModal'
+import { GenerateAllImagesModal } from '@/components/editor/GenerateAllImagesModal'
 import {
   Plus, ChevronRight, ChevronDown, Settings2, Eye,
   BookOpen, Layers, Save, FileText,
-  ArrowLeft, Trash2, Edit3, Check, X, Film, Loader2, ArrowUp, ArrowDown
+  ArrowLeft, Trash2, Edit3, Check, X, Film, Loader2, ArrowUp, ArrowDown, Wand2, ImagePlus
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { v4 as uuid } from 'uuid'
 import type { StoryBlock, BlockType, Chapter, Scene } from '@/types'
 import type { ParsedImport } from '@/lib/textParser'
+import { autoCreateMissingCast, buildCharacterNameMap, resolveBlockCharacter } from '@/lib/importPipeline'
 import {
   EMPTY_BOOK_RIGHTS,
   createPublishAttestation,
@@ -136,6 +139,8 @@ export default function StudioPage() {
   const [rightPanel, setRightPanel] = useState<'scene' | 'block' | null>('scene')
   const [saved, setSaved] = useState(false)
   const [showImport,    setShowImport]    = useState(false)
+  const [showGenerateAll, setShowGenerateAll] = useState(false)
+  const [showGenerateAllImages, setShowGenerateAllImages] = useState(false)
   const [showSettings, setShowSettings]   = useState(false)
   const [showPublishQA, setShowPublishQA] = useState(false)
   const [showComplianceGate, setShowComplianceGate] = useState(false)
@@ -307,6 +312,32 @@ export default function StudioPage() {
     setPublishing(false)
   }
 
+  /** Called by GenerateAllModal as each block finishes, so the open editor reflects new audio live. */
+  const handleBackgroundAudioReady = (blockId: string, audioUrl: string) => {
+    for (const ch of story.chapters) {
+      for (const sc of ch.scenes) {
+        if (sc.blocks.some(bl => bl.id === blockId)) {
+          store.updateBlock(story.id, ch.id, sc.id, blockId, { audioUrl } as any)
+          return
+        }
+      }
+    }
+  }
+
+  /** Called by GenerateAllImagesModal as each scene/cover image finishes. */
+  const handleBackgroundImageReady = (target: 'cover' | string, url: string) => {
+    if (target === 'cover') {
+      store.updateStory(story.id, { coverImage: url })
+      return
+    }
+    for (const ch of story.chapters) {
+      if (ch.scenes.some(sc => sc.id === target)) {
+        store.updateScene(story.id, ch.id, target, { sceneImage: url } as any)
+        return
+      }
+    }
+  }
+
   const getUncoveredCount = (): number => {
     let count = 0
     for (const ch of story.chapters) {
@@ -339,26 +370,20 @@ export default function StudioPage() {
     let firstChapterId: string | null = null
     let firstSceneId:   string | null = null
 
-    // Build a name → characterId map for auto-assigning dialogue/thought blocks.
-    // The pageCast parser stores the character name (e.g. "pip") in characterId as a hint.
-    // A UUID looks like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx; anything else is a name hint.
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const charByName = new Map<string, string>()
-    for (const c of story.characters) {
-      // Match by exact name, lowercase, and underscore-normalised (pip, Pip, pip_the_child → same)
-      charByName.set(c.name.toLowerCase(), c.id)
-      charByName.set(c.name.toLowerCase().replace(/\s+/g, '_'), c.id)
-      charByName.set(c.name.toLowerCase().replace(/\s+/g, '-'), c.id)
+    // Auto-create any characters named in a ::CAST block (folder/pagecast imports)
+    // that don't already exist on this book, then build the name → characterId map
+    // used to resolve dialogue/thought blocks. The pageCast parser stores the
+    // character name (e.g. "pip") in characterId as a hint until resolved here.
+    const newCast = await autoCreateMissingCast(story.id, parsed.cast, story.characters)
+    if (newCast.length > 0) {
+      useStudioStore.setState(state => ({
+        stories: state.stories.map(s => s.id === story.id
+          ? { ...s, characters: [...s.characters, ...newCast] }
+          : s),
+      }))
     }
-
-    const resolveCharacter = (block: import('@/types').StoryBlock): import('@/types').StoryBlock => {
-      if (block.type !== 'dialogue' && block.type !== 'thought') return block
-      const hint = block.characterId
-      if (!hint || UUID_RE.test(hint)) return block  // already a UUID or empty — leave as-is
-      const resolved = charByName.get(hint.toLowerCase())
-        ?? charByName.get(hint.toLowerCase().replace(/\s+/g, '_'))
-      return { ...block, characterId: resolved ?? '' }
-    }
+    const charByName = buildCharacterNameMap([...story.characters, ...newCast])
+    const resolveCharacter = (block: StoryBlock) => resolveBlockCharacter(block, charByName)
 
     if (destination.mode === 'current-beat') {
       const blocks = parsed.chapters.flatMap(parsedCh =>
@@ -444,6 +469,20 @@ export default function StudioPage() {
           title="Import text from .txt or .md file"
         >
           <FileText size={13} /> Import Text
+        </button>
+        <button
+          className="btn-ghost text-xs px-2 py-1.5 border border-bg-border hover:border-gold/50 hover:text-gold"
+          onClick={() => setShowGenerateAll(true)}
+          title="Generate audio for every block that's missing it"
+        >
+          <Wand2 size={13} /> Generate All
+        </button>
+        <button
+          className="btn-ghost text-xs px-2 py-1.5 border border-bg-border hover:border-gold/50 hover:text-gold"
+          onClick={() => setShowGenerateAllImages(true)}
+          title="Checks .casts/<slug>/images/ + cover.* first and syncs any finalized files; generates a candidate for anything still missing"
+        >
+          <ImagePlus size={13} /> Generate Images
         </button>
         <button
           className="btn-ghost text-xs px-2 py-1.5"
@@ -748,6 +787,27 @@ export default function StudioPage() {
           canInsertAtActiveBeat={Boolean(activeChapterId && activeSceneId)}
         />
       )}
+
+      {/* ── Generate All Missing Audio ── */}
+      {showGenerateAll && (
+        <GenerateAllModal
+          story={story}
+          bookId={bookId}
+          onClose={() => setShowGenerateAll(false)}
+          onBlockAudioReady={handleBackgroundAudioReady}
+        />
+      )}
+
+      {/* ── Generate Scene & Cover Images ── */}
+      {showGenerateAllImages && (
+        <GenerateAllImagesModal
+          story={story}
+          bookId={bookId}
+          onClose={() => setShowGenerateAllImages(false)}
+          onImageReady={handleBackgroundImageReady}
+        />
+      )}
+
 
       {showChapterInsert && (
         <ChapterInsertDialog

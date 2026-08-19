@@ -485,12 +485,18 @@ def main():
 
     if args.pagecast:
         pagecast_files = [Path(args.pagecast)]
-        base_dir       = Path(args.pagecast).parent
+        # book folder is one level up if the given file lives in script/
+        _pc_parent     = Path(args.pagecast).parent
+        base_dir       = _pc_parent.parent if _pc_parent.name.lower() == 'script' else _pc_parent
     else:
         base_dir       = Path(args.folder)
-        pagecast_files = sorted(base_dir.glob('*_pagecast.txt'))
+        # pagecast .txt files live in <base_dir>/script/ (falls back to the
+        # folder root for any book not yet migrated to the script/ layout)
+        script_dir     = base_dir / 'script'
+        search_dir     = script_dir if script_dir.exists() else base_dir
+        pagecast_files = sorted(search_dir.glob('*_pagecast.txt'))
         if not pagecast_files:
-            print(f'❌  No *_pagecast.txt files found in {base_dir}')
+            print(f'❌  No *_pagecast.txt files found in {search_dir}')
             sys.exit(1)
 
     # ── Setup mode ────────────────────────────────────────────────────────────

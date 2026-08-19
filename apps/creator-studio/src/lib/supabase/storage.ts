@@ -155,3 +155,40 @@ export async function deleteSceneImage(
     .remove([sceneImagePath(userId, bookId, sceneId)])
   return !error
 }
+
+// ─── Character reference portrait ──────────────────────────────────────────
+// Reuses the 'covers' bucket (already public + RLS'd) rather than provisioning
+// a new one just for portraits.
+
+function characterPortraitPath(userId: string, bookId: string, characterId: string): string {
+  return `${userId}/${bookId}/character_${characterId}_portrait`
+}
+
+/**
+ * Upload a generated character reference portrait to the 'covers' bucket.
+ * Returns the public URL (cache-busted) or null on error.
+ */
+export async function uploadCharacterPortrait(
+  userId: string,
+  bookId: string,
+  characterId: string,
+  file: File
+): Promise<string | null> {
+  const supabase = createClient()
+  const path = characterPortraitPath(userId, bookId, characterId)
+
+  const { error } = await supabase.storage
+    .from('covers')
+    .upload(path, file, {
+      upsert: true,
+      contentType: file.type || 'image/png',
+    })
+
+  if (error) {
+    console.error('uploadCharacterPortrait error:', error.message)
+    return null
+  }
+
+  const { data } = supabase.storage.from('covers').getPublicUrl(path)
+  return `${data.publicUrl}?v=${Date.now()}`
+}

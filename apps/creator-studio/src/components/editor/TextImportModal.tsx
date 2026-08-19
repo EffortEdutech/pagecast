@@ -4,10 +4,14 @@ import {
   X, Upload, FileText, Wand2, AlertCircle, Check,
   ChevronRight, BookOpen, Film, AlignLeft, MessageSquare,
   Brain, Quote, Pause, Volume2, Loader2, Info, FileUp,
-  ArrowUp, ArrowDown
+  ArrowUp, ArrowDown, FolderOpen, Users
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { parseText, formatParsedImportAsPageCastText, normalizeImportedText, type ParseFormat, type ParsedImport, type ParsedChapter } from '@/lib/textParser'
+import {
+  parseText, formatParsedImportAsPageCastText, normalizeImportedText,
+  concatenatePageCastFiles, isPageCastFile, hexForColorWord,
+  type ParseFormat, type ParsedImport, type ParsedChapter,
+} from '@/lib/textParser'
 import type { StoryBlock } from '@/types'
 
 export type ImportDestination =
@@ -204,9 +208,10 @@ export function TextImportModal({
   activeBeatCount = 0,
   canInsertAtActiveBeat = false,
 }: TextImportModalProps) {
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
 
   const [text,        setText]        = useState('')
+  const [folderInfo,  setFolderInfo]  = useState<{ folderName: string; fileCount: number; skipped: string[] } | null>(null)
   const [format,      setFormat]      = useState<ParseFormat>('auto')
   const [parsed,      setParsed]      = useState<ParsedImport | null>(null)
   const [importing,   setImporting]   = useState(false)
@@ -237,6 +242,7 @@ export function TextImportModal({
     if (!text.trim()) return
     setError(null)
     setShowDestination(false)
+    setFolderInfo(null)
     try {
       const firstPass = parseText(text, format === 'pagecast' ? 'auto' : format)
       const arranged = formatParsedImportAsPageCastText(firstPass)
@@ -278,19 +284,35 @@ export function TextImportModal({
     })
   }, [])
 
+  // Reads a File as text via FileReader — the same proven API the original
+  // single-file path always used successfully.
+  const readFileAsText = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = ev => resolve((ev.target?.result as string) ?? '')
+      reader.onerror = () => reject(reader.error ?? new Error(`Could not read ${file.name}`))
+      reader.readAsText(file)
+    })
+
+  // One input, one handler, 1-or-more files. Single file behaves exactly as
+  // before (including PDF extraction). Multiple files are sorted into
+  // castlet/chapter order and concatenated into one parse pass — each
+  // *_pagecast.txt file becomes its own chapter.
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
     if (fileRef.current) fileRef.current.value = ''
+    if (files.length === 0) return
+
     setError(null)
     setParsed(null)
     setPdfPages(null)
+    setFolderInfo(null)
 
-    // ── PDF: extract text with pdfjs-dist ──
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    // ── Single PDF: extract text with pdfjs-dist (unchanged) ──
+    if (files.length === 1 && (files[0].type === 'application/pdf' || files[0].name.toLowerCase().endsWith('.pdf'))) {
       setExtracting(true)
       try {
-        const { text: extracted, pages } = await extractPdfText(file)
+        const { text: extracted, pages } = await extractPdfText(files[0])
         if (!extracted.trim()) {
           setError('Could not extract text from this PDF. It may be a scanned image. Try exporting as .txt first.')
         } else {
@@ -305,13 +327,42 @@ export function TextImportModal({
       return
     }
 
-    // ── .txt / .md / .fountain: read as plain text ──
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const content = ev.target?.result as string
-      setText(normalizeImportedText(content))
+    // ── Single .txt / .md / .fountain: same simple path as before ──
+    if (files.length === 1) {
+      try {
+        const content = await readFileAsText(files[0])
+        setText(normalizeImportedText(content))
+      } catch (err: any) {
+        setError('Could not read file: ' + (err?.message ?? 'unknown error'))
+      }
+      return
     }
-    reader.readAsText(file)
+
+    // ── Multiple files: read all, keep the PageCast script files, sort them
+    //    into castlet/chapter order, concatenate. ──
+    try {
+      const withText = await Promise.all(
+        files.map(async f => ({ name: f.name, text: await readFileAsText(f) }))
+      )
+      const qualifying = withText.filter(f => isPageCastFile(f.text))
+      const skipped = withText.filter(f => !isPageCastFile(f.text)).map(f => f.name)
+
+      if (qualifying.length === 0) {
+        setError(`Selected ${files.length} files, but none are PageCast script files (no ::PAGECAST_BOOK marker). Multi-file select only works with *_pagecast.txt files — for other formats, select one file at a time.`)
+        return
+      }
+
+      const { combinedText, order } = concatenatePageCastFiles(qualifying)
+      const result = parseText(combinedText, 'pagecast')
+
+      setText(combinedText)
+      setFormat('pagecast')
+      setParsed(result)
+      setShowDestination(false)
+      setFolderInfo({ folderName: `${order.length} selected files`, fileCount: order.length, skipped })
+    } catch (err: any) {
+      setError('Could not read selected files: ' + (err?.message ?? 'unknown error'))
+    }
   }
 
   const handleImport = async () => {
@@ -366,7 +417,7 @@ export function TextImportModal({
           <div className="flex-1">
             <h2 className="text-text-primary font-bold text-base">Import Text</h2>
             <p className="text-text-muted text-xs mt-0.5">
-              Paste your story or upload a .txt, .md, .fountain, or .pdf file.
+              Paste your story, upload a single file, or select multiple chapter/castlet script files at once.
             </p>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-secondary transition-colors">
@@ -391,15 +442,16 @@ export function TextImportModal({
                 <option value="pagecast">PageCast Format</option>
               </select>
 
-              <input ref={fileRef} type="file" accept=".txt,.md,.fountain,.pdf" className="hidden" onChange={handleFileUpload} />
+              <input ref={fileRef} type="file" multiple accept=".txt,.md,.fountain,.pdf" className="hidden" onChange={handleFileUpload} />
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={extracting}
                 className="btn-ghost text-xs px-2 py-1 border border-bg-border hover:border-accent/40 shrink-0 disabled:opacity-50"
+                title="Upload a .txt, .md, .fountain, or .pdf file — Ctrl/Cmd-click to select several *_pagecast.txt chapter files at once"
               >
                 {extracting
                   ? <><Loader2 size={11} className="animate-spin" /> Extracting…</>
-                  : <><Upload size={11} /> Upload file</>
+                  : <><Upload size={11} /> Upload file(s)</>
                 }
               </button>
             </div>
@@ -416,7 +468,7 @@ export function TextImportModal({
                 className="w-full h-full resize-none bg-transparent text-text-secondary text-xs leading-relaxed p-4 focus:outline-none font-mono"
                 placeholder={PLACEHOLDER}
                 value={text}
-                onChange={e => { setText(e.target.value); setParsed(null); setPdfPages(null) }}
+                onChange={e => { setText(e.target.value); setParsed(null); setPdfPages(null); setFolderInfo(null) }}
                 spellCheck={false}
                 disabled={extracting}
               />
@@ -471,6 +523,10 @@ export function TextImportModal({
                   <p className="text-text-muted text-xs">
                     Supports .pdf, .txt, .md, PageCast tags, novel prose, screenplay, and markdown
                   </p>
+                  <p className="text-text-muted text-xs">
+                    Or click <span className="text-text-secondary font-medium">Upload file(s)</span> and Ctrl/Cmd-click the *_pagecast.txt
+                    files in a script folder to bring in a whole story at once — each file becomes its own chapter.
+                  </p>
                 </div>
               </div>
             )}
@@ -493,6 +549,45 @@ export function TextImportModal({
                     ))}
                   </div>
                 </div>
+
+                {folderInfo && (
+                  <div className="flex items-start gap-2 px-4 py-2 bg-success/5 border-b border-success/20 shrink-0">
+                    <FolderOpen size={11} className="text-success mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-text-secondary leading-relaxed">
+                      Imported <span className="text-success font-medium">{folderInfo.fileCount} file{folderInfo.fileCount !== 1 ? 's' : ''}</span> from
+                      <span className="text-text-primary font-medium"> {folderInfo.folderName}</span> — each became its own chapter, in castlet/chapter order.
+                      {folderInfo.skipped.length > 0 && (
+                        <span className="block mt-0.5 text-text-muted">
+                          Skipped {folderInfo.skipped.length} non-PageCast file{folderInfo.skipped.length !== 1 ? 's' : ''}: {folderInfo.skipped.join(', ')}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {parsed.cast && parsed.cast.length > 0 && (
+                  <div className="flex items-start gap-2 px-4 py-2 bg-gold/5 border-b border-gold/20 shrink-0">
+                    <Users size={11} className="text-gold mt-0.5 shrink-0" />
+                    <div className="text-[10px] text-text-secondary leading-relaxed flex-1 min-w-0">
+                      <span className="text-gold font-medium">{parsed.cast.length} cast member{parsed.cast.length !== 1 ? 's' : ''}</span> found —
+                      new characters will be auto-created on import (voice is a best guess; fine-tune in Voices).
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {parsed.cast.map(c => (
+                          <span
+                            key={c.slug}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-bg-card border border-bg-border"
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: hexForColorWord(c.colorWord) }}
+                            />
+                            <span className="text-text-secondary">{c.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {parsed.stats.dialogues > 0 && (
                   <div className="flex items-start gap-2 px-4 py-2 bg-accent/5 border-b border-accent/20 shrink-0">

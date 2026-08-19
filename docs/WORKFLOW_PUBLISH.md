@@ -201,6 +201,24 @@ Each scene can have a background ambience layer and a music layer:
 
 ---
 
+## Optional — Produce a Dark Storybook PDF
+
+For local media production, open `python skills/pageCast_gui.py`, select a book in the header, then use the **PDF Producer** tab. The GUI uses the selected header book automatically and exposes the main `skills/storybook_pdf.py` options: single chapter, output directory, DOCX-only build, and DOCX-to-PDF conversion.
+
+Manual equivalent:
+
+```bash
+python skills/storybook_pdf.py --book "The Garden That Talked Back"
+python skills/storybook_pdf.py --book "The Garden That Talked Back" --chapter 1
+python skills/storybook_pdf.py --book "The Garden That Talked Back" --out-dir ".casts/the-garden-that-talked-back/pdf"
+python skills/storybook_pdf.py --book "The Garden That Talked Back" --no-pdf
+python skills/storybook_pdf.py --pdf-from ".casts/the-garden-that-talked-back/TheGardenThatTalkedBack_Ch1_PageCast.docx"
+```
+
+Expected inputs are `.casts/<book-slug>/*manuscript*.docx`, scene images under `.casts/<book-slug>/images/`, and an optional cover image.
+
+---
+
 ## Step 8 — Publish
 
 > **Current state:** The publish toggle writes `status = 'published'` to the database.
@@ -229,6 +247,7 @@ Each scene can have a background ambience layer and a music layer:
 | Upload recorded audio | Editor canvas → any block → Upload button |
 | Add background music to a scene | Editor → scene in tree → atmosphere (🎵) button |
 | Add SFX to a scene | Editor canvas → + Add Block → SFX → choose from library |
+| Produce dark storybook PDF | Media Platform → PDF Producer |
 | Preview the book | Studio Editor → Preview button |
 | Publish | Dashboard → book card → Publish toggle |
 
@@ -253,4 +272,4 @@ alter table public.characters
 
 ---
 
-*Last updated: 2026-05-04*
+*Last updated: 2026-07-07*

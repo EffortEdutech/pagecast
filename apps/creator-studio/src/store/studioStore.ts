@@ -1,7 +1,49 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
 import { v4 as uuid } from 'uuid'
 import type { Story, Character, Chapter, Scene, StoryBlock, Creator } from '@/types'
+
+// ─── Storage: IndexedDB (via idb-keyval) instead of localStorage ──────────────
+//
+// localStorage caps out around 5-10MB per origin and the whole store gets
+// re-serialized on every single edit (updateBlock, etc.) -- once total story
+// content across all books grew large enough this started throwing
+// `QuotaExceededError` and blocking every edit. IndexedDB has a far larger
+// quota (hundreds of MB+), so we move persistence there.
+//
+// One-time migration: if old data still exists under this key in
+// localStorage, read it once, copy it into IndexedDB, and clear the
+// localStorage entry so it stops competing for that small quota.
+const STORAGE_KEY = 'pagecast-studio'
+
+const idbStorage: StateStorage = {
+  getItem: async (name) => {
+    const fromIdb = await idbGet(name)
+    if (fromIdb !== undefined && fromIdb !== null) return fromIdb as string
+
+    // Migrate any pre-existing localStorage copy, then clear it.
+    if (typeof window !== 'undefined') {
+      try {
+        const legacy = window.localStorage.getItem(name)
+        if (legacy) {
+          await idbSet(name, legacy)
+          window.localStorage.removeItem(name)
+          return legacy
+        }
+      } catch {
+        // localStorage may already be unusable (quota) -- nothing to migrate then
+      }
+    }
+    return null
+  },
+  setItem: async (name, value) => {
+    await idbSet(name, value)
+  },
+  removeItem: async (name) => {
+    await idbDel(name)
+  },
+}
 
 // ─── Defaults ──────────────────────────────────────────────────────────────────
 
@@ -292,6 +334,9 @@ export const useStudioStore = create<StudioStore>()(
         return chapter?.scenes.find(sc => sc.id === get().activeSceneId) ?? null
       },
     }),
-    { name: 'pagecast-studio' }
+    {
+      name: STORAGE_KEY,
+      storage: createJSONStorage(() => idbStorage),
+    }
   )
 )

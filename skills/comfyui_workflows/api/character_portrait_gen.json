@@ -1,0 +1,180 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 42,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — CHANGE SEED to get different looks, keep on FIXED"
+    }
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "juggernaut_xl_v9_lightning.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "5": {
+    "inputs": {
+      "width": 768,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "full body character design sheet, ArtStation concept art, digital illustration, [REPLACE: character description, e.g. 'a young Indonesian boy, age 10, short dark hair, dark brown eyes, wearing a blue batik shirt and dark pants, black sneakers'], standing upright, A-pose arms slightly away from body, looking directly at camera, neutral calm expression, front facing, centered full body composition, head to toe visible, complete outfit clearly shown, soft studio lighting, plain white background, clear sharp face, detailed eyes, detailed clothing and accessories, symmetrical, correct human anatomy, 8k, high quality, character reference sheet turnaround",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "POSITIVE — Edit character description here"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "blurry face, bad face, ugly face, deformed face, melted face, asymmetric eyes, cross-eyed, missing eyes, no eyes, extra limbs, extra arms, extra legs, missing limbs, deformed hands, extra fingers, fused fingers, malformed hands, bad anatomy, low quality, watermark, text, sunglasses, hat covering face, hair covering face, turned away from camera, side view, back view, profile view, looking away, closed eyes, dark background, busy background, multiple characters, cropped body, cut off legs, cut off feet, partial body, close-up face only, portrait crop, headshot only",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "NEGATIVE — do not edit"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "char_portrait",
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "OUTPUT → rename this file to CHARNAME.jpg and copy to .casts/CHARACTER_REFS/"
+    }
+  },
+  "11": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "UltralyticsDetectorProvider"
+    }
+  },
+  "12": {
+    "inputs": {
+      "guide_size": 512,
+      "guide_size_for": "bbox",
+      "max_size": 768,
+      "seed": 42,
+      "steps": 8,
+      "cfg": 2,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 0.45,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "wildcard": "CUDA",
+      "cycle": 1,
+      "inpaint_model": 1,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false,
+      "image": [
+        "8",
+        0
+      ],
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ],
+      "vae": [
+        "4",
+        2
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "bbox_detector": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "FaceDetailer — auto face enhancement (do not edit)"
+    }
+  }
+}

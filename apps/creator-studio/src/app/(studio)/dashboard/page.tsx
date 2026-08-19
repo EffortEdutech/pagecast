@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useStudioStore } from '@/store/studioStore'
 import { useUser } from '@/hooks/useUser'
@@ -8,10 +8,13 @@ import { Header } from '@/components/layout/Header'
 import {
   Plus, BookOpen, Clock, Music, Mic, MoreVertical,
   Edit3, Trash2, Eye, Copy, TrendingUp, Users, DollarSign,
-  Globe, FileText, Loader2
+  Globe, FileText, Loader2, Upload
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { Story } from '@/types'
+import type { Story, Chapter } from '@/types'
+import { concatenatePageCastFiles, isPageCastFile, parseText } from '@/lib/textParser'
+import { autoCreateMissingCast, buildCharacterNameMap, resolveBlockCharacter, newId } from '@/lib/importPipeline'
+import { replaceBookContent } from '@/lib/supabase/blocks'
 
 function StatCard({ icon: Icon, label, value, sub, color }: { icon: any, label: string, value: string, sub?: string, color: string }) {
   return (
@@ -38,6 +41,7 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
   const [menuOpen,       setMenuOpen]       = useState(false)
   const [duplicating,    setDuplicating]    = useState(false)
   const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
 
   const coverColors = ['from-accent/30 to-accent/10', 'from-gold/30 to-gold/10', 'from-info/30 to-info/10', 'from-success/30 to-success/10']
   const colorIdx = story.id.charCodeAt(story.id.length - 1) % coverColors.length
@@ -50,10 +54,16 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
     setDuplicating(false)
   }
 
+  const handleConfirmDelete = async () => {
+    setDeleting(true)
+    await onDelete()
+    // No need to reset state — the card unmounts once the story leaves the list.
+  }
+
   return (
-    <div className="card group overflow-hidden transition-all duration-200 hover:border-accent/30">
+    <div className="card group transition-all duration-200 hover:border-accent/30">
       {/* Cover */}
-      <div className={clsx('h-32 bg-gradient-to-br flex items-center justify-center relative', coverColors[colorIdx])}>
+      <div className={clsx('h-32 rounded-t-xl overflow-hidden bg-gradient-to-br flex items-center justify-center relative', coverColors[colorIdx])}>
         <BookOpen size={36} className="text-white/20" />
         <div className="absolute top-2 right-2 flex items-center gap-1.5">
           <span className={clsx(
@@ -124,8 +134,39 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
           <span className="ml-auto font-medium text-text-secondary">${story.price.toFixed(2)}</span>
         </div>
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in" onClick={() => !deleting && setConfirmDelete(false)}>
+          <div className="card-elevated w-full max-w-sm space-y-4 p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-text-primary font-bold text-base">Delete "{story.title}"?</h3>
+              <p className="text-text-secondary text-sm mt-1.5">
+                This permanently deletes the book — its chapters, scenes, blocks, and cast. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button className="btn-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</button>
+              <button className="btn-danger" onClick={handleConfirmDelete} disabled={deleting}>
+                {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : <><Trash2 size={14} /> Delete book</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+/** Races a promise against a timeout so a hung network call surfaces as a visible
+ * error instead of leaving the UI stuck silently forever. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s — check your Supabase connection/credentials.`)), ms)
+    promise.then(
+      v => { clearTimeout(timer); resolve(v) },
+      e => { clearTimeout(timer); reject(e) }
+    )
+  })
 }
 
 const PREF_PRICE_KEY = 'pagecast_default_price'
@@ -136,7 +177,14 @@ function readDefaultPrice(): number {
   return Number.isFinite(saved) && saved > 0 ? saved : 0
 }
 
-function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (title: string, desc: string, price: number) => void }) {
+function NewStoryModal({ onClose, onCreate, onImportFiles, importing, importStep, importError }: {
+  onClose: () => void
+  onCreate: (title: string, desc: string, price: number) => void
+  onImportFiles: (fileList: FileList) => void
+  importing: boolean
+  importStep: string
+  importError: string | null
+}) {
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
   const [accessMode, setAccessMode] = useState<'free' | 'paid'>(() => readDefaultPrice() > 0 ? 'paid' : 'free')
@@ -145,14 +193,75 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
     return defaultPrice > 0 ? defaultPrice.toFixed(2) : '4.99'
   })
   const parsedPrice = Math.max(0.5, Number(price) || 4.99)
+  const importFilesRef = useRef<HTMLInputElement>(null)
+
+  // Log at the absolute first possible moment, before any React state or async
+  // code runs, so we can tell "button click never registered" apart from
+  // "it registered but something after it failed silently."
+  const handlePickFilesClick = () => {
+    console.log('[NewStoryModal] "Import script files" button clicked, opening picker')
+    importFilesRef.current?.click()
+  }
+
+  const handleFilesChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const count = e.target.files?.length ?? 0
+    console.log(`[NewStoryModal] file input onChange fired — ${count} file(s) chosen`)
+    if (e.target.files && count > 0) onImportFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  if (importing) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in">
+        <div className="card-elevated w-full max-w-sm space-y-4 p-6 text-center animate-slide-up">
+          <Loader2 size={28} className="text-accent animate-spin mx-auto" />
+          <div>
+            <p className="text-text-primary font-semibold text-sm">Importing your story…</p>
+            <p className="text-text-muted text-xs mt-1">{importStep || 'Working…'}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in sm:items-center">
       <div className="card-elevated max-h-[92dvh] w-full max-w-md space-y-5 overflow-y-auto p-5 animate-slide-up sm:p-6">
         <div>
           <h2 className="text-text-primary font-bold text-lg">New Story</h2>
-          <p className="text-text-secondary text-sm mt-1">Give your story a title and a brief description.</p>
+          <p className="text-text-secondary text-sm mt-1">Give your story a title and a brief description, or import an existing script below.</p>
         </div>
+
+        {/* Import from PageCast script files — the only import path, kept to one reliable method */}
+        <div className="rounded-lg border border-bg-border p-3 space-y-2">
+          <p className="text-text-primary text-sm font-medium">Already have a script?</p>
+          <p className="text-text-muted text-xs leading-relaxed">
+            Select the *_pagecast.txt chapter/castlet files (e.g. from a .casts/&lt;story&gt;/script folder).
+            Ctrl/Cmd-click to select more than one — each file becomes its own chapter.
+          </p>
+          <input
+            ref={importFilesRef}
+            type="file"
+            multiple
+            accept=".txt"
+            className="hidden"
+            onChange={handleFilesChosen}
+          />
+          <button
+            className="btn-secondary w-full justify-center"
+            onClick={handlePickFilesClick}
+          >
+            <Upload size={14} /> Import script files
+          </button>
+          {importError && <p className="text-danger text-xs whitespace-pre-line">{importError}</p>}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-bg-border" />
+          <span className="text-text-muted text-xs">or start from scratch</span>
+          <div className="h-px flex-1 bg-bg-border" />
+        </div>
+
         <div className="space-y-3">
           <div>
             <label className="label">Story Title</label>
@@ -208,10 +317,13 @@ function NewStoryModal({ onClose, onCreate }: { onClose: () => void, onCreate: (
 export default function DashboardPage() {
   const router = useRouter()
   const { setActiveStory, stories } = useStudioStore()
-  const { loading: booksLoading, error: booksError, createBook, deleteBook, publishBook, duplicateBook } = useBooks()
+  const { loading: booksLoading, error: booksError, createBook, updateBook, deleteBook, publishBook, duplicateBook } = useBooks()
   const { displayName } = useUser()
   const [showModal, setShowModal] = useState(false)
   const [filter, setFilter] = useState<'all' | 'draft' | 'published'>('all')
+  const [folderImporting, setFolderImporting] = useState(false)
+  const [folderStep, setFolderStep] = useState('')
+  const [folderError, setFolderError] = useState<string | null>(null)
 
   const filtered = stories.filter((s: Story) => filter === 'all' || s.status === filter)
 
@@ -235,6 +347,114 @@ export default function DashboardPage() {
   const handlePublish = async (story: Story) => {
     const newStatus = story.status === 'published' ? 'draft' : 'published'
     await publishBook(story.id, newStatus as 'draft' | 'published')
+  }
+
+  // ── Import: build a brand-new book from a set of *_pagecast.txt chapter/castlet
+  //    files (e.g. selected from a .casts/<story>/script folder). Triggered from
+  //    inside the New Story modal — the one place you'd look to create a book. ──
+  const handleImportFiles = (fileList: FileList) => {
+    // Fire synchronously and log FIRST, before any state update or await, so this
+    // line alone proves the click → onChange → here chain completed. If this
+    // never appears in the console, the bug is upstream (button/input wiring),
+    // not in this function.
+    console.log(`[Dashboard] handleImportFiles called — ${fileList.length} file(s) selected`)
+    void runImport(fileList)
+  }
+
+  const runImport = async (fileList: FileList) => {
+    setFolderError(null)
+    setFolderImporting(true)
+    setFolderStep('Reading selected files…')
+
+    try {
+      const allFiles = Array.from(fileList)
+      const txtFiles = allFiles.filter(f => /\.txt$/i.test(f.name))
+      console.log(`[Dashboard] ${txtFiles.length} of ${allFiles.length} selected file(s) end in .txt`)
+
+      if (txtFiles.length === 0) {
+        setFolderError(`${allFiles.length} file${allFiles.length !== 1 ? 's' : ''} selected, but none end in .txt — manuscript .docx files are ignored.`)
+        return
+      }
+
+      const withText = await Promise.all(
+        txtFiles.map(async f => ({ name: f.name, text: await f.text() }))
+      )
+      const qualifying = withText.filter(f => isPageCastFile(f.text))
+      console.log(`[Dashboard] ${qualifying.length} of ${txtFiles.length} .txt file(s) contain a ::PAGECAST_BOOK marker`)
+
+      if (qualifying.length === 0) {
+        setFolderError(`Found ${txtFiles.length} .txt file${txtFiles.length !== 1 ? 's' : ''}, but none are PageCast script files (no ::PAGECAST_BOOK marker).`)
+        return
+      }
+
+      const { combinedText } = concatenatePageCastFiles(qualifying)
+      const parsed = parseText(combinedText, 'pagecast')
+      console.log(`[Dashboard] parsed ${parsed.chapters.length} chapter(s), ${parsed.cast?.length ?? 0} cast member(s)`)
+
+      setFolderStep(`Creating the book "${parsed.meta?.title?.trim() || qualifying[0].name}"…`)
+      const title = parsed.meta?.title?.trim() || qualifying[0].name.replace(/\.txt$/i, '')
+      let book
+      try {
+        book = await withTimeout(createBook(title, '', 0), 15000, 'Creating the book')
+      } catch (e: any) {
+        console.error('[Dashboard] createBook call failed or timed out:', e)
+        setFolderError(e?.message ?? 'Failed to create the new book.')
+        return
+      }
+      if (!book) { setFolderError('Failed to create the new book (check that you are signed in — try reloading the page).'); return }
+      console.log(`[Dashboard] created book ${book.id} — "${book.title}"`)
+
+      if (parsed.meta?.genre || parsed.meta?.language) {
+        setFolderStep('Setting genre/language…')
+        await withTimeout(updateBook(book.id, {
+          ...(parsed.meta.genre    ? { genre: parsed.meta.genre } : {}),
+          ...(parsed.meta.language ? { language: parsed.meta.language } : {}),
+        }), 15000, 'Updating book metadata')
+      }
+
+      // Auto-create cast from ::CAST blocks (skips characters that already match
+      // by name — e.g. the default "Narrator" seeded on book creation).
+      setFolderStep(`Creating cast (${parsed.cast?.length ?? 0} member(s) found)…`)
+      const newCast = await withTimeout(autoCreateMissingCast(book.id, parsed.cast, book.characters), 20000, 'Creating cast members')
+      console.log(`[Dashboard] auto-created ${newCast.length} of ${parsed.cast?.length ?? 0} cast member(s) (rest already existed)`)
+      const allCharacters = [...book.characters, ...newCast]
+      const nameMap = buildCharacterNameMap(allCharacters)
+
+      const chapters: Chapter[] = parsed.chapters.map((ch, ci) => ({
+        id: newId(),
+        title: ch.title,
+        order: ci + 1,
+        scenes: ch.scenes.map(sc => ({
+          id: newId(),
+          title: sc.title,
+          blocks: sc.blocks.map(b => resolveBlockCharacter(b, nameMap)),
+        })),
+      }))
+
+      setFolderStep(`Saving ${chapters.length} chapter(s)…`)
+      const saved = await withTimeout(replaceBookContent(book.id, { chapters }), 20000, 'Saving chapters')
+      console.log(`[Dashboard] replaceBookContent saved=${saved}, ${chapters.length} chapter(s) written`)
+      if (!saved) {
+        setFolderError('Book was created, but saving the imported chapters failed. Open it and try Import Text again.')
+        return
+      }
+
+      useStudioStore.setState(state => ({
+        stories: state.stories.map(s => s.id === book.id
+          ? { ...s, characters: allCharacters, chapters }
+          : s),
+      }))
+
+      setShowModal(false)
+      setActiveStory(book.id)
+      router.push(`/studio/${book.id}`)
+    } catch (err: any) {
+      console.error('[Dashboard] import failed:', err)
+      setFolderError('Import failed: ' + (err?.message ?? 'unknown error'))
+    } finally {
+      setFolderImporting(false)
+      setFolderStep('')
+    }
   }
 
   return (
@@ -342,6 +562,10 @@ export default function DashboardPage() {
         <NewStoryModal
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
+          onImportFiles={handleImportFiles}
+          importing={folderImporting}
+          importStep={folderStep}
+          importError={folderError}
         />
       )}
     </>

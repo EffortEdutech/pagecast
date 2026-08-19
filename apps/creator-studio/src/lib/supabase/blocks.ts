@@ -318,7 +318,7 @@ export async function reorderBlocks(blocks: { id: string; sort_order: number }[]
   return results.every(r => !r.error)
 }
 
-export async function replaceBookContent(bookId: string, story: Story): Promise<boolean> {
+export async function replaceBookContent(bookId: string, story: Pick<Story, 'chapters'>): Promise<boolean> {
   const supabase = createClient()
 
   const desiredChapterIds = new Set(story.chapters.map(ch => ch.id))

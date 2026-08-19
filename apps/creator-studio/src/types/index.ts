@@ -10,6 +10,8 @@ export type StoryStatus = 'draft' | 'published' | 'archived'
 
 // ─── Character ────────────────────────────────────────────────────────────────
 
+export type PortraitStatus = 'none' | 'generating' | 'pending_review' | 'approved' | 'failed'
+
 export interface Character {
   id: string
   name: string
@@ -20,6 +22,9 @@ export interface Character {
   voiceId?: string
   voiceLabel?: string
   defaultVolume: number
+  portraitUrl?: string
+  portraitStatus?: PortraitStatus
+  portraitPrompt?: string
 }
 
 // ─── Story Blocks ─────────────────────────────────────────────────────────────

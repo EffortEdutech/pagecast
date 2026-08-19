@@ -1,0 +1,596 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "juggernaut_xl_v9_lightning.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "CLIP-ViT-H-14.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "3": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus-face_sdxl_vit-h.safetensors"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter Model Loader"
+    }
+  },
+  "4": {
+    "inputs": {
+      "image": "character_ref.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "INPUT — Load the portrait from character_portrait_gen.json (saved to CHARACTER_REFS/CHARNAME.jpg)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "weight": 0.8,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only",
+      "model": [
+        "1",
+        0
+      ],
+      "ipadapter": [
+        "3",
+        0
+      ],
+      "image": [
+        "4",
+        0
+      ],
+      "clip_vision": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter — Character Reference"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "blurry face, bad face, ugly, deformed eyes, extra limbs, extra fingers, malformed hands, bad anatomy, low quality, text, watermark, speech bubble, multiple characters, extra person, nsfw, nude",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative (shared)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "8": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, full body front view, standing straight, facing camera directly, arms at sides, symmetrical composition",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Front View"
+    }
+  },
+  "9": {
+    "inputs": {
+      "seed": 1001,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Front"
+    }
+  },
+  "10": {
+    "inputs": {
+      "samples": [
+        "9",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Front"
+    }
+  },
+  "11": {
+    "inputs": {
+      "filename_prefix": "char_01_front",
+      "images": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Front"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, full body back view, standing straight, facing away from camera, arms at sides, back of character visible",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Back View"
+    }
+  },
+  "13": {
+    "inputs": {
+      "seed": 1002,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Back"
+    }
+  },
+  "14": {
+    "inputs": {
+      "samples": [
+        "13",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Back"
+    }
+  },
+  "15": {
+    "inputs": {
+      "filename_prefix": "char_02_back",
+      "images": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Back"
+    }
+  },
+  "16": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, full body left side profile view, standing straight, facing left, arms at sides, side profile clearly visible",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Left Side"
+    }
+  },
+  "17": {
+    "inputs": {
+      "seed": 1003,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Left Side"
+    }
+  },
+  "18": {
+    "inputs": {
+      "samples": [
+        "17",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Left Side"
+    }
+  },
+  "19": {
+    "inputs": {
+      "filename_prefix": "char_03_left_side",
+      "images": [
+        "18",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Left Side"
+    }
+  },
+  "20": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, full body right three-quarter view, standing, slight turn toward camera, 3/4 angle, dynamic pose",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Right 3/4 View"
+    }
+  },
+  "21": {
+    "inputs": {
+      "seed": 1004,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "20",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Right 3/4"
+    }
+  },
+  "22": {
+    "inputs": {
+      "samples": [
+        "21",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Right 3/4"
+    }
+  },
+  "23": {
+    "inputs": {
+      "filename_prefix": "char_04_three_quarter",
+      "images": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Right 3/4"
+    }
+  },
+  "24": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, close-up portrait, head and shoulders, neutral calm expression, clear detailed face, sharp eyes, looking at camera, front view",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Neutral Expression"
+    }
+  },
+  "25": {
+    "inputs": {
+      "seed": 1005,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "24",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Neutral"
+    }
+  },
+  "26": {
+    "inputs": {
+      "samples": [
+        "25",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Neutral"
+    }
+  },
+  "27": {
+    "inputs": {
+      "filename_prefix": "char_05_neutral",
+      "images": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Neutral Expression"
+    }
+  },
+  "28": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, close-up portrait, head and shoulders, bright happy smile, joyful cheerful expression, clear detailed face, sharp eyes, looking at camera, front view",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — Happy Expression"
+    }
+  },
+  "29": {
+    "inputs": {
+      "seed": 1006,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "28",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — Happy"
+    }
+  },
+  "30": {
+    "inputs": {
+      "samples": [
+        "29",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — Happy"
+    }
+  },
+  "31": {
+    "inputs": {
+      "filename_prefix": "char_06_happy",
+      "images": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — Happy Expression"
+    }
+  },
+  "32": {
+    "inputs": {
+      "text": "ArtStation concept art, digital illustration, character design reference sheet, [CHARACTER DESCRIPTION HERE], cinematic lighting, detailed, high quality, 8k, white studio background, solo character, full body A-pose, arms extended 45 degrees downward away from body, standing, facing camera directly, character reference sheet turnaround, all costume details visible, front view",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive — A-Pose"
+    }
+  },
+  "33": {
+    "inputs": {
+      "seed": 1007,
+      "steps": 4,
+      "cfg": 1.5,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "5",
+        0
+      ],
+      "positive": [
+        "32",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — A-Pose"
+    }
+  },
+  "34": {
+    "inputs": {
+      "samples": [
+        "33",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode — A-Pose"
+    }
+  },
+  "35": {
+    "inputs": {
+      "filename_prefix": "char_07_apose",
+      "images": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save — A-Pose"
+    }
+  }
+}

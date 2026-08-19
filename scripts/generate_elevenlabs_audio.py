@@ -147,7 +147,9 @@ def process_file(txt_path: Path, api_key: str, stats: dict,
                  sfx_duration: float = SFX_DURATION,
                  ambience_duration: float = AMBIENCE_DURATION):
     text = txt_path.read_text(encoding="utf-8")
-    base = txt_path.parent
+    # sfx/ and ambience/ live beside the book folder root, not beside script/ --
+    # if this file was found in a script/ subfolder, step up one level first.
+    base = txt_path.parent.parent if txt_path.parent.name.lower() == "script" else txt_path.parent
 
     sfx_dir      = base / "sfx"
     ambience_dir = base / "ambience"
@@ -234,11 +236,15 @@ def main():
         if not folder.exists():
             print(f"ERROR: Folder not found: {folder}", file=sys.stderr)
             sys.exit(1)
-        txt_files = sorted(folder.glob("*_pagecast.txt"))
+        # pagecast .txt files live in <folder>/script/ (falls back to folder
+        # root for any book not yet migrated to the script/ layout)
+        script_dir = folder / "script"
+        search_dir = script_dir if script_dir.exists() else folder
+        txt_files = sorted(search_dir.glob("*_pagecast.txt"))
         if not txt_files:
-            txt_files = sorted(folder.glob("*.txt"))
+            txt_files = sorted(search_dir.glob("*.txt"))
         if not txt_files:
-            print(f"ERROR: No pagecast .txt files found in {folder}", file=sys.stderr)
+            print(f"ERROR: No pagecast .txt files found in {search_dir}", file=sys.stderr)
             sys.exit(1)
         for txt in txt_files:
             print(f"\n── {txt.name} ──")

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
-import { Check, Key, User, BookOpen, Sparkles, AlertCircle, Loader2, Zap, Rocket } from 'lucide-react'
+import { Check, Key, User, BookOpen, Sparkles, AlertCircle, Loader2, Zap, Rocket, Plus, X } from 'lucide-react'
 import { GEMINI_TTS_MODELS, TTS_GEMINI_MODEL_LS, getTtsApiKey, getTtsSettings, saveTtsSettings, normalizeGeminiTtsModel } from '@/lib/tts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
@@ -98,13 +98,11 @@ export default function SettingsPage() {
         const casts = (payload.casts ?? []) as GuestCastOption[]
         setIsAdmin(true)
         setGuestCasts(casts)
-        setGuestCastIds(
-          casts
-            .filter(cast => cast.guest_access)
-            .sort((a, b) => (a.guest_access_rank ?? 99) - (b.guest_access_rank ?? 99))
-            .map(cast => cast.id)
-            .slice(0, 3)
-        )
+        const currentGuestIds = casts
+          .filter(cast => cast.guest_access)
+          .sort((a, b) => (a.guest_access_rank ?? 99) - (b.guest_access_rank ?? 99))
+          .map(cast => cast.id)
+        setGuestCastIds(currentGuestIds.length ? currentGuestIds : [''])
       })
       .catch(err => {
         if (!cancelled) {
@@ -152,7 +150,26 @@ export default function SettingsPage() {
     setGuestCastIds(current => {
       const next = [...current]
       next[index] = castId
-      return [...new Set(next.filter(Boolean))].slice(0, 3)
+      // De-dupe while preserving each slot's position; keep a trailing
+      // empty slot's position too (Boolean filter would collapse it).
+      const seen = new Set<string>()
+      return next.filter(id => {
+        if (!id) return true
+        if (seen.has(id)) return false
+        seen.add(id)
+        return true
+      })
+    })
+  }
+
+  const handleAddSlot = () => {
+    setGuestCastIds(current => [...current, ''])
+  }
+
+  const handleRemoveSlot = (index: number) => {
+    setGuestCastIds(current => {
+      const next = current.filter((_, i) => i !== index)
+      return next.length ? next : ['']
     })
   }
 
@@ -162,7 +179,7 @@ export default function SettingsPage() {
     setGuestError(null)
 
     try {
-      const castIds = guestCastIds.filter(Boolean).slice(0, 3)
+      const castIds = guestCastIds.filter(Boolean)
       const res = await fetch('/api/admin/guest-casts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -355,7 +372,7 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="text-text-primary font-semibold text-sm">Reader Start Free Shelf</h3>
                     <p className="text-text-secondary text-xs mt-1">
-                      Choose up to 3 published Starter Casts for visitors. Rotate these to test different Cast styles and grow subscribers.
+                      Choose any number of published Starter Casts for visitors. Add or remove slots below, and rotate these to test different Cast styles and grow subscribers.
                     </p>
                   </div>
                 </div>
@@ -369,17 +386,17 @@ export default function SettingsPage() {
               )}
 
               <div className="grid gap-3">
-                {[0, 1, 2].map(index => {
+                {guestCastIds.map((castId, index) => {
                   const selectedInOtherSlots = new Set(
                     guestCastIds.filter((id, slot) => id && slot !== index)
                   )
 
                   return (
-                    <div key={index} className="grid gap-2 sm:grid-cols-[72px_1fr] sm:items-center">
+                    <div key={index} className="grid gap-2 sm:grid-cols-[72px_1fr_auto] sm:items-center">
                       <label className="label mb-0">Slot {index + 1}</label>
                       <select
                         className="input"
-                        value={guestCastIds[index] ?? ''}
+                        value={castId ?? ''}
                         onChange={e => handleGuestSlotChange(index, e.target.value)}
                         disabled={guestLoading || guestSaving}
                       >
@@ -390,10 +407,28 @@ export default function SettingsPage() {
                           </option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        className="btn-ghost px-2 py-1.5 text-text-muted hover:text-danger"
+                        onClick={() => handleRemoveSlot(index)}
+                        disabled={guestLoading || guestSaving}
+                        title="Remove slot"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   )
                 })}
               </div>
+
+              <button
+                type="button"
+                className="btn-ghost text-xs px-2 py-1.5"
+                onClick={handleAddSlot}
+                disabled={guestLoading || guestSaving}
+              >
+                <Plus size={13} /> Add Slot
+              </button>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <button
@@ -406,7 +441,7 @@ export default function SettingsPage() {
                    'Save Free Shelf'}
                 </button>
                 <span className="text-text-muted text-xs">
-                  {guestCastIds.filter(Boolean).length}/3 visitor Casts selected.
+                  {guestCastIds.filter(Boolean).length} visitor Cast{guestCastIds.filter(Boolean).length === 1 ? '' : 's'} selected.
                 </span>
               </div>
             </div>

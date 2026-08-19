@@ -342,9 +342,15 @@ def convert_to_pdf(docx_path):
 # ---------------------------------------------------------------------------
 
 def discover_manuscripts(casts_folder, chapter=None):
-    """Return sorted list of (chapter_num, Path) for all _manuscript.docx files."""
+    """Return sorted list of (chapter_num, Path) for all _manuscript.docx files.
+
+    Manuscripts live in <casts_folder>/script/ (current convention). Falls back
+    to the cast folder root for any book not yet migrated to the script/ layout.
+    """
+    script_dir = casts_folder / 'script'
+    search_dir = script_dir if script_dir.exists() else casts_folder
     found = []
-    for p in casts_folder.glob('*manuscript*.docx'):
+    for p in search_dir.glob('*manuscript*.docx'):
         if p.name.startswith('~$'):
             continue
         m = re.search(r'[Cc]h(?:apter)?[\s_-]*(\d+)', p.stem)
@@ -363,7 +369,7 @@ def main():
     parser = argparse.ArgumentParser(description='pageCast Dark Storybook PDF Producer')
     parser.add_argument('--book',     help='Book title (builds DOCX + PDF from manuscripts)')
     parser.add_argument('--chapter',  type=int, default=None, help='Single chapter number (default: all)')
-    parser.add_argument('--out-dir',  help='Output directory')
+    parser.add_argument('--out-dir',  help='Output directory (default: <casts_folder>/pdf/)')
     parser.add_argument('--no-pdf',   action='store_true', help='Build DOCX only, skip PDF conversion')
     parser.add_argument('--pdf-from', metavar='DOCX',
                         help='Convert an existing .docx directly to PDF (skips manuscript build). '
@@ -400,7 +406,7 @@ def main():
     if not manuscripts:
         print('Error: No _manuscript.docx files found in ' + str(casts_folder)); sys.exit(1)
 
-    out_dir = Path(args.out_dir).resolve() if args.out_dir else casts_folder
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else (casts_folder / 'pdf')
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print('\n  pageCast Dark PDF Producer  (manuscript mode)')
