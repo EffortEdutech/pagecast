@@ -192,7 +192,7 @@ function RunCard({ run, onChanged }: { run: ImageRun; onChanged: () => void }) {
               <Loader2 size={12} className="animate-spin" /> Loading jobs…
             </div>
           )}
-          {jobs?.map(job => <JobRow key={job.id} job={job} bookTitle={run.bookTitle} onRetried={() => { loadJobs(); onChanged() }} />)}
+          {jobs?.map(job => <JobRow key={job.id} job={job} bookTitle={run.bookTitle ?? null} onRetried={() => { loadJobs(); onChanged() }} />)}
           {jobs?.length === 0 && <p className="px-3 py-3 text-text-muted text-xs">No jobs found for this run.</p>}
         </div>
       )}

@@ -735,7 +735,7 @@ export async function retryImageJob(job: ImageJob, bookTitle?: string): Promise<
             const file = new File([local.blob], `${job.characterId}.${ext}`, { type: local.mimeType })
             const url = await uploadCharacterPortrait(userId, job.bookId, job.characterId, file)
             if (!url) throw new Error('Upload failed')
-            await dbUpdateCharacter(job.characterId, { portraitUrl: url, portraitStatus: 'approved', portraitPrompt: job.prompt })
+            await dbUpdateCharacter(job.characterId, { portraitUrl: url, portraitStatus: 'approved', portraitPrompt: job.prompt ?? undefined })
           } else if (job.jobType === 'cover_image') {
             const file = new File([local.blob], `cover.${ext}`, { type: local.mimeType })
             const url = await uploadCoverImage(job.bookId, file)
