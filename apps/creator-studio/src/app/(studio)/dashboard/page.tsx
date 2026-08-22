@@ -8,7 +8,7 @@ import { Header } from '@/components/layout/Header'
 import {
   Plus, BookOpen, Clock, Music, Mic, MoreVertical,
   Edit3, Trash2, Eye, Copy, TrendingUp, Users, DollarSign,
-  Globe, FileText, Loader2, Upload
+  Globe, FileText, Loader2, Upload, Pencil
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story, Chapter } from '@/types'
@@ -31,17 +31,21 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: any, label: 
   )
 }
 
-function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
+function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish, onRename }: {
   story: Story
   onEdit: () => void
   onDelete: () => void
   onDuplicate: () => void
   onPublish: () => void
+  onRename: (newTitle: string) => Promise<void>
 }) {
   const [menuOpen,       setMenuOpen]       = useState(false)
   const [duplicating,    setDuplicating]    = useState(false)
   const [confirmDelete,  setConfirmDelete]  = useState(false)
   const [deleting,       setDeleting]       = useState(false)
+  const [renaming,       setRenaming]       = useState(false)
+  const [titleDraft,     setTitleDraft]     = useState(story.title)
+  const [savingRename,   setSavingRename]   = useState(false)
 
   const coverColors = ['from-accent/30 to-accent/10', 'from-gold/30 to-gold/10', 'from-info/30 to-info/10', 'from-success/30 to-success/10']
   const colorIdx = story.id.charCodeAt(story.id.length - 1) % coverColors.length
@@ -58,6 +62,21 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
     setDeleting(true)
     await onDelete()
     // No need to reset state — the card unmounts once the story leaves the list.
+  }
+
+  const handleOpenRename = () => {
+    setMenuOpen(false)
+    setTitleDraft(story.title)
+    setRenaming(true)
+  }
+
+  const handleSaveRename = async () => {
+    const trimmed = titleDraft.trim()
+    if (!trimmed || trimmed === story.title) { setRenaming(false); return }
+    setSavingRename(true)
+    await onRename(trimmed)
+    setSavingRename(false)
+    setRenaming(false)
   }
 
   return (
@@ -106,6 +125,9 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
                 <button onClick={() => { onEdit(); setMenuOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors">
                   <Edit3 size={12} /> Continue editing
                 </button>
+                <button onClick={handleOpenRename} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors">
+                  <Pencil size={12} /> Rename
+                </button>
                 <button onClick={handleDuplicate} disabled={duplicating} className="flex items-center gap-2 w-full px-3 py-2 hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50">
                   {duplicating ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
                   {duplicating ? 'Duplicating…' : 'Duplicate'}
@@ -134,6 +156,35 @@ function StoryCard({ story, onEdit, onDelete, onDuplicate, onPublish }: {
           <span className="ml-auto font-medium text-text-secondary">${story.price.toFixed(2)}</span>
         </div>
       </div>
+
+      {renaming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in" onClick={() => !savingRename && setRenaming(false)}>
+          <div className="card-elevated w-full max-w-sm space-y-4 p-5 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-text-primary font-bold text-base">Rename book</h3>
+              <p className="text-text-secondary text-sm mt-1.5">Give this Castlet a new title.</p>
+            </div>
+            <input
+              autoFocus
+              className="input w-full"
+              value={titleDraft}
+              maxLength={200}
+              disabled={savingRename}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveRename()
+                if (e.key === 'Escape') setRenaming(false)
+              }}
+            />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button className="btn-secondary" onClick={() => setRenaming(false)} disabled={savingRename}>Cancel</button>
+              <button className="btn-primary" onClick={handleSaveRename} disabled={savingRename || !titleDraft.trim()}>
+                {savingRename ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm animate-fade-in" onClick={() => !deleting && setConfirmDelete(false)}>
@@ -349,6 +400,10 @@ export default function DashboardPage() {
     await publishBook(story.id, newStatus as 'draft' | 'published')
   }
 
+  const handleRename = async (story: Story, newTitle: string) => {
+    await updateBook(story.id, { title: newTitle })
+  }
+
   // ── Import: build a brand-new book from a set of *_pagecast.txt chapter/castlet
   //    files (e.g. selected from a .casts/<story>/script folder). Triggered from
   //    inside the New Story modal — the one place you'd look to create a book. ──
@@ -550,6 +605,7 @@ export default function DashboardPage() {
                   onDelete={() => deleteBook(story.id)}
                   onDuplicate={() => handleDuplicate(story)}
                   onPublish={() => handlePublish(story)}
+                  onRename={(newTitle) => handleRename(story, newTitle)}
                 />
               ))}
             </div>
