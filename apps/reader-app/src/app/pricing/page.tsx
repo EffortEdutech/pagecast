@@ -1,8 +1,24 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
 import { Check, CreditCard, Gem, Globe2, Headphones, Sparkles } from 'lucide-react'
 
-const plans = [
+type Plan = {
+  name: string
+  price: string
+  cadence: string
+  description: string
+  cta: string
+  href: string
+  features: string[]
+  featured?: boolean
+  action?: 'cast-pass-checkout'
+}
+
+const plans: Plan[] = [
   {
     name: 'Starter Pass',
     price: '$0',
@@ -23,17 +39,43 @@ const plans = [
   },
   {
     name: 'Cast Pass',
-    price: '$9-$19',
+    price: '$19',
     cadence: 'per month',
     description: 'The membership path for families and regular Explorers who want the full TaleVerse.',
-    cta: 'Coming Soon',
-    href: '/store',
+    cta: 'Start Cast Pass',
+    href: '/pricing',
     featured: true,
+    action: 'cast-pass-checkout',
     features: ['All Premium Casts', 'New Tales monthly', 'Cancel anytime', 'One Cast Pass'],
   },
 ]
 
 export default function PricingPage() {
+  const router = useRouter()
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
+
+  const startCastPassCheckout = async () => {
+    setCheckoutError('')
+    setCheckoutLoading(true)
+    try {
+      const response = await fetch('/api/paygate/checkout', { method: 'POST' })
+      const payload = await response.json().catch(() => null) as { redirectUrl?: string; error?: string } | null
+
+      if (response.status === 401) {
+        router.push('/login?next=/pricing')
+        return
+      }
+      if (!response.ok || !payload?.redirectUrl) {
+        throw new Error(payload?.error ?? 'Could not start Cast Pass checkout.')
+      }
+      window.location.href = payload.redirectUrl
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : 'Could not start Cast Pass checkout.')
+      setCheckoutLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-bg-primary">
       <Navbar />
@@ -56,6 +98,12 @@ export default function PricingPage() {
         </section>
 
         <section className="max-w-6xl mx-auto px-6 py-10">
+          {checkoutError && (
+            <div className="mb-5 rounded-xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {checkoutError}
+            </div>
+          )}
+
           <div className="grid lg:grid-cols-3 gap-5">
             {plans.map(plan => (
               <div
@@ -90,12 +138,23 @@ export default function PricingPage() {
                   ))}
                 </div>
 
-                <Link
-                  href={plan.href}
-                  className={plan.featured ? 'btn-primary justify-center mt-7' : 'btn-secondary justify-center mt-7'}
-                >
-                  {plan.cta}
-                </Link>
+                {plan.action === 'cast-pass-checkout' ? (
+                  <button
+                    type="button"
+                    onClick={startCastPassCheckout}
+                    disabled={checkoutLoading}
+                    className="btn-primary justify-center mt-7 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {checkoutLoading ? 'Opening Stripe…' : plan.cta}
+                  </button>
+                ) : (
+                  <Link
+                    href={plan.href}
+                    className={plan.featured ? 'btn-primary justify-center mt-7' : 'btn-secondary justify-center mt-7'}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
               </div>
             ))}
           </div>

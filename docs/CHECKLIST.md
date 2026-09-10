@@ -234,6 +234,8 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | 6.6 | Book ownership gate in reader | ✅ | |
 | 6.7 | Creator revenue dashboard | ⬜ | |
 | 6.8 | Author payout system | 🚫 | Post-MVP |
+| 6.9 | PayGate Cast Pass checkout proxy | ✅ | /api/paygate/checkout sends authenticated Supabase user JWT to PayGate with fixed plan_key=cast_pass_monthly; PayGate owns amount, provider account, lookup key, return URL, and entitlement projection. |
+| 6.10 | Cast Pass pricing CTA wired to PayGate | ✅ | /pricing Cast Pass button opens PayGate/Stripe checkout for USD 19/month; Single Cast remains on existing store path until PayGate item/SKU contract exists. |
 
 ---
 
