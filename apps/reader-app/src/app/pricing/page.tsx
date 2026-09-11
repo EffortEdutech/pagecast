@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
-import { Check, CreditCard, Gem, Globe2, Headphones, Sparkles } from 'lucide-react'
+import { Check, CreditCard, Gem, Globe2, Headphones, Sparkles, Wand2 } from 'lucide-react'
 
 type Plan = {
   name: string
@@ -54,6 +54,12 @@ export default function PricingPage() {
   const router = useRouter()
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
+  const [billingStatus, setBillingStatus] = useState<'success' | 'cancelled' | ''>('')
+
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get('billing')
+    if (status === 'success' || status === 'cancelled') setBillingStatus(status)
+  }, [])
 
   const startCastPassCheckout = async () => {
     setCheckoutError('')
@@ -81,6 +87,56 @@ export default function PricingPage() {
       <Navbar />
 
       <main>
+        {billingStatus === 'success' && (
+          <section className="border-b border-success/20 bg-success/10">
+            <div className="max-w-5xl mx-auto px-6 py-6">
+              <div className="card border-success/30 bg-bg-primary/95 p-5 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                  <div className="h-11 w-11 rounded-2xl bg-success/15 text-success flex items-center justify-center shrink-0">
+                    <Check size={22} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-success text-sm font-semibold">Payment successful</p>
+                    <h1 className="text-text-primary text-2xl sm:text-3xl font-bold mt-1">
+                      Your Cast Pass is being activated.
+                    </h1>
+                    <p className="text-text-secondary mt-2 leading-relaxed">
+                      Stripe confirmed the payment. PayGate is now processing the verified webhook and will unlock
+                      Cast Pass access from the payment state, not from this browser redirect.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 mt-5">
+                      <Link href="/store" className="btn-primary justify-center">
+                        Explore Premium Casts
+                      </Link>
+                      <Link href="/library" className="btn-secondary justify-center">
+                        Go to My Casts
+                      </Link>
+                    </div>
+                    <p className="text-text-muted text-xs mt-4">
+                      If access does not appear immediately, refresh in a moment while PayGate finishes webhook processing.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {billingStatus === 'cancelled' && (
+          <section className="border-b border-warning/20 bg-warning/10">
+            <div className="max-w-5xl mx-auto px-6 py-5">
+              <div className="flex items-start gap-3 rounded-2xl border border-warning/25 bg-bg-primary/90 px-4 py-3 text-sm">
+                <Wand2 size={18} className="text-warning shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-text-primary font-semibold">Checkout cancelled</p>
+                  <p className="text-text-secondary mt-1">
+                    No payment was taken. You can start Cast Pass again whenever you are ready.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         <section className="border-b border-bg-border bg-bg-secondary">
           <div className="max-w-5xl mx-auto px-6 py-14 text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/25 bg-accent/10 text-accent text-xs font-semibold mb-5">
