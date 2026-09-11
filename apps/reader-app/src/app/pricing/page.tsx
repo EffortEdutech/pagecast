@@ -6,6 +6,14 @@ import { useEffect, useState } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
 import { Check, CreditCard, Gem, Globe2, Headphones, Sparkles, Wand2 } from 'lucide-react'
 
+type CastPassState = {
+  authenticated: boolean
+  castPassActive: boolean
+  subscription?: { state?: string; planKey?: string; currentPeriodEnd?: string }
+  entitlements?: Array<{ key: string; state: string; effective_until?: string }>
+  error?: string
+}
+
 type Plan = {
   name: string
   price: string
@@ -55,13 +63,40 @@ export default function PricingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
   const [billingStatus, setBillingStatus] = useState<'success' | 'cancelled' | ''>('')
+  const [castPassState, setCastPassState] = useState<CastPassState | null>(null)
+  const [castPassLoading, setCastPassLoading] = useState(true)
 
   useEffect(() => {
     const status = new URLSearchParams(window.location.search).get('billing')
     if (status === 'success' || status === 'cancelled') setBillingStatus(status)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    async function loadCastPassState() {
+      try {
+        const response = await fetch('/api/paygate/state', { cache: 'no-store' })
+        const payload = await response.json().catch(() => null) as CastPassState | null
+        if (!cancelled) setCastPassState(payload)
+      } catch {
+        if (!cancelled) setCastPassState({ authenticated: false, castPassActive: false, error: 'Cast Pass state is unavailable right now' })
+      } finally {
+        if (!cancelled) setCastPassLoading(false)
+      }
+    }
+    loadCastPassState()
+    return () => { cancelled = true }
+  }, [])
+
+  const activeUntil = castPassState?.entitlements?.find(entitlement => entitlement.state === 'active' && entitlement.effective_until)?.effective_until
+  const activeUntilLabel = activeUntil ? new Date(activeUntil).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+
   const startCastPassCheckout = async () => {
+    if (castPassState?.castPassActive) {
+      router.push('/store')
+      return
+    }
+
     setCheckoutError('')
     setCheckoutLoading(true)
     try {
@@ -99,9 +134,16 @@ export default function PricingPage() {
                   Your Cast Pass is being activated.
                 </h1>
                 <p className="text-text-secondary mt-4 leading-relaxed">
-                  Stripe confirmed your payment. PayGate will unlock Cast Pass from the verified Stripe webhook,
-                  so access is based on trusted payment evidence rather than this browser return page.
+                  Stripe confirmed your payment. PayGate unlocks Cast Pass from verified Stripe webhook evidence,
+                  not from this browser return page.
                 </p>
+
+                <div className="mt-5 rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success">
+                  {castPassState?.castPassActive
+                    ? <>PayGate state: active Cast Pass{activeUntilLabel ? ' until ' + activeUntilLabel : ''}.</>
+                    : <>Waiting for PayGate entitlement state. Refresh in a moment if access is not visible yet.</>
+                  }
+                </div>
 
                 <div className="grid sm:grid-cols-2 gap-3 mt-6">
                   <Link href="/store" className="btn-primary justify-center">
@@ -111,10 +153,6 @@ export default function PricingPage() {
                     Go to My Casts
                   </Link>
                 </div>
-
-                <div className="mt-6 rounded-2xl border border-bg-border bg-bg-primary px-4 py-3 text-sm text-text-secondary">
-                  If your Cast Pass is not visible yet, wait a few seconds and refresh. Webhook processing can finish shortly after Stripe redirects you back.
-                </div>
               </div>
             </div>
           </section>
@@ -122,6 +160,7 @@ export default function PricingPage() {
       </div>
     )
   }
+
   return (
     <div className="min-h-screen bg-bg-primary">
       <Navbar />
@@ -159,6 +198,18 @@ export default function PricingPage() {
         </section>
 
         <section className="max-w-6xl mx-auto px-6 py-10">
+          {castPassState?.castPassActive && (
+            <div className="mb-5 rounded-xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success">
+              Cast Pass is active through PayGate{activeUntilLabel ? ' until ' + activeUntilLabel : ''}. Premium Cast access should use this verified payment state.
+            </div>
+          )}
+
+          {!castPassLoading && castPassState?.authenticated && !castPassState.castPassActive && billingStatus !== 'cancelled' && (
+            <div className="mb-5 rounded-xl border border-bg-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
+              PayGate state loaded: no active Cast Pass found for this account yet.
+            </div>
+          )}
+
           {checkoutError && (
             <div className="mb-5 rounded-xl border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
               {checkoutError}
@@ -206,7 +257,7 @@ export default function PricingPage() {
                     disabled={checkoutLoading}
                     className="btn-primary justify-center mt-7 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {checkoutLoading ? 'Opening Stripe…' : plan.cta}
+                    {castPassState?.castPassActive ? 'Explore Premium Casts' : checkoutLoading ? 'Opening Stripe…' : plan.cta}
                   </button>
                 ) : (
                   <Link

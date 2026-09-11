@@ -1,4 +1,4 @@
-export type PayGateEnvironment = 'test' | 'live'
+﻿export type PayGateEnvironment = 'test' | 'live'
 
 export interface CreateCheckoutInput {
   readonly accessToken: string
@@ -16,6 +16,31 @@ export interface PayGateCheckoutSession {
   readonly status: string
   readonly expires_at?: string
   readonly request_id?: string
+}
+
+export interface PayGateSubscriptionState {
+  readonly appId: string
+  readonly userRef: string
+  readonly state: 'none' | 'trialing' | 'active' | 'past_due' | 'cancelled' | string
+  readonly planKey?: string
+  readonly currentPeriodEnd?: string
+}
+
+export interface PayGateEntitlement {
+  readonly key: string
+  readonly state: 'active' | 'revoked' | string
+  readonly effective_until?: string
+}
+
+export interface PayGateEntitlementState {
+  readonly appId: string
+  readonly userRef: string
+  readonly entitlements: readonly PayGateEntitlement[]
+}
+
+export interface PayGateState {
+  readonly subscription: PayGateSubscriptionState
+  readonly entitlements: PayGateEntitlementState
 }
 
 export class PayGateClientError extends Error {
@@ -41,11 +66,25 @@ export function getPaymentHubEnvironment(): PayGateEnvironment {
   return raw
 }
 
+function authHeaders(accessToken: string): HeadersInit {
+  return { Authorization: `Bearer ${accessToken}` }
+}
+
+async function readPayGateJson<T>(response: Response, fallbackCode: string, fallbackMessage: string): Promise<T> {
+  const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | T | null
+  if (!response.ok) {
+    const error = payload && typeof payload === 'object' && 'error' in payload ? payload.error : undefined
+    throw new PayGateClientError(response.status, error?.code ?? fallbackCode, error?.message ?? fallbackMessage)
+  }
+  if (!payload) throw new PayGateClientError(502, fallbackCode, fallbackMessage)
+  return payload as T
+}
+
 export async function createPayGateCheckout(input: CreateCheckoutInput): Promise<PayGateCheckoutSession> {
   const response = await fetch(`${getPaymentHubBaseUrl()}/v1/checkout/sessions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${input.accessToken}`,
+      ...authHeaders(input.accessToken),
       'Content-Type': 'application/json',
       'Idempotency-Key': input.idempotencyKey,
     },
@@ -59,13 +98,29 @@ export async function createPayGateCheckout(input: CreateCheckoutInput): Promise
     cache: 'no-store',
   })
 
-  const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | PayGateCheckoutSession | null
-  if (!response.ok) {
-    const error = payload && 'error' in payload ? payload.error : undefined
-    throw new PayGateClientError(response.status, error?.code ?? 'PAYGATE_CHECKOUT_FAILED', error?.message ?? 'PayGate checkout failed')
-  }
-  if (!payload || !('redirect_url' in payload) || !payload.redirect_url) {
+  const payload = await readPayGateJson<PayGateCheckoutSession>(response, 'PAYGATE_CHECKOUT_FAILED', 'PayGate checkout failed')
+  if (!payload.redirect_url) {
     throw new PayGateClientError(502, 'PAYGATE_MISSING_REDIRECT', 'PayGate did not return a checkout redirect URL')
   }
   return payload
+}
+
+export async function readPayGateState(input: {
+  readonly accessToken: string
+  readonly appId: string
+  readonly userRef: string
+}): Promise<PayGateState> {
+  const query = new URLSearchParams({ app_id: input.appId, user_ref: input.userRef })
+  const [subscription, entitlements] = await Promise.all([
+    fetch(`${getPaymentHubBaseUrl()}/v1/subscriptions/current?${query.toString()}`, {
+      headers: authHeaders(input.accessToken),
+      cache: 'no-store',
+    }).then((response) => readPayGateJson<PayGateSubscriptionState>(response, 'PAYGATE_SUBSCRIPTION_FAILED', 'PayGate subscription state is unavailable')),
+    fetch(`${getPaymentHubBaseUrl()}/v1/entitlements?${query.toString()}`, {
+      headers: authHeaders(input.accessToken),
+      cache: 'no-store',
+    }).then((response) => readPayGateJson<PayGateEntitlementState>(response, 'PAYGATE_ENTITLEMENTS_FAILED', 'PayGate entitlement state is unavailable')),
+  ])
+
+  return { subscription, entitlements }
 }
