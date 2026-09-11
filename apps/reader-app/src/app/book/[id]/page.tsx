@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -30,7 +30,7 @@ export default function BookPage() {
   const [serverAccess, setServerAccess] = useState<boolean | null>(null)
   const [accessReason, setAccessReason] = useState<string | null>(null)
 
-  // Load story — Supabase first, fall back to demo data
+  // Load story â€” Supabase first, fall back to demo data
   useEffect(() => {
     if (!id) return
     fetchBook(id).then(book => {
@@ -56,7 +56,7 @@ export default function BookPage() {
 
   // Handle ?purchased=1 redirect from Stripe success_url.
   // NOTE: Must be declared here (before any early returns) to comply with
-  // React's Rules of Hooks — hooks must be called in the same order on every
+  // React's Rules of Hooks â€” hooks must be called in the same order on every
   // render regardless of conditions.
   useEffect(() => {
     if (!story) return
@@ -76,7 +76,7 @@ export default function BookPage() {
     }
   }, [story])
 
-  // ── Early exits (after all hooks) ─────────────────────────────────────────
+  // â”€â”€ Early exits (after all hooks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (story === undefined) return (
     <div className="min-h-screen bg-bg-primary flex items-center justify-center">
@@ -94,12 +94,13 @@ export default function BookPage() {
     </div>
   )
 
-  // ── Derived state ──────────────────────────────────────────────────────────
+  // â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const isSupabaseCast = UUID_RE.test(story.id)
   const checkingAccess = isSupabaseCast && serverAccess === null
   const owned = serverAccess === true || (!isSupabaseCast && (story.isFree || (hydrated && isOwned(story.id))))
   const isGuestAccess = accessReason === 'guest' || story.guestAccess
+  const isCastPassAccess = accessReason === 'cast_pass'
 
   const handleBuy = async () => {
     if (!story) return
@@ -179,7 +180,7 @@ export default function BookPage() {
                   </button>
                 ) : owned ? (
                   <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
-                    <Play size={18} className="fill-white" /> {isGuestAccess ? 'Start Guest Cast' : 'Resume Cast'}
+                    <Play size={18} className="fill-white" /> {isGuestAccess ? 'Start Guest Cast' : isCastPassAccess ? 'Read with Cast Pass' : 'Resume Cast'}
                   </Link>
                 ) : (
                   <>
@@ -243,7 +244,7 @@ export default function BookPage() {
               {checkingAccess
                 ? <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking access...</span>
                 : owned
-                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> {isGuestAccess ? 'Guest access is open - create an account anytime to save progress' : 'This Cast is unlocked - enjoy the full Journey'}</span>
+                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> {isGuestAccess ? 'Guest access is open - create an account anytime to save progress' : isCastPassAccess ? 'Unlocked by Cast Pass - enjoy the full Journey' : 'This Cast is unlocked - enjoy the full Journey'}</span>
                 : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Unlock this Cast to continue the Journey</span>
               }
             </div>
@@ -301,9 +302,9 @@ export default function BookPage() {
             </h3>
             <div className="space-y-2 text-xs text-text-secondary">
               {[
-                { icon: BookOpen,   label: 'Reading Mode — read at your pace' },
-                { icon: Headphones, label: 'Audiobook Mode — auto-scroll + highlight' },
-                { icon: Film,       label: 'Cinematic Mode — full immersion' },
+                { icon: BookOpen,   label: 'Reading Mode â€” read at your pace' },
+                { icon: Headphones, label: 'Audiobook Mode â€” auto-scroll + highlight' },
+                { icon: Film,       label: 'Cinematic Mode â€” full immersion' },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-2">
                   <Icon size={12} className="text-accent shrink-0" />
@@ -319,7 +320,7 @@ export default function BookPage() {
               {checkingAccess
                 ? <span className="text-text-muted text-base flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Checking</span>
                 : owned
-                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> {isGuestAccess ? 'Guest Cast' : 'In My Casts'}</span>
+                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> {isGuestAccess ? 'Guest Cast' : isCastPassAccess ? 'Cast Pass' : 'In My Casts'}</span>
                 : story.isFree ? 'Starter Cast' : formatUsd(story.price)
               }
             </div>
@@ -329,7 +330,7 @@ export default function BookPage() {
               </button>
             ) : owned ? (
               <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center">
-                <Play size={14} className="fill-white" /> Open Cast
+                <Play size={14} className="fill-white" /> {isCastPassAccess ? 'Open with Cast Pass' : 'Open Cast'}
               </Link>
             ) : (
               <button onClick={handleBuy} className="btn-primary w-full justify-center">

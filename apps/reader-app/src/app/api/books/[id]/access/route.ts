@@ -1,7 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { readPayGateState, PayGateClientError } from '@/lib/paymentHub/client'
 
 export const dynamic = 'force-dynamic'
+
+const PAGECAST_APP_ID = 'pagecast'
+const CAST_PASS_PLAN_KEY = 'cast_pass_monthly'
+const CAST_PASS_ENTITLEMENT_KEYS = new Set(['plan:cast_pass_monthly', 'pagecast.cast_pass', 'pagecast.premium_casts'])
+
+function hasActiveCastPass(state: Awaited<ReturnType<typeof readPayGateState>>): boolean {
+  if (state.subscription.state === 'active' && state.subscription.planKey === CAST_PASS_PLAN_KEY) return true
+  return state.entitlements.entitlements.some((entitlement) => (
+    CAST_PASS_ENTITLEMENT_KEYS.has(entitlement.key) && entitlement.state === 'active'
+  ))
+}
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -56,6 +68,24 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   if (!subscriptionError && subscription) {
     return NextResponse.json({ hasAccess: true, reason: 'subscription' })
+  }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  const accessToken = session?.access_token
+  if (!accessToken) {
+    return NextResponse.json({ hasAccess: false, reason: 'locked' })
+  }
+
+  try {
+    const payGateState = await readPayGateState({ accessToken, appId: PAGECAST_APP_ID, userRef: user.id })
+    if (hasActiveCastPass(payGateState)) {
+      return NextResponse.json({ hasAccess: true, reason: 'cast_pass' })
+    }
+  } catch (error) {
+    if (!(error instanceof PayGateClientError)) {
+      console.error('PayGate Cast Pass access check failed', error)
+    }
+    // Fail closed for premium access. Redirect success pages and provider errors never unlock content.
   }
 
   return NextResponse.json({ hasAccess: false, reason: 'locked' })
