@@ -82,46 +82,51 @@ export default function PricingPage() {
     }
   }
 
+  if (billingStatus === 'success') {
+    return (
+      <div className="min-h-screen bg-bg-primary">
+        <Navbar />
+
+        <main className="max-w-4xl mx-auto px-6 py-14">
+          <section className="card border-success/30 bg-bg-secondary p-6 sm:p-8">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+              <div className="h-12 w-12 rounded-2xl bg-success/15 text-success flex items-center justify-center shrink-0">
+                <Check size={24} />
+              </div>
+              <div className="flex-1">
+                <p className="text-success text-sm font-semibold">Payment successful</p>
+                <h1 className="text-text-primary text-3xl sm:text-4xl font-bold mt-2 leading-tight">
+                  Your Cast Pass is being activated.
+                </h1>
+                <p className="text-text-secondary mt-4 leading-relaxed">
+                  Stripe confirmed your payment. PayGate will unlock Cast Pass from the verified Stripe webhook,
+                  so access is based on trusted payment evidence rather than this browser return page.
+                </p>
+
+                <div className="grid sm:grid-cols-2 gap-3 mt-6">
+                  <Link href="/store" className="btn-primary justify-center">
+                    Explore Premium Casts
+                  </Link>
+                  <Link href="/library" className="btn-secondary justify-center">
+                    Go to My Casts
+                  </Link>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-bg-border bg-bg-primary px-4 py-3 text-sm text-text-secondary">
+                  If your Cast Pass is not visible yet, wait a few seconds and refresh. Webhook processing can finish shortly after Stripe redirects you back.
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen bg-bg-primary">
       <Navbar />
 
       <main>
-        {billingStatus === 'success' && (
-          <section className="border-b border-success/20 bg-success/10">
-            <div className="max-w-5xl mx-auto px-6 py-6">
-              <div className="card border-success/30 bg-bg-primary/95 p-5 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                  <div className="h-11 w-11 rounded-2xl bg-success/15 text-success flex items-center justify-center shrink-0">
-                    <Check size={22} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-success text-sm font-semibold">Payment successful</p>
-                    <h1 className="text-text-primary text-2xl sm:text-3xl font-bold mt-1">
-                      Your Cast Pass is being activated.
-                    </h1>
-                    <p className="text-text-secondary mt-2 leading-relaxed">
-                      Stripe confirmed the payment. PayGate is now processing the verified webhook and will unlock
-                      Cast Pass access from the payment state, not from this browser redirect.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3 mt-5">
-                      <Link href="/store" className="btn-primary justify-center">
-                        Explore Premium Casts
-                      </Link>
-                      <Link href="/library" className="btn-secondary justify-center">
-                        Go to My Casts
-                      </Link>
-                    </div>
-                    <p className="text-text-muted text-xs mt-4">
-                      If access does not appear immediately, refresh in a moment while PayGate finishes webhook processing.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
         {billingStatus === 'cancelled' && (
           <section className="border-b border-warning/20 bg-warning/10">
             <div className="max-w-5xl mx-auto px-6 py-5">
