@@ -1,22 +1,48 @@
 'use client'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useReaderStore } from '@/store/readerStore'
 import { useHydrated } from '@/hooks/useHydrated'
 import { usePublishedBooks } from '@/hooks/usePublishedBooks'
+import { createClient } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/Navbar'
 import { Clock, Mic, Music, BookOpen, Headphones, Sparkles, Check, Languages, Lock, Rocket, ShoppingBag } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story } from '@/types'
 import { formatUsd } from '@/lib/format'
 
-function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' | 'locked' | 'premium' | 'default' }) {
+
+type AccessReason = 'guest' | 'free' | 'purchase' | 'subscription' | 'cast_pass' | 'single_cast' | 'locked' | 'unauthenticated' | string
+
+type AccessState = { hasAccess: boolean; reason?: AccessReason }
+
+function StoryCard({ story, mode = 'default', signedIn, access }: { story: Story; mode?: 'guest' | 'locked' | 'premium' | 'default'; signedIn: boolean; access?: AccessState }) {
   const hydrated   = useHydrated()
   const isOwnedRaw = useReaderStore(s => s.isOwned(story.id))
   const isOwned    = mode !== 'guest' && hydrated && isOwnedRaw
+  const hasServerAccess = Boolean(access?.hasAccess)
+  const unlocked = isOwned || hasServerAccess
+  const isGuestAccess = access?.reason === 'guest' || mode === 'guest'
+  const isFreeAccountCast = mode === 'locked'
+  const priceLabel = unlocked
+    ? 'Unlocked'
+    : isGuestAccess
+      ? 'Guest access'
+      : isFreeAccountCast
+        ? (signedIn ? 'Free account' : 'Join free')
+        : story.isFree ? 'Starter Cast' : formatUsd(story.price)
+  const actionLabel = unlocked
+    ? 'Read Cast'
+    : isGuestAccess
+      ? 'Start Cast'
+      : mode === 'premium'
+        ? 'Unlock Cast'
+        : isFreeAccountCast
+          ? (signedIn ? 'Open Cast' : 'Create account')
+          : 'View Cast'
 
   return (
     <Link href={`/book/${story.id}`} className="card hover:border-accent/40 transition-all duration-200 overflow-hidden group flex flex-col">
-      {/* Cover */}
       <div className={clsx(
         'h-44 flex flex-col justify-end p-4 relative overflow-hidden',
         story.coverImage?.startsWith('http') ? 'bg-black' : `bg-gradient-to-br ${story.coverGradient ?? 'from-accent/30 to-accent/10'}`
@@ -33,32 +59,20 @@ function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' |
         <div className="relative z-10">
           <div className="flex gap-2 mb-2 flex-wrap">
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.language.toUpperCase()}</span>
-            {story.genre && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.genre}</span>
-            )}
-            {story.ageRating && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.ageRating}</span>
-            )}
-            {mode === 'guest' && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-success/25 text-white">Guest Access</span>
-            )}
-            {mode === 'locked' && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-black/35 text-white/90">Free Account</span>
-            )}
-            {mode === 'premium' && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gold/25 text-white">Premium</span>
-            )}
+            {story.genre && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.genre}</span>}
+            {story.ageRating && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/15 text-white/90">{story.ageRating}</span>}
+            {mode === 'guest' && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-success/25 text-white">Guest Access</span>}
+            {mode === 'locked' && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-black/35 text-white/90">Free Account</span>}
+            {mode === 'premium' && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gold/25 text-white">Premium</span>}
           </div>
           <h3 className="text-white font-bold text-lg leading-tight group-hover:text-accent-hover transition-colors">{story.title}</h3>
         </div>
-        {isOwned && (
+        {unlocked && (
           <div className="absolute top-3 right-3 w-7 h-7 bg-success rounded-full flex items-center justify-center">
             <Check size={13} className="text-white" />
           </div>
         )}
       </div>
-
-      {/* Info */}
       <div className="p-4 flex flex-col flex-1">
         <p className="text-text-secondary text-xs leading-relaxed line-clamp-3 flex-1">{story.description}</p>
         <div className="flex items-center gap-3 mt-3 text-text-muted text-[10px]">
@@ -66,13 +80,7 @@ function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' |
           {story.hasMusic && <span className="flex items-center gap-1"><Music size={10} /> Music</span>}
           <span className="flex items-center gap-1"><Mic size={10} /> {story.characters.filter(c => c.role === 'character').length} voices</span>
           <span className="ml-auto font-semibold text-text-primary text-xs">
-            {isOwned
-              ? <span className="text-success">Unlocked</span>
-              : mode === 'guest'
-                ? 'Start free'
-                : mode === 'locked'
-                  ? 'Join free'
-                  : story.isFree ? 'Starter Cast' : formatUsd(story.price)}
+            {unlocked ? <span className="text-success">{priceLabel}</span> : priceLabel}
           </span>
         </div>
         <div className="mt-4">
@@ -84,7 +92,7 @@ function StoryCard({ story, mode = 'default' }: { story: Story; mode?: 'guest' |
             'bg-bg-elevated text-text-secondary'
           )}>
             {mode === 'guest' ? <Rocket size={12} /> : mode === 'premium' ? <ShoppingBag size={12} /> : mode === 'locked' ? <Lock size={12} /> : <BookOpen size={12} />}
-            {mode === 'guest' ? 'Start Cast' : mode === 'premium' ? 'Unlock Cast' : mode === 'locked' ? 'Create account' : 'View Cast'}
+            {actionLabel}
           </span>
         </div>
       </div>
@@ -114,6 +122,35 @@ export default function StorePage() {
   const guestIds = new Set(guestCasts.map(story => story.id))
   const accountCasts = stories.filter(story => !guestIds.has(story.id) && story.isFree).slice(0, 6)
   const premiumCasts = stories.filter(story => !story.isFree).slice(0, 6)
+  const visibleStories = [...guestCasts, ...accountCasts, ...premiumCasts]
+  const [signedIn, setSignedIn] = useState(false)
+  const [accessByBook, setAccessByBook] = useState<Record<string, AccessState>>({})
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(Boolean(session?.user))
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (loading || visibleStories.length === 0) return
+    let cancelled = false
+    Promise.all(visibleStories.map(async (story) => {
+      try {
+        const response = await fetch(`/api/books/${story.id}/access`, { cache: 'no-store' })
+        const data = await response.json().catch(() => null) as AccessState | null
+        return [story.id, data ?? { hasAccess: false }] as const
+      } catch {
+        return [story.id, { hasAccess: false }] as const
+      }
+    })).then((entries) => {
+      if (!cancelled) setAccessByBook(Object.fromEntries(entries))
+    })
+    return () => { cancelled = true }
+  }, [loading, stories])
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -177,7 +214,7 @@ export default function StorePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {loading
             ? Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-            : guestCasts.map(story => <StoryCard key={story.id} story={story} mode="guest" />)
+            : guestCasts.map(story => <StoryCard key={story.id} story={story} mode="guest" signedIn={signedIn} access={accessByBook[story.id]} />)
           }
         </div>
 
@@ -202,7 +239,7 @@ export default function StorePage() {
                   <p className="text-text-secondary text-sm mt-0.5">These Casts stay visible, but saving and continuing starts with a free PageCast account.</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {accountCasts.map(story => <StoryCard key={story.id} story={story} mode="locked" />)}
+                  {accountCasts.map(story => <StoryCard key={story.id} story={story} mode="locked" signedIn={signedIn} access={accessByBook[story.id]} />)}
                 </div>
               </section>
             )}
@@ -214,7 +251,7 @@ export default function StorePage() {
               </div>
               {premiumCasts.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {premiumCasts.map(story => <StoryCard key={story.id} story={story} mode="premium" />)}
+                  {premiumCasts.map(story => <StoryCard key={story.id} story={story} mode="premium" signedIn={signedIn} access={accessByBook[story.id]} />)}
                 </div>
               ) : (
                 <div className="card p-5 flex items-center gap-3">
