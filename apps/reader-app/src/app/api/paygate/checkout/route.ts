@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic'
 
 const PAGECAST_APP_ID = 'pagecast'
 const CAST_PASS_PLAN_KEY = 'cast_pass_monthly'
-const RETURN_CONTEXT = 'billing'
+const CAST_PASS_RETURN_CONTEXT = 'billing'
+const SINGLE_CAST_RETURN_CONTEXT = 'cast'
 const ITEM_REF_RE = /^book:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type CheckoutRequestBody = {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
             planKey: CAST_PASS_PLAN_KEY,
             idempotencyKey: `pagecast-cast-pass-${user.id}-${crypto.randomUUID()}`,
           }),
-      returnContext: RETURN_CONTEXT,
+      returnContext: itemRef ? SINGLE_CAST_RETURN_CONTEXT : CAST_PASS_RETURN_CONTEXT,
       environment: getPaymentHubEnvironment(),
     })
 

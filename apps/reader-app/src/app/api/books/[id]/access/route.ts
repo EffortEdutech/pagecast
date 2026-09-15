@@ -18,9 +18,10 @@ function hasActiveCastPass(state: Awaited<ReturnType<typeof readPayGateState>>):
 
 function scopeMatchesBook(scope: unknown, bookId: string): boolean {
   if (!scope || typeof scope !== 'object') return false
-  const typedScope = scope as { bookId?: unknown; bookIds?: unknown }
-  if (typedScope.bookId === bookId) return true
+  const typedScope = scope as { bookId?: unknown; book_id?: unknown; bookIds?: unknown; book_ids?: unknown }
+  if (typedScope.bookId === bookId || typedScope.book_id === bookId) return true
   if (Array.isArray(typedScope.bookIds)) return typedScope.bookIds.includes(bookId)
+  if (Array.isArray(typedScope.book_ids)) return typedScope.book_ids.includes(bookId)
   return false
 }
 
@@ -97,6 +98,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const payGateState = await readPayGateState({ accessToken, appId: PAGECAST_APP_ID, userRef: user.id })
     if (hasActiveCastPass(payGateState)) {
       return NextResponse.json({ hasAccess: true, reason: 'cast_pass' })
+    }
+    if (hasActiveSingleCastItem(payGateState, bookId)) {
+      return NextResponse.json({ hasAccess: true, reason: 'single_cast' })
     }
   } catch (error) {
     if (!(error instanceof PayGateClientError)) {
