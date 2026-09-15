@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getGeminiVoice, getOpenAiVoiceForVoiceId, getPageCastVoice, getVoiceCastingInstruction } from '@/lib/voiceLibrary'
 import { normalizeGeminiTtsModel, type GeminiTtsModel } from '@/lib/tts'
 
+export const runtime = 'nodejs'
+
 // Voice mapping and casting notes live in src/lib/voiceLibrary.ts.
 
 interface ElevenLabsVoice {
@@ -305,6 +307,79 @@ function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitsPerSample =
   return Buffer.concat([header, pcm])
 }
 
+
+function getLocalQwenBaseUrl(): string {
+  return (process.env.LOCAL_QWEN_TTS_URL ?? 'http://127.0.0.1:7860').replace(/\/$/, '')
+}
+
+function resolvePageCastLanguageForQwen(language?: string | null): string {
+  const value = (language ?? '').toLowerCase()
+  if (value.startsWith('zh') || value.includes('chinese')) return 'Chinese'
+  if (value.startsWith('ja') || value.includes('japanese')) return 'Japanese'
+  if (value.startsWith('ko') || value.includes('korean')) return 'Korean'
+  if (value.startsWith('fr') || value.includes('french')) return 'French'
+  if (value.startsWith('de') || value.includes('german')) return 'German'
+  if (value.startsWith('es') || value.includes('spanish')) return 'Spanish'
+  if (value.startsWith('pt') || value.includes('portuguese')) return 'Portuguese'
+  if (value.startsWith('ru') || value.includes('russian')) return 'Russian'
+  return 'English'
+}
+
+function buildLocalQwenDescription(opts: {
+  voiceId?: string
+  blockType?: string
+  emotion?: string
+  style?: string
+  voiceLabel?: string
+  performanceTag?: string
+  characterName?: string
+  speed?: number
+}): string {
+  return buildStorytellingInstructions(opts)
+}
+
+async function fetchLocalQwenTts(opts: {
+  text: string
+  voiceId: string
+  speed: number
+  blockType?: string
+  emotion?: string
+  style?: string
+  voiceLabel?: string
+  performanceTag?: string
+  characterName?: string
+}): Promise<Response> {
+  const baseUrl = getLocalQwenBaseUrl()
+  const modelSize = process.env.LOCAL_QWEN_MODEL_SIZE === '1.7B' ? '1.7B' : '0.6B'
+  const res = await fetch(`${baseUrl}/pagecast/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: opts.text.trim(),
+      voiceId: opts.voiceId,
+      language: resolvePageCastLanguageForQwen(process.env.PAGECAST_DEFAULT_LANGUAGE),
+      modelSize,
+      voiceDescription: buildLocalQwenDescription(opts),
+      temperature: 0.8,
+      topP: 0.95,
+      repetitionPenalty: 1.15,
+      maxNewTokens: 2048,
+    }),
+  })
+
+  if (!res.ok) {
+    const raw = await res.text().catch(() => '')
+    let detail = raw || `Local Qwen error ${res.status}`
+    try {
+      const parsed = JSON.parse(raw)
+      detail = parsed?.detail ?? parsed?.error ?? detail
+    } catch {}
+    throw new Error(detail)
+  }
+
+  return res
+}
+
 function getServerProviderApiKey(provider: string): string {
   if (provider === 'gemini') {
     return (
@@ -360,8 +435,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No text provided' }, { status: 400 })
   }
   const providerApiKey = apiKey?.trim() || getServerProviderApiKey(provider)
-  if (!providerApiKey) {
+  if (provider !== 'local-qwen' && !providerApiKey) {
     return NextResponse.json({ error: 'No API key provided — add your key in Settings.' }, { status: 400 })
+  }
+
+  if (provider === 'local-qwen') {
+    let qwenRes: Response
+    try {
+      qwenRes = await fetchLocalQwenTts({ text, voiceId, speed, blockType, emotion, style, voiceLabel, performanceTag, characterName })
+    } catch (e: any) {
+      return NextResponse.json({ error: `Local Qwen request failed: ${e.message}` }, { status: 502 })
+    }
+
+    const audioBuffer = await qwenRes.arrayBuffer()
+
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.rpc('increment_tts_chars', {
+          p_user_id: user.id,
+          p_chars:   text.trim().length,
+        })
+      }
+    } catch { /* non-blocking */ }
+
+    return new NextResponse(audioBuffer, {
+      headers: {
+        'Content-Type':   qwenRes.headers.get('Content-Type') ?? 'audio/wav',
+        'Content-Length': String(audioBuffer.byteLength),
+        'Cache-Control':  'no-store',
+        'X-Chars-Used':   String(text.trim().length),
+        'X-TTS-Provider': 'Local Qwen',
+        'X-TTS-Voice':    qwenRes.headers.get('X-TTS-Voice') ?? voiceLabel ?? voiceId,
+      },
+    })
   }
 
   // ── OpenAI TTS ──────────────────────────────────────────────────────────────

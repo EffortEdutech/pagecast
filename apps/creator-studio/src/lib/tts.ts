@@ -14,7 +14,7 @@ export const TTS_ELEVENLABS_KEY_LS = 'pagecast_tts_elevenlabs_api_key'
 export const TTS_GEMINI_KEY_LS = 'pagecast_tts_gemini_api_key'
 export const TTS_GEMINI_MODEL_LS = 'pagecast_tts_gemini_model'
 
-export type TtsProvider = 'openai' | 'elevenlabs' | 'gemini'
+export type TtsProvider = 'openai' | 'elevenlabs' | 'gemini' | 'local-qwen'
 export type GeminiTtsModel =
   | 'gemini-2.5-flash-preview-tts'
   | 'gemini-3.1-flash-tts-preview'
@@ -38,10 +38,10 @@ export const GEMINI_TTS_MODELS: Array<{ id: GeminiTtsModel; label: string; descr
   },
 ]
 
-// ── Settings ────────────────────────────────────────────────────────────────
+// ── Settings ────────────────────────────────────────────────────────────────â”€
 
 function normalizeProvider(provider?: string | null): TtsProvider {
-  return provider === 'elevenlabs' || provider === 'gemini' ? provider : 'openai'
+  return provider === 'elevenlabs' || provider === 'gemini' || provider === 'local-qwen' ? provider : 'openai'
 }
 
 export function normalizeGeminiTtsModel(model?: string | null): GeminiTtsModel {
@@ -55,13 +55,14 @@ export function getTtsApiKey(provider: string): string {
   const normalized = normalizeProvider(provider)
   if (normalized === 'elevenlabs') return localStorage.getItem(TTS_ELEVENLABS_KEY_LS) ?? ''
   if (normalized === 'gemini') return localStorage.getItem(TTS_GEMINI_KEY_LS) ?? ''
+  if (normalized === 'local-qwen') return ''
   return localStorage.getItem(TTS_OPENAI_KEY_LS) ?? localStorage.getItem(TTS_KEY_LS) ?? ''
 }
 
 export function getTtsSettings(): {
   apiKey: string
   provider: TtsProvider
-  keys: Record<TtsProvider, string>
+  keys: Record<Exclude<TtsProvider, 'local-qwen'>, string>
   geminiModel: GeminiTtsModel
 } {
   if (typeof window === 'undefined') {
@@ -81,7 +82,7 @@ export function getTtsSettings(): {
     gemini: localStorage.getItem(TTS_GEMINI_KEY_LS) ?? (provider === 'gemini' ? legacyKey : ''),
   }
   return {
-    apiKey: keys[provider],
+    apiKey: provider === 'local-qwen' ? '' : keys[provider],
     provider,
     keys,
     geminiModel,
@@ -132,11 +133,13 @@ export async function generateBlockTts(opts: TtsGenerateOpts): Promise<TtsResult
     ? 'elevenlabs'
     : opts.voiceId.startsWith('gemini:')
       ? 'gemini'
-      : settings.provider
+      : opts.voiceId.startsWith('qwen:')
+        ? 'local-qwen'
+        : settings.provider
   const apiKey = getTtsApiKey(provider)
   const ttsText = formatTextForTts(opts.text)
 
-  if (!apiKey && provider !== 'gemini') {
+  if (!apiKey && provider !== 'gemini' && provider !== 'local-qwen') {
     return {
       url:   null,
       error: 'No API key — add your key in Settings → AI Voice (TTS).',

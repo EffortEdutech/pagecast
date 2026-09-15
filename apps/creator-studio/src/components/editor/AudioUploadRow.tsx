@@ -54,7 +54,8 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
-    setHasTtsKey(!!getTtsSettings().apiKey)
+    const settings = getTtsSettings()
+    setHasTtsKey(settings.provider === 'local-qwen' || !!settings.apiKey)
   }, [])
 
   useEffect(() => { return () => { audioRef.current?.pause() } }, [block.audioUrl])
@@ -92,7 +93,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
 
     setGenerating(true); setActionError(null)
     const fresh = getTtsSettings()
-    setHasTtsKey(!!fresh.apiKey)
+    setHasTtsKey(fresh.provider === 'local-qwen' || !!fresh.apiKey)
 
     const effectiveVoiceId    = voiceId    ?? 'ai_female_soft'
     const effectiveOpenAi     = getOpenAiVoiceForVoiceId(effectiveVoiceId)
@@ -156,8 +157,11 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
   const selectedProvider = getTtsSettings().provider
   const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') || selectedProvider === 'elevenlabs'
   const isGeminiVoice = voiceId?.startsWith('gemini:') || selectedProvider === 'gemini'
+  const isLocalQwenVoice = voiceId?.startsWith('qwen:') || selectedProvider === 'local-qwen'
   const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
-  const providerBadge = isGeminiVoice
+  const providerBadge = isLocalQwenVoice
+    ? (voiceId?.startsWith('qwen:') ? 'Local Qwen exact voice' : 'Local Qwen')
+    : isGeminiVoice
     ? (voiceId?.startsWith('gemini:') ? 'Google Gemini exact voice' : 'Google Gemini')
     : isElevenLabsVoice
     ? (voiceId?.startsWith('elevenlabs:') ? 'ElevenLabs v3 exact voice' : 'ElevenLabs v3')
@@ -196,7 +200,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
             disabled={!canGenerate}
             title={
               !hasTtsKey
-                ? 'Add your OpenAI / ElevenLabs key in Settings'
+                ? selectedProvider === 'local-qwen' ? 'Start Local Qwen Voice Studio first' : 'Add your OpenAI / ElevenLabs / Gemini key in Settings'
                 : !blockText.trim()
                   ? 'Add text first'
                   : `Generate AI voice · ${providerBadge}${voiceLabel ? ` · ${voiceLabel}` : ''}`

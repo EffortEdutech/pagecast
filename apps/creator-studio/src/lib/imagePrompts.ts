@@ -44,19 +44,24 @@ export function getStyleAnchor(genre?: string): string {
  * what gets fed back into Gemini as the reference for every scene the
  * character appears in, so consistency comes from having several angles
  * locked in up front rather than a single static portrait.
- * Meant to be user-editable before generation, since the data model has no
- * physical-description field to draw from.
+ * If character.portraitPrompt is set (e.g. imported from a ::CAST line's
+ * appearance= field, or the Voices page), it's used as the locked appearance
+ * directly. Otherwise falls back to asking the model to design one — still
+ * user-editable before generation either way.
  */
 export function draftCharacterPortraitPrompt(character: Character, story: Story): string {
   const styleAnchor = getStyleAnchor(story.genre)
   const roleHint = character.role === 'narrator'
     ? 'a warm, approachable storyteller presence'
     : 'a character fitting this story\'s world and tone'
+  const appearanceLine = character.portraitPrompt
+    ? `Locked appearance: ${character.portraitPrompt}.`
+    : `Design a distinct, memorable, age-appropriate appearance (face, hair, clothing) that suits "${story.title}".`
   return [
     `Character model sheet / turnaround reference for ${character.displayName}, ${roleHint}.`,
     `Show the SAME character three times side by side on one plain white background: front view, three-quarter view, and back view, each in a neutral standing pose with arms relaxed.`,
     `Identical face, hair, clothing, colours, and proportions across all three views — same character, camera angle is the only difference. Even, flat studio lighting, no shadows or mood lighting.`,
-    `Design a distinct, memorable, age-appropriate appearance (face, hair, clothing) that suits "${story.title}".`,
+    appearanceLine,
     ANATOMY_ANCHOR + ',',
     styleAnchor + ', character design sheet, reference turnaround, orthographic views, no text labels, no captions.',
   ].join(' ')
@@ -101,7 +106,9 @@ export function buildScenePrompt(scene: Scene, chapter: Chapter, involvedCharact
     .slice(0, 400)
 
   const characterLine = involvedCharacters.length
-    ? `Characters present, matching their established reference appearance: ${involvedCharacters.map(c => c.displayName).join(', ')}.`
+    ? `Characters present, matching each character's established reference appearance: ${involvedCharacters.map(c =>
+        c.portraitPrompt ? `${c.displayName} (${c.portraitPrompt})` : c.displayName
+      ).join('; ')}.`
     : ''
 
   return [

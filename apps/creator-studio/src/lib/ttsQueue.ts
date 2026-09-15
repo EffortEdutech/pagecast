@@ -49,6 +49,7 @@ export function resolveEffectiveCharacter(block: StoryBlock, characters: Charact
 function resolveProvider(voiceId: string): TtsProvider {
   if (voiceId.startsWith('elevenlabs:')) return 'elevenlabs'
   if (voiceId.startsWith('gemini:')) return 'gemini'
+  if (voiceId.startsWith('qwen:')) return 'local-qwen'
   return getTtsSettings().provider
 }
 
@@ -153,7 +154,9 @@ export async function runTtsPreflight(story: Story): Promise<PreflightResult> {
     const key = getTtsApiKey(provider)
     const count = jobs.filter(j => j.provider === provider).length
     if (!key) {
-      if (provider === 'gemini') {
+      if (provider === 'local-qwen') {
+        warnings.push(`Local Qwen selected for ${count} block${count === 1 ? '' : 's'} — make sure Qwen Voice Studio is running at http://127.0.0.1:7860.`)
+      } else if (provider === 'gemini') {
         warnings.push(`No Gemini API key saved in Settings — ${count} block${count === 1 ? '' : 's'} will only work if a server-side Gemini key is configured.`)
       } else {
         blockers.push(`No ${provider === 'openai' ? 'OpenAI' : 'ElevenLabs'} API key saved in Settings → AI Voice (TTS) — required for ${count} block${count === 1 ? '' : 's'}.`)

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { readPayGateState, PayGateClientError } from '@/lib/paymentHub/client'
 
@@ -7,11 +7,28 @@ export const dynamic = 'force-dynamic'
 const PAGECAST_APP_ID = 'pagecast'
 const CAST_PASS_PLAN_KEY = 'cast_pass_monthly'
 const CAST_PASS_ENTITLEMENT_KEYS = new Set(['plan:cast_pass_monthly', 'pagecast.cast_pass', 'pagecast.premium_casts'])
+const SINGLE_CAST_ENTITLEMENT_KEY = 'pagecast.single_cast_unlock'
 
 function hasActiveCastPass(state: Awaited<ReturnType<typeof readPayGateState>>): boolean {
   if (state.subscription.state === 'active' && state.subscription.planKey === CAST_PASS_PLAN_KEY) return true
   return state.entitlements.entitlements.some((entitlement) => (
     CAST_PASS_ENTITLEMENT_KEYS.has(entitlement.key) && entitlement.state === 'active'
+  ))
+}
+
+function scopeMatchesBook(scope: unknown, bookId: string): boolean {
+  if (!scope || typeof scope !== 'object') return false
+  const typedScope = scope as { bookId?: unknown; bookIds?: unknown }
+  if (typedScope.bookId === bookId) return true
+  if (Array.isArray(typedScope.bookIds)) return typedScope.bookIds.includes(bookId)
+  return false
+}
+
+function hasActiveSingleCastItem(state: Awaited<ReturnType<typeof readPayGateState>>, bookId: string): boolean {
+  return state.entitlements.entitlements.some((entitlement) => (
+    entitlement.key === SINGLE_CAST_ENTITLEMENT_KEY &&
+    entitlement.state === 'active' &&
+    scopeMatchesBook(entitlement.scope, bookId)
   ))
 }
 
@@ -83,7 +100,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     }
   } catch (error) {
     if (!(error instanceof PayGateClientError)) {
-      console.error('PayGate Cast Pass access check failed', error)
+      console.error('PayGate access check failed', error)
     }
     // Fail closed for premium access. Redirect success pages and provider errors never unlock content.
   }

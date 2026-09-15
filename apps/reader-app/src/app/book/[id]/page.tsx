@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -101,33 +101,34 @@ export default function BookPage() {
   const owned = serverAccess === true || (!isSupabaseCast && (story.isFree || (hydrated && isOwned(story.id))))
   const isGuestAccess = accessReason === 'guest' || story.guestAccess
   const isCastPassAccess = accessReason === 'cast_pass'
+  const isSingleCastAccess = accessReason === 'single_cast'
 
   const handleBuy = async () => {
     if (!story) return
+    if (story.isFree) {
+      addToLibrary(story.id)
+      router.push(`/reader/${story.id}`)
+      return
+    }
+
     setBuying(true)
     setBuyError(null)
     try {
-      const res  = await fetch('/api/stripe/checkout', {
+      const res  = await fetch('/api/paygate/checkout', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ bookId: story.id }),
+        body:    JSON.stringify({ item_ref: `book:${story.id}` }),
       })
       const data = await res.json()
 
       if (!res.ok) {
         if (res.status === 401) { router.push(`/login?next=/book/${story.id}`); return }
-        setBuyError(data.error ?? 'Something went wrong.')
+        setBuyError(data.error ?? 'Single Cast checkout is unavailable right now.')
         return
       }
 
-      if (data.alreadyOwned || data.free) {
-        addToLibrary(story.id)
-        router.push(`/reader/${story.id}`)
-        return
-      }
-
-      if (data.url) {
-        window.location.href = data.url
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl
       }
     } catch {
       setBuyError('Could not connect to checkout. Try again.')
@@ -180,7 +181,7 @@ export default function BookPage() {
                   </button>
                 ) : owned ? (
                   <Link href={`/reader/${story.id}`} className="btn-primary text-base px-6 py-3 shadow-accent">
-                    <Play size={18} className="fill-white" /> {isGuestAccess ? 'Start Guest Cast' : isCastPassAccess ? 'Read with Cast Pass' : 'Resume Cast'}
+                    <Play size={18} className="fill-white" /> {isGuestAccess ? 'Start Guest Cast' : isCastPassAccess ? 'Read with Cast Pass' : isSingleCastAccess ? 'Read Single Cast' : 'Resume Cast'}
                   </Link>
                 ) : (
                   <>
@@ -244,7 +245,7 @@ export default function BookPage() {
               {checkingAccess
                 ? <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking access...</span>
                 : owned
-                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> {isGuestAccess ? 'Guest access is open - create an account anytime to save progress' : isCastPassAccess ? 'Unlocked by Cast Pass - enjoy the full Journey' : 'This Cast is unlocked - enjoy the full Journey'}</span>
+                ? <span className="flex items-center justify-center gap-2"><Check size={14} /> {isGuestAccess ? 'Guest access is open - create an account anytime to save progress' : isCastPassAccess ? 'Unlocked by Cast Pass - enjoy the full Journey' : isSingleCastAccess ? 'Unlocked as your Single Cast - enjoy the full Journey' : 'This Cast is unlocked - enjoy the full Journey'}</span>
                 : <span className="flex items-center justify-center gap-2"><Lock size={13} /> Unlock this Cast to continue the Journey</span>
               }
             </div>
@@ -320,7 +321,7 @@ export default function BookPage() {
               {checkingAccess
                 ? <span className="text-text-muted text-base flex items-center justify-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Checking</span>
                 : owned
-                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> {isGuestAccess ? 'Guest Cast' : isCastPassAccess ? 'Cast Pass' : 'In My Casts'}</span>
+                ? <span className="text-success text-base flex items-center justify-center gap-1.5"><Check size={14} /> {isGuestAccess ? 'Guest Cast' : isCastPassAccess ? 'Cast Pass' : isSingleCastAccess ? 'Single Cast' : 'In My Casts'}</span>
                 : story.isFree ? 'Starter Cast' : formatUsd(story.price)
               }
             </div>
@@ -330,7 +331,7 @@ export default function BookPage() {
               </button>
             ) : owned ? (
               <Link href={`/reader/${story.id}`} className="btn-primary w-full justify-center">
-                <Play size={14} className="fill-white" /> {isCastPassAccess ? 'Open with Cast Pass' : 'Open Cast'}
+                <Play size={14} className="fill-white" /> {isCastPassAccess ? 'Open with Cast Pass' : isSingleCastAccess ? 'Open Single Cast' : 'Open Cast'}
               </Link>
             ) : (
               <button onClick={handleBuy} className="btn-primary w-full justify-center">

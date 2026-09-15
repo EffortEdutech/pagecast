@@ -68,6 +68,10 @@ export async function createCharacter(
       voice_id:    char.voiceId,
       voice_label: char.voiceLabel,
       sort_order:  sortOrder,
+      // Was previously dropped on insert — only updateCharacter() persisted it, so a
+      // portraitPrompt set at creation time (e.g. from a ::CAST appearance= import)
+      // was silently discarded. Include it here so import-time values actually land.
+      portrait_prompt: char.portraitPrompt ?? null,
     })
     .select()
     .single()

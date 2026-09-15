@@ -1,10 +1,11 @@
-﻿export type PayGateEnvironment = 'test' | 'live'
+export type PayGateEnvironment = 'test' | 'live'
 
 export interface CreateCheckoutInput {
   readonly accessToken: string
   readonly appId: string
   readonly userRef: string
-  readonly planKey: string
+  readonly planKey?: string
+  readonly itemRef?: string
   readonly returnContext: string
   readonly environment: PayGateEnvironment
   readonly idempotencyKey: string
@@ -30,6 +31,7 @@ export interface PayGateEntitlement {
   readonly key: string
   readonly state: 'active' | 'revoked' | string
   readonly effective_until?: string
+  readonly scope?: { readonly bookId?: string; readonly bundleId?: string; readonly bookIds?: readonly string[] } | Record<string, unknown>
 }
 
 export interface PayGateEntitlementState {
@@ -81,6 +83,13 @@ async function readPayGateJson<T>(response: Response, fallbackCode: string, fall
 }
 
 export async function createPayGateCheckout(input: CreateCheckoutInput): Promise<PayGateCheckoutSession> {
+  if (!input.planKey && !input.itemRef) {
+    throw new PayGateClientError(400, 'PAYGATE_CHECKOUT_TARGET_REQUIRED', 'PayGate checkout requires a plan or item reference')
+  }
+  if (input.planKey && input.itemRef) {
+    throw new PayGateClientError(400, 'PAYGATE_CHECKOUT_TARGET_CONFLICT', 'PayGate checkout accepts either a plan or item reference, not both')
+  }
+
   const response = await fetch(`${getPaymentHubBaseUrl()}/v1/checkout/sessions`, {
     method: 'POST',
     headers: {
@@ -91,7 +100,8 @@ export async function createPayGateCheckout(input: CreateCheckoutInput): Promise
     body: JSON.stringify({
       app_id: input.appId,
       user_ref: input.userRef,
-      plan_key: input.planKey,
+      ...(input.planKey ? { plan_key: input.planKey } : {}),
+      ...(input.itemRef ? { item_ref: input.itemRef } : {}),
       return_context: input.returnContext,
       environment: input.environment,
     }),

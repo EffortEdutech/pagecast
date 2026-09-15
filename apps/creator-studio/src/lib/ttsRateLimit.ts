@@ -33,6 +33,7 @@ export const DEFAULT_PROVIDER_LIMITS: Record<TtsProvider, ProviderLimit> = {
   elevenlabs: { concurrency: 2, minIntervalMs: 1200 },
   gemini:     { concurrency: 2, minIntervalMs: 7500 }, // ~8 RPM
   openai:     { concurrency: 5, minIntervalMs: 1500 }, // ~40 RPM
+  'local-qwen': { concurrency: 1, minIntervalMs: 500 }, // local GPU: one generation at a time
 }
 
 const OVERRIDES_LS = 'pagecast_tts_rate_limit_overrides'
@@ -47,6 +48,7 @@ export function getProviderLimits(): Record<TtsProvider, ProviderLimit> {
       elevenlabs: { ...DEFAULT_PROVIDER_LIMITS.elevenlabs, ...parsed.elevenlabs },
       gemini:     { ...DEFAULT_PROVIDER_LIMITS.gemini,     ...parsed.gemini },
       openai:     { ...DEFAULT_PROVIDER_LIMITS.openai,     ...parsed.openai },
+      'local-qwen': { ...DEFAULT_PROVIDER_LIMITS['local-qwen'], ...parsed['local-qwen'] },
     }
   } catch {
     return DEFAULT_PROVIDER_LIMITS
@@ -100,6 +102,7 @@ export function createRateLimiters(): Record<TtsProvider, ProviderRateLimiter> {
     elevenlabs: new ProviderRateLimiter(limits.elevenlabs),
     gemini:     new ProviderRateLimiter(limits.gemini),
     openai:     new ProviderRateLimiter(limits.openai),
+    'local-qwen': new ProviderRateLimiter(limits['local-qwen']),
   }
 }
 

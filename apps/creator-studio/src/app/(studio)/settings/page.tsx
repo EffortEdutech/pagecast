@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('en')
   const [price,    setPrice]    = useState('4.99')
   const [ttsKey,   setTtsKey]   = useState('')
-  const [provider, setProvider] = useState<'openai' | 'elevenlabs' | 'gemini'>('openai')
+  const [provider, setProvider] = useState<'openai' | 'elevenlabs' | 'gemini' | 'local-qwen'>('openai')
   const [geminiModel, setGeminiModel] = useState(GEMINI_TTS_MODELS[0].id)
   const [saving,   setSaving]   = useState(false)
   const [saved,    setSaved]    = useState(false)
@@ -250,16 +250,18 @@ export default function SettingsPage() {
             <h2 className="text-text-primary font-semibold">AI Voice (TTS) Provider</h2>
           </div>
           <p className="text-text-secondary text-sm">
-            Connect your own TTS API key. PageCast supports OpenAI and ElevenLabs. Your key is stored locally in your browser only.
+            Connect your own TTS API key. PageCast supports OpenAI, ElevenLabs, Gemini, and your free Local Qwen Voice Studio. Cloud keys are stored locally in your browser only.
           </p>
           <div>
             <label className="label">Provider</label>
-            <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value as 'openai' | 'elevenlabs' | 'gemini')}>
+            <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value as 'openai' | 'elevenlabs' | 'gemini' | 'local-qwen')}>
               <option value="openai">OpenAI TTS</option>
               <option value="elevenlabs">ElevenLabs v3</option>
               <option value="gemini">Google / Gemini TTS</option>
+              <option value="local-qwen">Local Qwen Voice Studio</option>
             </select>
           </div>
+          {provider !== 'local-qwen' && (
           <div>
             <label className="label">API Key</label>
             <input
@@ -276,6 +278,12 @@ export default function SettingsPage() {
               onChange={e => setTtsKey(e.target.value)}
             />
           </div>
+          )}
+          {provider === 'local-qwen' && (
+            <div className="rounded-lg border border-gold/30 bg-gold/10 p-3 text-xs text-text-secondary">
+              Local Qwen uses http://127.0.0.1:7860 by default and does not need a cloud API key. Start Qwen Voice Studio before generating audio.
+            </div>
+          )}
           {provider === 'gemini' && (
             <div>
               <label className="label">Gemini TTS Model</label>
@@ -296,7 +304,7 @@ export default function SettingsPage() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <Sparkles size={14} className="text-accent shrink-0 mt-0.5" />
             <p className="text-text-secondary text-xs leading-relaxed">
-              Your API key is sent directly from your browser to the TTS provider via a server-side proxy route. It is never stored in the database.
+              Cloud API keys are sent through a server-side proxy route and are never stored in the database. Local Qwen stays on this machine.
             </p>
           </div>
 

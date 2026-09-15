@@ -50,6 +50,11 @@ export async function autoCreateMissingCast(
       voiceId:       guessVoiceId(member.voiceDescriptor, member.role) ?? 'ai_female_soft',
       voiceLabel:    member.voiceDescriptor ?? '',
       defaultVolume: 1,
+      // Carries the CAST line's appearance= field (e.g. from comic-castlet-writer's
+      // Character Lock Sheet) into the existing portraitPrompt field, so the image
+      // generation prompt builders in lib/imagePrompts.ts have a locked description
+      // to draw from instead of inventing one per generation.
+      portraitPrompt: member.appearance || undefined,
     }, sortOrder)
     sortOrder++
     if (char) created.push(char)

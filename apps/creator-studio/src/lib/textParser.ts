@@ -42,6 +42,13 @@ export interface ParsedCastMember {
   voiceDescriptor?: string
   /** Raw color word from the CAST line, e.g. "amber" */
   colorWord?: string
+  /** Locked visual/physical description from the CAST line's appearance= field, e.g.
+   *  "late 20s, damp collar, closed umbrella gripped white-knuckled, short dark hair".
+   *  Free text, written by a human or a writing skill (e.g. comic-castlet-writer's
+   *  Character Lock Sheet) — feeds Character.portraitPrompt on import so the image
+   *  generation prompt builders (lib/imagePrompts.ts) have a concrete description to
+   *  draw from instead of inventing one. */
+  appearance?: string
 }
 
 export interface ParsedBookMeta {
@@ -285,7 +292,7 @@ function titleFromHash(line: string): string {
   return line.replace(/^#{1,6}\s*/, '').trim()
 }
 
-/** Parses one ::CAST line: "Mak Cempaka: mak_cempaka | role=supporting | voice=... | color=gold" */
+/** Parses one ::CAST line: "Mak Cempaka: mak_cempaka | role=supporting | voice=... | color=gold | appearance=..." */
 function parseCastLine(line: string): ParsedCastMember | null {
   const m = line.match(/^([^:]+):\s*([^|]+)(?:\|(.*))?$/)
   if (!m) return null
@@ -299,6 +306,7 @@ function parseCastLine(line: string): ParsedCastMember | null {
     role: optionValue(options, 'role') ?? 'character',
     voiceDescriptor: optionValue(options, 'voice'),
     colorWord: optionValue(options, 'color'),
+    appearance: optionValue(options, 'appearance'),
   }
 }
 

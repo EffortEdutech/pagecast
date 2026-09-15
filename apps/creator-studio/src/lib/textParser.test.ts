@@ -96,6 +96,26 @@ describe('parsePageCast cast/meta capture', () => {
     const result = parseText(oneFile, 'pagecast')
     expect(result.chapters[0].scenes[0].blocks[0]).toMatchObject({ type: 'dialogue', characterId: 'nino' })
   })
+
+  it('captures an appearance= field on a ::CAST line for locked character descriptions', () => {
+    const withAppearance = [
+      '::PAGECAST_BOOK', 'Title: Test Series', '::', '',
+      '::CAST',
+      'Nino: nino | role=main_character | voice=young_boy_confident | color=teal | appearance=8 years old, red rain boots, gap-toothed grin',
+      '::', '',
+      '# Castlet 1', '## Scene 1',
+      '[NARRATION]', 'Nino ran outside.',
+    ].join('\n')
+    const result = parseText(withAppearance, 'pagecast')
+    expect(result.cast).toMatchObject([
+      { name: 'Nino', slug: 'nino', appearance: '8 years old, red rain boots, gap-toothed grin' },
+    ])
+  })
+
+  it('leaves appearance undefined when the CAST line has no appearance= field', () => {
+    const result = parseText(oneFile, 'pagecast')
+    expect(result.cast?.[0].appearance).toBeUndefined()
+  })
 })
 
 describe('concatenatePageCastFiles', () => {
