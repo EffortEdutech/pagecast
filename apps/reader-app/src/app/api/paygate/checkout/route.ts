@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 const PAGECAST_APP_ID = 'pagecast'
 const CAST_PASS_PLAN_KEY = 'cast_pass_monthly'
 const RETURN_CONTEXT = 'billing'
-const ITEM_REF_RE = /^book:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const ITEM_REF_RE = /^book:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type CheckoutRequestBody = {
   item_ref?: unknown
