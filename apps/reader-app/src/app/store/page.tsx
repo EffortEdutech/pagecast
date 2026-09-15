@@ -21,7 +21,8 @@ function StoryCard({ story, mode = 'default', signedIn, access }: { story: Story
   const isOwnedRaw = useReaderStore(s => s.isOwned(story.id))
   const isOwned    = mode !== 'guest' && hydrated && isOwnedRaw
   const hasServerAccess = Boolean(access?.hasAccess)
-  const unlocked = isOwned || hasServerAccess
+  // Premium access must be server-authoritative. Local reader-store ownership can be stale across browser users.
+  const unlocked = hasServerAccess || (mode !== 'premium' && isOwned)
   const isGuestAccess = access?.reason === 'guest' || mode === 'guest'
   const isFreeAccountCast = mode === 'locked'
   const priceLabel = unlocked
