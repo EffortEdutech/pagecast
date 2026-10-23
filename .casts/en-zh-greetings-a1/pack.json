@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "0.1",
+  "type": "language_pack",
+  "slug": "en-zh-greetings-a1",
+  "title": "First Chinese Greetings",
+  "l1": "en",
+  "l2": "zh",
+  "level": "A1",
+  "lessonGoal": "Greet someone, ask their name, and respond politely in Mandarin Chinese.",
+  "practiceMode": "pause_and_speak",
+  "speechRule": "one_language_per_block",
+  "ttsRouting": "block_language_then_language_cast_voice",
+  "narrators": { "en": "narrator_en", "zh": "narrator_zh" },
+  "chapters": [
+    { "id": "welcome", "file": "script/01_welcome_pagecast.txt" },
+    { "id": "core-phrases", "file": "script/02_core_phrases_pagecast.txt" },
+    { "id": "guided-dialogue", "file": "script/03_guided_dialogue_pagecast.txt" },
+    { "id": "review", "file": "script/04_review_pagecast.txt" }
+  ]
+}

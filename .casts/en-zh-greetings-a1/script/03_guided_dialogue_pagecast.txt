@@ -1,0 +1,35 @@
+::PAGECAST_BOOK
+Title: First Chinese Greetings — Guided Dialogue
+ContentType: language_pack
+SourceLanguage: en
+TargetLanguage: zh
+Level: A1
+PracticeMode: pause_and_speak
+::
+::CAST
+Narrator English: narrator_en | role=narrator | language=en | voice=calm_female
+Narrator Chinese: narrator_zh | role=narrator | language=zh | voice=calm_female
+::
+# CHAPTER 3: Guided Dialogue
+## SCENE 1: Meeting Someone
+[NARRATION: Narrator English | language=en | learningRole=instruction | phraseId=dialogue-1]
+Listen to the short conversation.
+[NARRATION: Narrator Chinese | language=zh | learningRole=model | phraseId=dialogue-2]
+你好!
+[NARRATION: Narrator English | language=en | learningRole=translation | phraseId=dialogue-2]
+Hello!
+[NARRATION: Narrator Chinese | language=zh | learningRole=model | phraseId=dialogue-3]
+你叫什么名字?
+[NARRATION: Narrator English | language=en | learningRole=translation | phraseId=dialogue-3]
+What's your name?
+[NARRATION: Narrator Chinese | language=zh | learningRole=model | phraseId=dialogue-4]
+我叫安娜。
+[NARRATION: Narrator English | language=en | learningRole=translation | phraseId=dialogue-4]
+My name is Anna.
+[NARRATION: Narrator Chinese | language=zh | learningRole=model | phraseId=dialogue-5]
+很高兴认识你。
+[NARRATION: Narrator English | language=en | learningRole=translation | phraseId=dialogue-5]
+Nice to meet you.
+[NARRATION: Narrator English | language=en | learningRole=prompt | phraseId=dialogue-practice | practice=learner_turn]
+Now greet your partner and say your name in Chinese.
+[PAUSE: 5s]
