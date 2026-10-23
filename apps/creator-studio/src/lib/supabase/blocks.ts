@@ -420,5 +420,14 @@ export async function replaceBookContent(bookId: string, story: Pick<Story, 'cha
     }
   }
 
+  const { error: bookError } = await supabase
+    .from('books')
+    .update({ total_chapters: story.chapters.length })
+    .eq('id', bookId)
+  if (bookError) {
+    console.error('replaceBookContent total_chapters update error:', bookError)
+    return false
+  }
+
   return true
 }

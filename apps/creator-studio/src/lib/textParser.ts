@@ -470,9 +470,12 @@ function parsePageCast(text: string): { chapters: ParsedChapter[]; cast: ParsedC
           else if (kv.key === 'genre'        && !meta.genre)           meta.genre = kv.value
           else if (kv.key === 'default narrator' && !meta.defaultNarrator) meta.defaultNarrator = kv.value
           else if (kv.key === 'contenttype'    && !meta.contentType) meta.contentType = kv.value as ParsedBookMeta['contentType']
+          else if (kv.key === 'packtype'       && !meta.contentType && kv.value.toLowerCase() === 'language_learning') meta.contentType = 'language_pack'
           else if (kv.key === 'schemaversion'  && !meta.schemaVersion) meta.schemaVersion = kv.value
           else if (kv.key === 'sourcelanguage' && !meta.sourceLanguage) meta.sourceLanguage = kv.value
           else if (kv.key === 'targetlanguage' && !meta.targetLanguage) meta.targetLanguage = kv.value
+          else if (kv.key === 'l1'              && !meta.sourceLanguage) meta.sourceLanguage = kv.value
+          else if (kv.key === 'l2'              && !meta.targetLanguage) meta.targetLanguage = kv.value
           else if (kv.key === 'level'          && !meta.level) meta.level = kv.value
           else if (kv.key === 'practicemode'   && !meta.practiceMode) meta.practiceMode = kv.value as ParsedBookMeta['practiceMode']
         }
