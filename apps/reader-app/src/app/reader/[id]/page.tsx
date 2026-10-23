@@ -19,6 +19,12 @@ import {
   Trash2, RotateCcw, Timer, Users
 } from 'lucide-react'
 
+function voiceLanguageMatches(voiceLanguage: string, language: string): boolean {
+  const wanted = language.toLowerCase().replace('_', '-')
+  const actual = voiceLanguage.toLowerCase().replace('_', '-')
+  return actual === wanted || actual.startsWith(`${wanted}-`) || wanted.startsWith(`${actual}-`)
+}
+
 // ─── Waveform animation ───────────────────────────────────────────────
 function Waveform() {
   return (
@@ -628,9 +634,14 @@ export default function ReaderPage() {
       : prefs.characterVolume
 
     if (voicesRef.current.length > 0) {
-      const speakable = voicesRef.current.filter(v => v.lang.startsWith('en'))
-      const pool = speakable.length > 0 ? speakable : voicesRef.current
       const blockCharId = (block as any).characterId as string | undefined
+      const blockCharacter = blockCharId ? story.characters.find(c => c.id === blockCharId) : undefined
+      const targetLanguage = (block as any).language ?? blockCharacter?.language ?? story.language ?? 'en'
+      const languagePool = voicesRef.current.filter(v => voiceLanguageMatches(v.lang, targetLanguage))
+      const speakable = languagePool.length > 0
+        ? languagePool
+        : (targetLanguage === 'en' ? voicesRef.current.filter(v => v.lang.startsWith('en')) : [])
+      const pool = speakable.length > 0 ? speakable : voicesRef.current
       if (story.narratorOnlyMode) {
         // Narrator-only: single voice reads everything
         utter.voice  = pool[0]
@@ -914,6 +925,24 @@ export default function ReaderPage() {
               {story.ageRating && (
                 <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/15 text-white/90 backdrop-blur-sm">
                   {story.ageRating}
+                </span>
+              )}
+            </div>
+          )}
+
+          {story.contentType === 'language_pack' && (
+            <div className="flex gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-accent/80 text-white backdrop-blur-sm">
+                Language Pack
+              </span>
+              {story.languages?.source?.code && story.languages?.target?.code && (
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/15 text-white/90 backdrop-blur-sm">
+                  {story.languages.source.code.toUpperCase()} → {story.languages.target.code.toUpperCase()}
+                </span>
+              )}
+              {story.level && (
+                <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-white/15 text-white/90 backdrop-blur-sm">
+                  {story.level}
                 </span>
               )}
             </div>

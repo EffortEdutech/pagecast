@@ -1,0 +1,35 @@
+::PAGECAST_BOOK
+Title: First English Greetings
+ContentType: language_pack
+SchemaVersion: 1.0
+Languages: id,en
+SourceLanguage: id
+TargetLanguage: en
+Level: A1
+PracticeMode: pause_and_speak
+Default Narrator: narrator_id
+::
+
+::CAST
+Narrator Indonesian: narrator_id | role=narrator | language=id | voice=ai_female_warm
+Narrator English: narrator_en | role=narrator | language=en | voice=ai_male_calm
+::
+
+# CHAPTER 1: Welcome
+
+## SCENE 1: Welcome
+Ambience: quiet_room
+Music: warm_acoustic
+Location: Practice room
+Time: Day
+
+[NARRATION: narrator_id | language=id | learningRole=instruction | phraseId=welcome]
+Dengarkan dulu. Anda tidak perlu bercakap lagi.
+
+[NARRATION: narrator_en | language=en | learningRole=instruction | phraseId=welcome]
+Listen first. You do not need to speak yet.
+
+[NARRATION: narrator_id | language=id | learningRole=prompt | practice=speak]
+Sekarang, ulangi kalimat bahasa Inggrisnya.
+
+[PAUSE: 3s | practice=speak]

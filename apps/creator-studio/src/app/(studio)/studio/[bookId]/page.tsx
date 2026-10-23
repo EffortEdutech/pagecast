@@ -370,6 +370,28 @@ export default function StudioPage() {
     let firstChapterId: string | null = null
     let firstSceneId:   string | null = null
 
+    const bookMetadata: Partial<import('@/types').Story> = {
+      ...(parsed.meta?.language ? { language: parsed.meta.language } : {}),
+      ...(parsed.meta?.contentType ? { contentType: parsed.meta.contentType } : {}),
+      ...(parsed.meta?.schemaVersion ? { schemaVersion: parsed.meta.schemaVersion } : {}),
+      ...(parsed.meta?.sourceLanguage || parsed.meta?.targetLanguage ? {
+        languages: {
+          ...(parsed.meta.sourceLanguage ? { source: { code: parsed.meta.sourceLanguage } } : {}),
+          ...(parsed.meta.targetLanguage ? { target: { code: parsed.meta.targetLanguage } } : {}),
+        },
+      } : {}),
+      ...(parsed.meta?.level ? { level: parsed.meta.level } : {}),
+      ...(parsed.meta?.practiceMode ? { practiceMode: parsed.meta.practiceMode } : {}),
+    }
+    if (Object.keys(bookMetadata).length > 0) {
+      const updated = await import('@/lib/supabase/books').then(m => m.updateBook(bookId, bookMetadata))
+      if (updated) {
+        useStudioStore.setState(state => ({
+          stories: state.stories.map(s => s.id === bookId ? { ...s, ...bookMetadata } : s),
+        }))
+      }
+    }
+
     // Auto-create any characters named in a ::CAST block (folder/pagecast imports)
     // that don't already exist on this book, then build the name → characterId map
     // used to resolve dialogue/thought blocks. The pageCast parser stores the

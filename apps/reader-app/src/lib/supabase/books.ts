@@ -34,7 +34,16 @@ function dbContentToBlock(
   audioUrl: string | null
 ): StoryBlock {
   const performanceTag = typeof content.performance_tag === 'string' ? content.performance_tag : undefined
-  const base = { id, type: type as BlockType, audioUrl: audioUrl ?? undefined, performanceTag }
+  const base = {
+    id,
+    type: type as BlockType,
+    audioUrl: audioUrl ?? undefined,
+    performanceTag,
+    language: typeof content.language === 'string' ? content.language : undefined,
+    learning: content.learning && typeof content.learning === 'object'
+      ? content.learning as StoryBlock['learning']
+      : undefined,
+  }
   switch (type) {
     case 'narration':
       return { ...base, type: 'narration', text: String(content.text ?? ''), characterId: content.character_id as string | undefined }
@@ -83,12 +92,15 @@ interface DbBook {
   age_rating: string; status: string; price: number; is_free: boolean
   guest_access: boolean | null; guest_access_rank: number | null; guest_access_label: string | null
   language: string | null
+  content_type: string | null; schema_version: string | null
+  languages: { source?: { code: string; label?: string }; target?: { code: string; label?: string } } | null
+  level: string | null; practice_mode: string | null
   estimated_time: string | null; created_at: string
   narrator_only_mode: boolean | null; narrator_voice_id: string | null
 }
 interface DbCharacter {
   id: string; book_id: string; name: string; role: string | null
-  color: string; voice_label: string | null; voice_id: string | null; sort_order: number
+  color: string; voice_label: string | null; voice_id: string | null; language: string | null; sort_order: number
 }
 interface DbChapter {
   id: string; book_id: string; title: string; sort_order: number
@@ -117,6 +129,7 @@ function dbCharToCharacter(c: DbCharacter): Character {
     displayName: c.name,
     color: c.color,
     voiceId: c.voice_id ?? undefined,
+    language: c.language ?? undefined,
     defaultVolume: 1,
   }
 }
@@ -129,6 +142,11 @@ function dbToStory(book: DbBook, chars: DbCharacter[], chapters: Chapter[] = [])
     coverGradient: book.cover_gradient || pickGradient(book.id),
     coverImage: book.cover_emoji || undefined,
     language: book.language ?? 'en',
+    contentType: book.content_type === 'language_pack' ? 'language_pack' : 'cast',
+    schemaVersion: book.schema_version ?? undefined,
+    languages: book.languages ?? undefined,
+    level: book.level ?? undefined,
+    practiceMode: book.practice_mode === 'pause_and_speak' ? 'pause_and_speak' : undefined,
     price: book.price,
     isFree: book.is_free,
     guestAccess: book.guest_access ?? false,

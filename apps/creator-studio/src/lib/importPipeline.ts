@@ -49,6 +49,7 @@ export async function autoCreateMissingCast(
       voiceSource:   'ai',
       voiceId:       guessVoiceId(member.voiceDescriptor, member.role) ?? 'ai_female_soft',
       voiceLabel:    member.voiceDescriptor ?? '',
+      language:      member.language,
       defaultVolume: 1,
       // Carries the CAST line's appearance= field (e.g. from comic-castlet-writer's
       // Character Lock Sheet) into the existing portraitPrompt field, so the image

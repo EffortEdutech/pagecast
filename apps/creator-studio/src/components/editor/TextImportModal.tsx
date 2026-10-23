@@ -9,7 +9,7 @@ import {
 import { clsx } from 'clsx'
 import {
   parseText, formatParsedImportAsPageCastText, normalizeImportedText,
-  concatenatePageCastFiles, isPageCastFile, hexForColorWord,
+  concatenatePageCastFiles, isPageCastFile, hexForColorWord, validateParsedImport,
   type ParseFormat, type ParsedImport, type ParsedChapter,
 } from '@/lib/textParser'
 import type { StoryBlock } from '@/types'
@@ -373,6 +373,11 @@ export function TextImportModal({
     }
     if (!showDestination) {
       setShowDestination(true)
+      return
+    }
+    const contractErrors = validateParsedImport(parsed)
+    if (contractErrors.length > 0) {
+      setError(`Language Pack validation failed: ${contractErrors.join(' ')}`)
       return
     }
     setImporting(true)

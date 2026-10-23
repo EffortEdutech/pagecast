@@ -7,6 +7,26 @@ export type VoiceSource = 'ai' | 'upload' | 'none'
 export type ReaderMode = 'reading' | 'audiobook' | 'cinematic'
 
 export type StoryStatus = 'draft' | 'published' | 'archived'
+export type ContentType = 'cast' | 'language_pack'
+export type LanguagePackPracticeMode = 'pause_and_speak'
+
+export interface ContentLanguage {
+  code: string
+  label?: string
+}
+
+export interface ContentLanguages {
+  source?: ContentLanguage
+  target?: ContentLanguage
+}
+
+export interface LanguagePackLearning {
+  role?: 'model' | 'translation' | 'instruction' | 'prompt' | 'answer' | 'review'
+  pairedBlockId?: string
+  practice?: 'listen' | 'repeat' | 'speak' | 'learner_turn' | 'recall'
+  register?: 'casual' | 'neutral' | 'polite' | 'formal'
+  phraseId?: string
+}
 
 // ─── Character ────────────────────────────────────────────────────────────────
 
@@ -21,6 +41,7 @@ export interface Character {
   voiceSource: VoiceSource
   voiceId?: string
   voiceLabel?: string
+  language?: string | 'multi'
   defaultVolume: number
   portraitUrl?: string
   portraitStatus?: PortraitStatus
@@ -37,6 +58,8 @@ export interface BaseBlock {
   duration?: number
   voiceSpeed?: number
   performanceTag?: string
+  language?: string
+  learning?: LanguagePackLearning
 }
 
 export interface NarrationBlock extends BaseBlock {
@@ -123,6 +146,11 @@ export interface Story {
   description: string
   coverImage?: string
   language: string
+  contentType?: ContentType
+  schemaVersion?: string
+  languages?: ContentLanguages
+  level?: string
+  practiceMode?: LanguagePackPracticeMode
   status: StoryStatus
   price: number
   isFree?: boolean

@@ -6,6 +6,8 @@ import { uploadBlockAudio, deleteBlockAudio } from '@/lib/supabase/storage'
 import { saveAssetRights, type RightsCategory } from '@/lib/supabase/compliance'
 import { generateBlockTts, getTtsSettings } from '@/lib/tts'
 import { getOpenAiVoiceForVoiceId, getPageCastVoice } from '@/lib/voiceLibrary'
+import { LOCAL_TTS_LABELS, isLocalTtsProvider, providerFromVoiceId } from '@/lib/localTts'
+import { useStudioStore } from '@/store/studioStore'
 import { AssetRightsDeclaration } from './AssetRightsDeclaration'
 import type { StoryBlock } from '@/types'
 
@@ -35,6 +37,12 @@ function getDefaultTtsSpeed(block: StoryBlock, voiceId: string): number {
 export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterName, onUpdate }: AudioUploadRowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef     = useRef<HTMLAudioElement | null>(null)
+  const languageContext = useStudioStore(state => {
+    const story = state.stories.find(s => s.id === bookId)
+    const characterId = 'characterId' in block ? (block as { characterId?: string }).characterId : undefined
+    const character = characterId ? story?.characters.find(c => c.id === characterId) : undefined
+    return { storyLanguage: story?.language, characterLanguage: character?.language }
+  })
 
   const [uploading,    setUploading]    = useState(false)
   const [generating,   setGenerating]   = useState(false)
@@ -55,7 +63,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
     const settings = getTtsSettings()
-    setHasTtsKey(settings.provider === 'local-qwen' || !!settings.apiKey)
+    setHasTtsKey(isLocalTtsProvider(settings.provider) || !!settings.apiKey)
   }, [])
 
   useEffect(() => { return () => { audioRef.current?.pause() } }, [block.audioUrl])
@@ -93,7 +101,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
 
     setGenerating(true); setActionError(null)
     const fresh = getTtsSettings()
-    setHasTtsKey(fresh.provider === 'local-qwen' || !!fresh.apiKey)
+    setHasTtsKey(isLocalTtsProvider(fresh.provider) || !!fresh.apiKey)
 
     const effectiveVoiceId    = voiceId    ?? 'ai_female_soft'
     const effectiveOpenAi     = getOpenAiVoiceForVoiceId(effectiveVoiceId)
@@ -112,6 +120,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
       voiceLabel: effectiveVoiceLabel,
       performanceTag: block.performanceTag,
       characterName,
+      language: block.language ?? languageContext.characterLanguage ?? languageContext.storyLanguage,
     })
 
     if (url) {
@@ -157,10 +166,13 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
   const selectedProvider = getTtsSettings().provider
   const isElevenLabsVoice = voiceId?.startsWith('elevenlabs:') || selectedProvider === 'elevenlabs'
   const isGeminiVoice = voiceId?.startsWith('gemini:') || selectedProvider === 'gemini'
-  const isLocalQwenVoice = voiceId?.startsWith('qwen:') || selectedProvider === 'local-qwen'
+  const voiceProvider = providerFromVoiceId(voiceId)
+  const localProvider = isLocalTtsProvider(voiceProvider)
+    ? voiceProvider
+    : !voiceProvider && isLocalTtsProvider(selectedProvider) ? selectedProvider : null
   const openaiVoice = getOpenAiVoiceForVoiceId(voiceId)
-  const providerBadge = isLocalQwenVoice
-    ? (voiceId?.startsWith('qwen:') ? 'Local Qwen exact voice' : 'Local Qwen')
+  const providerBadge = localProvider
+    ? (voiceProvider === localProvider ? `${LOCAL_TTS_LABELS[localProvider]} exact voice` : LOCAL_TTS_LABELS[localProvider])
     : isGeminiVoice
     ? (voiceId?.startsWith('gemini:') ? 'Google Gemini exact voice' : 'Google Gemini')
     : isElevenLabsVoice
@@ -200,7 +212,7 @@ export function AudioUploadRow({ block, bookId, voiceId, voiceLabel, characterNa
             disabled={!canGenerate}
             title={
               !hasTtsKey
-                ? selectedProvider === 'local-qwen' ? 'Start Local Qwen Voice Studio first' : 'Add your OpenAI / ElevenLabs / Gemini key in Settings'
+                ? isLocalTtsProvider(selectedProvider) ? `Start ${LOCAL_TTS_LABELS[selectedProvider]} first` : 'Add your OpenAI / ElevenLabs / Gemini key in Settings'
                 : !blockText.trim()
                   ? 'Add text first'
                   : `Generate AI voice · ${providerBadge}${voiceLabel ? ` · ${voiceLabel}` : ''}`

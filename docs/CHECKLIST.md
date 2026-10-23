@@ -134,7 +134,7 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | 4.4 | Character role (narrator / character) | ✅ | |
 | 4.5 | Voice Library page (browse & assign voices) | ✅ | 17 voices with real `speechSynthesis` preview, pitch/rate per voice, narrator tab |
 | 4.6 | AI TTS voice generation (per block) | 🔧 | Requires creator's own OpenAI/ElevenLabs key in Settings |
-| 4.7 | TTS provider integration (OpenAI / ElevenLabs) | 🔧 | Route built; only works with user-supplied API key |
+| 4.7 | TTS provider integration (OpenAI / ElevenLabs / Gemini / Local Qwen / Local Chatterbox) | 🔧 | Route built; cloud providers need a user-supplied API key; local engines need Creator Studio running on the same machine |
 | 4.8 | Upload recorded audio per block | ✅ | AudioUploadRow upload + Supabase Storage |
 | 4.9 | Audio preview player | ✅ | Mini player in AudioUploadRow (play/pause/progress/time) |
 | 4.10 | Voice assignment (character → voice ID) | ✅ | BlockItem passes char voiceId → AudioUploadRow → TTS |
@@ -146,6 +146,8 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | 4.16 | **Browser TTS voice preview in Voice Library** | ✅ | `window.speechSynthesis.speak()` per card; gender-matched browser voice selection |
 | 4.17 | **Narrator-only mode** (single voice reads all) | ✅ | Book-level toggle in Voices → Settings tab; reader engine fully honours it |
 | 4.18 | **Creator audio QA gate before publish** | ✅ | `getUncoveredCount()` — dialog warns with block count before first publish |
+| 4.19 | **Local Qwen TTS engine** (side by side with ElevenLabs / Gemini) | 🔧 | Code done, verified against mock servers — real-engine smoke test pending. Provider `local-qwen` → Qwen Voice Studio `/pagecast/tts` (default `http://127.0.0.1:7860`, `LOCAL_QWEN_TTS_URL`). Voices page "Sync Local Voices" lists Qwen speakers (`qwen:<Speaker>`); samples, cast picker, Add Cast modal, Generate All queue. Story language now passed through. Qwen voice-library clones (`qwen:clone:<name>`) listed via new Qwen `GET /pagecast/voices` (only entries with reference audio + transcript); clones use Base model at `LOCAL_QWEN_MODEL_SIZE` (default 0.6B) |
+| 4.20 | **Local Chatterbox TTS engine** (side by side with ElevenLabs / Gemini) | 🔧 | Code done, verified against mock servers — real-engine smoke test pending. Provider `local-chatterbox` → Chatterbox TTS Server `/tts` (default `http://127.0.0.1:8004`, `LOCAL_CHATTERBOX_TTS_URL`). Lists predefined voices (`chatterbox:<file>`) + reference-audio clones (`chatterbox:clone:<file>`); sends story language (id→ms); temperature/exaggeration/CFG/seed follow the Chatterbox UI defaults. `src/lib/localTts.ts` + `localTts.test.ts`. Local engines only work when Creator Studio runs locally, not on Vercel |
 
 ---
 
@@ -306,4 +308,36 @@ NEXT_PUBLIC_API_URL=          # Render backend URL — fill when Render is live
 | B.5 | `story-001` non-UUID 400 errors | ✅ | `studioStore` seed removed; UUID regex guard in voices page |
 | B.6 | Dashboard book-card dropdown menu clipped | ✅ | `overflow-hidden` on the whole card (needed only for the cover graphic's rounded corners) was cutting off the 3-dot menu after one row. Moved `overflow-hidden` onto just the cover div |
 | B.7 | Dashboard "Delete" in book-card dropdown did nothing | ✅ | `confirmDelete` state was set but never rendered — no confirmation dialog existed, so the delete never fired. Added an actual confirm-delete modal wired to `onDelete()` |
+| B.8 | `/api/tts/*` was public (no auth) | ✅ | Middleware listed `/api/tts/` as public, so anyone could call the hosted generate route and spend server-side Gemini/ElevenLabs/OpenAI keys. Removed the exemption; unauthenticated `/api/*` now gets 401 JSON (pages still redirect to /login); TTS routes also check `requireApiUser()` (`lib/supabase/apiAuth.ts`, fails closed) and reuse that user for the usage counter |
 
+
+
+---
+
+## MEDIA PLATFORM REDESIGN (book / cast / audio / image — H3 consistency)
+
+> Plan: `docs/MEDIA_PLATFORM_REDESIGN.md` · Source of process: storybook folder (Blue Silence, After Igari)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| M.0 | Redesign plan drafted | 🔧 | v0.3 (AI Economy pattern, licence gate, image-only voices) 2026-10-12, awaiting eff review |
+| M.1 | Unified `.casts/<slug>/` folder spec + dry-run migration (glitch first) | ⬜ | Phase 1 |
+
+## Language Pack upgrade — Indonesian → English pilot
+
+| ID | Deliverable | Status | Evidence / blocker |
+|---|---|---:|---|
+| LP.1 | Shared Content Contract v1 for Casts and Language Packs | ✅ | `docs/PAGECAST_CONTENT_CONTRACT_V1.md` |
+| LP.2 | Creator Studio import, validation, persistence, and lossless PageCast formatting | ✅ | `textParser.ts`, import pipeline, Supabase mappers, contract fixtures |
+| LP.3 | Reader language metadata, language-aware speech fallback, and Language Pack presentation | ✅ | Reader types, Supabase mapper, `/reader/[id]` |
+| LP.4 | Media language parsing, voice routing, language-specific filenames, and manifest metadata | ✅ | `skills/generate_voices.py` and Media parser smoke check |
+| LP.5 | Indonesian → English four-stage pilot | ✅ | `.casts/id-en-greetings-a1/`, generic and pilot validators |
+| LP.6 | Reusable Codex / Claude Cowork authoring skill | ✅ | `skills/language-pack-author/` |
+| LP.7 | First-class Supabase schema migration applied and verified | ✅ | Live migration `language_pack_content`; columns and constraints verified on `zdlbcvscytujdomxzwei` |
+| LP.8 | Authenticated live three-component acceptance run | ⬜ | Depends on LP.7 and live audio/database access |
+| LP.9 | Local delivery artifact preflight | ✅ | `npm run check:language-pack-artifacts` |
+| M.2 | Full Character records + Publish Cast split (`cast/` vs `publish/cast.public.json`) | ⬜ | Phase 2 · author-secret files never published |
+| M.3 | Bible builder + chapter preflight/part gate skills (After Igari model) | ⬜ | Phase 3 |
+| M.4 | Character lock + H3 reference images (portrait + full-body) | ⬜ | Phase 4 |
+| M.5 | Scene job manifests + runner adapter | ⬜ | Phase 5 · Maestro = local Pinokio app (port 42003 API); copy AI Economy submission-record pattern; capture one image-mode payload. Image-only (no Maestro voices). Licence gate: H3 / Qwen blocked, Klein unchecked |
+| M.6 | Publish packager + Studio import of `cast.public.json` | ⬜ | Phase 6 · only Studio code change |

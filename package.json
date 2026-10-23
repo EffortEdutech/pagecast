@@ -5,6 +5,10 @@
   "scripts": {
     "creator-studio": "npm run dev --prefix apps/creator-studio",
     "reader-app": "npm run dev --prefix apps/reader-app",
-    "typecheck": "npm run typecheck --prefix apps/creator-studio"
+    "typecheck": "npm run typecheck --prefix apps/creator-studio",
+    "check:contract": "node scripts/validate_pagecast_contract.mjs",
+    "check:language-pack": "node scripts/validate_language_pack.mjs",
+    "check:language-pack-pilot": "node scripts/validate_language_pack_pilot.mjs",
+    "check:language-pack-artifacts": "node scripts/verify_language_pack_artifacts.mjs"
   }
 }

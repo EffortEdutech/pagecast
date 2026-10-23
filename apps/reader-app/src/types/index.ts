@@ -1,6 +1,18 @@
 export type BlockType = 'narration' | 'dialogue' | 'thought' | 'quote' | 'pause' | 'sfx'
 export type ReaderMode = 'reading' | 'audiobook' | 'cinematic'
 export type ReaderTheme = 'dark' | 'light' | 'sepia'
+export type ContentType = 'cast' | 'language_pack'
+export type LanguagePackPracticeMode = 'pause_and_speak'
+
+export interface ContentLanguage { code: string; label?: string }
+export interface ContentLanguages { source?: ContentLanguage; target?: ContentLanguage }
+export interface LanguagePackLearning {
+  role?: 'model' | 'translation' | 'instruction' | 'prompt' | 'answer' | 'review'
+  pairedBlockId?: string
+  practice?: 'listen' | 'repeat' | 'speak' | 'learner_turn' | 'recall'
+  register?: 'casual' | 'neutral' | 'polite' | 'formal'
+  phraseId?: string
+}
 
 export interface Character {
   id: string
@@ -9,10 +21,11 @@ export interface Character {
   displayName: string
   color: string
   voiceId?: string
+  language?: string | 'multi'
   defaultVolume: number
 }
 
-export interface BaseBlock { id: string; type: BlockType; audioUrl?: string; duration?: number; performanceTag?: string }
+export interface BaseBlock { id: string; type: BlockType; audioUrl?: string; duration?: number; performanceTag?: string; language?: string; learning?: LanguagePackLearning }
 export interface NarrationBlock extends BaseBlock { type: 'narration'; text: string; characterId?: string }
 export interface DialogueBlock  extends BaseBlock { type: 'dialogue'; characterId: string; text: string; emotion?: string }
 export interface ThoughtBlock   extends BaseBlock { type: 'thought';  characterId: string; text: string }
@@ -35,6 +48,8 @@ export interface Chapter { id: string; title: string; order: number; scenes: Sce
 export interface Story {
   id: string; title: string; description: string
   coverGradient?: string; coverImage?: string; language: string
+  contentType?: ContentType; schemaVersion?: string; languages?: ContentLanguages
+  level?: string; practiceMode?: LanguagePackPracticeMode
   price: number; isFree?: boolean; hasMusic: boolean; hasSfx: boolean
   guestAccess?: boolean; guestAccessRank?: number; guestAccessLabel?: string
   characters: Character[]; chapters: Chapter[]

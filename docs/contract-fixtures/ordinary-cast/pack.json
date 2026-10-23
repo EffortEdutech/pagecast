@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "contentType": "cast",
+  "slug": "ordinary-cast-fixture",
+  "title": "The Quiet Lantern",
+  "language": "en",
+  "chapters": [
+    { "id": "chapter-1", "file": "script/chapter-1_pagecast.txt" }
+  ]
+}

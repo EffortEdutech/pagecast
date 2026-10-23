@@ -17,6 +17,11 @@ export interface DbBook {
   cover_gradient: string
   cover_emoji: string
   language: string | null
+  content_type?: string | null
+  schema_version?: string | null
+  languages?: Record<string, unknown> | null
+  level?: string | null
+  practice_mode?: string | null
   genre: string | null
   age_rating: string
   status: 'draft' | 'published' | 'archived'
@@ -41,6 +46,7 @@ export interface DbCharacter {
   color: string
   voice_id: string | null      // added in migration 005
   voice_label: string | null
+  language?: string | null
   voice_pitch: number
   voice_rate: number
   avatar_emoji: string | null
@@ -61,6 +67,11 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
     coverImage: book.cover_emoji,
     coverGradient: book.cover_gradient,
     language: book.language ?? 'en',
+    contentType: (book.content_type ?? 'cast') as Story['contentType'],
+    schemaVersion: book.schema_version ?? undefined,
+    languages: book.languages as Story['languages'],
+    level: book.level ?? undefined,
+    practiceMode: book.practice_mode as Story['practiceMode'],
     status: book.status,
     price: book.price,
     isFree: book.is_free,
@@ -78,6 +89,7 @@ export function dbBookToStory(book: DbBook, characters: DbCharacter[] = []): Sto
       voiceSource:   'ai' as const,
       voiceId:       c.voice_id ?? 'ai_female_soft',
       voiceLabel:    c.voice_label ?? '',
+      language:      c.language ?? undefined,
       defaultVolume: 1,
       portraitUrl:    c.portrait_url ?? undefined,
       portraitStatus: (c.portrait_status ?? 'none') as Character['portraitStatus'],
@@ -102,6 +114,11 @@ function storyToDbInsert(story: Partial<Story>, authorId: string): Partial<DbBoo
     cover_gradient: 'from-accent/30 to-accent/10',
     cover_emoji: story.coverImage ?? '📖',
     language: story.language ?? 'en',
+    content_type: story.contentType ?? 'cast',
+    schema_version: story.schemaVersion ?? '1.0',
+    languages: story.languages ? { ...story.languages } : undefined,
+    level: story.level,
+    practice_mode: story.practiceMode,
     status: story.status ?? 'draft',
     price: story.price ?? 0,
     is_free: (story.price ?? 0) === 0,
@@ -179,6 +196,11 @@ export async function updateBook(bookId: string, updates: Partial<Story>): Promi
     ...(updates.price       !== undefined && { price: updates.price, is_free: updates.price === 0 }),
     ...(updates.isFree      !== undefined && { is_free: updates.isFree }),
     ...(updates.language    !== undefined && { language: updates.language }),
+    ...(updates.contentType !== undefined && { content_type: updates.contentType }),
+    ...(updates.schemaVersion !== undefined && { schema_version: updates.schemaVersion }),
+    ...(updates.languages !== undefined && { languages: { ...updates.languages } }),
+    ...(updates.level !== undefined && { level: updates.level }),
+    ...(updates.practiceMode !== undefined && { practice_mode: updates.practiceMode }),
     ...(updates.coverImage        !== undefined && { cover_emoji:          updates.coverImage }),
     ...(updates.coverGradient     !== undefined && { cover_gradient:       updates.coverGradient }),
     ...(updates.genre             !== undefined && { genre:                updates.genre }),

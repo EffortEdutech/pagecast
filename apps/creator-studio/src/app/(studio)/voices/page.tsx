@@ -31,6 +31,13 @@ import {
   type StoryLanguageCode,
 } from '@/lib/voiceLibrary'
 import { getTtsSettings } from '@/lib/tts'
+import {
+  LOCAL_TTS_LABELS,
+  LOCAL_TTS_PROVIDERS,
+  providerFromVoiceId,
+  type LocalTtsProvider,
+  type LocalVoice,
+} from '@/lib/localTts'
 import type { Character } from '@/types'
 
 // ── Voice catalogue ────────────────────────────────────────────────────────────
@@ -48,6 +55,27 @@ interface ProviderVoice {
 }
 
 type GeminiVoice = (typeof GEMINI_VOICES)[number]
+
+type LocalVoicesByProvider = Record<LocalTtsProvider, LocalVoice[]>
+
+const EMPTY_LOCAL_VOICES: LocalVoicesByProvider = { 'local-qwen': [], 'local-chatterbox': [] }
+
+/** Display label stored on the character, e.g. "Qwen - Ryan" / "Chatterbox Clone - Syamsuri15s". */
+function localVoiceLabel(voice: LocalVoice): string {
+  const engine = voice.provider === 'local-qwen' ? 'Qwen' : 'Chatterbox'
+  return `${engine}${voice.kind === 'clone' ? ' Clone' : ''} - ${voice.label}`
+}
+
+/** Best-effort LocalVoice for a saved voice id when the engine hasn't been synced yet. */
+function localVoiceFromId(voiceId: string, synced: LocalVoicesByProvider): LocalVoice | null {
+  const provider = providerFromVoiceId(voiceId)
+  if (provider !== 'local-qwen' && provider !== 'local-chatterbox') return null
+  const found = synced[provider].find(v => v.id === voiceId)
+  if (found) return found
+  const isClone = voiceId.includes(':clone:')
+  const name = voiceId.split(':').pop() ?? voiceId
+  return { id: voiceId, label: name.replace(/\.[^.]+$/, ''), provider, kind: isClone ? 'clone' : 'builtin' }
+}
 
 type VoiceLanguageTag = StoryLanguageCode | 'multi'
 type VoiceLanguageTags = Record<string, VoiceLanguageTag>
@@ -371,6 +399,80 @@ function GeminiVoiceCard({
   )
 }
 
+function LocalVoiceCard({
+  voice,
+  selected,
+  onSelect,
+  onSample,
+  loading,
+  sampleUrl,
+}: {
+  voice: LocalVoice
+  selected: boolean
+  onSelect: () => void
+  onSample: () => void
+  loading: boolean
+  sampleUrl?: string
+}) {
+  const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const playSample = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (playing) {
+      audioRef.current?.pause()
+      setPlaying(false)
+      return
+    }
+    if (!sampleUrl) {
+      onSample()
+      return
+    }
+    const audio = new Audio(sampleUrl)
+    audioRef.current = audio
+    audio.onended = () => setPlaying(false)
+    audio.onerror = () => setPlaying(false)
+    setPlaying(true)
+    audio.play().catch(() => setPlaying(false))
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      className={clsx(
+        'card p-3 cursor-pointer transition-all duration-150 flex items-center gap-3',
+        selected ? 'border-success/70 bg-success/10' : 'hover:border-bg-hover hover:bg-bg-elevated'
+      )}
+    >
+      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+        selected ? 'bg-success/25 text-success' : 'bg-bg-elevated text-text-muted')}>
+        <Mic size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-text-primary text-sm font-medium truncate">{voice.label}</div>
+        <div className="text-text-muted text-[10px] truncate">
+          {LOCAL_TTS_LABELS[voice.provider]} / {voice.kind === 'clone' ? 'clone' : 'built-in'}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={playSample}
+          title={sampleUrl ? (playing ? 'Stop sample' : 'Play sample') : `Generate ${LOCAL_TTS_LABELS[voice.provider]} sample`}
+          className={clsx('w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+            playing ? 'bg-success text-black' : 'bg-bg-elevated hover:bg-bg-hover text-text-muted')}
+        >
+          {loading
+            ? <Loader2 size={11} className="animate-spin" />
+            : playing
+              ? <Square size={9} className="fill-current" />
+              : <Play size={10} className="ml-0.5" />}
+        </button>
+        {selected && <Check size={14} className="text-success" />}
+      </div>
+    </div>
+  )
+}
+
 // ── Add character modal ────────────────────────────────────────────────────────
 
 interface AddModalProps {
@@ -384,6 +486,8 @@ interface AddModalProps {
   onSyncElevenLabsVoices: () => void
   onGenerateElevenLabsSample: (voice: ProviderVoice, language?: string) => void
   onGenerateGeminiSample: (voice: GeminiVoice) => void
+  localVoices: LocalVoicesByProvider
+  onGenerateLocalSample: (voice: LocalVoice) => void
   onAdd: (char: Character) => void
   onClose: () => void
 }
@@ -399,6 +503,8 @@ function AddCharacterModal({
   onSyncElevenLabsVoices,
   onGenerateElevenLabsSample,
   onGenerateGeminiSample,
+  localVoices,
+  onGenerateLocalSample,
   onAdd,
   onClose,
 }: AddModalProps) {
@@ -416,10 +522,13 @@ function AddCharacterModal({
   const geminiVoice = voiceId.startsWith('gemini:')
     ? GEMINI_VOICES.find(v => v.id === voiceId)
     : undefined
+  const localVoice = localVoiceFromId(voiceId, localVoices)
   const voiceLabel = elevenLabsVoice
     ? `ElevenLabs - ${elevenLabsVoice.label}`
     : geminiVoice
       ? `Gemini - ${geminiVoice.label}`
+    : localVoice
+      ? localVoiceLabel(localVoice)
     : pageCastVoice?.label ?? ''
   const matchingElevenVoices = elevenVoices.filter(voice => languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
   const otherElevenVoices = elevenVoices.filter(voice => !languageMatchesStory(getElevenLabsVoiceLanguage(voice, elevenVoiceTags), bookLanguage))
@@ -438,6 +547,10 @@ function AddCharacterModal({
     }
     if (geminiVoice) {
       onGenerateGeminiSample(geminiVoice)
+      return
+    }
+    if (localVoice) {
+      onGenerateLocalSample(localVoice)
       return
     }
     previewVoice(voiceId)
@@ -518,6 +631,13 @@ function AddCharacterModal({
                     ))}
                   </optgroup>
                 )}
+                {LOCAL_TTS_PROVIDERS.map(provider => localVoices[provider].length > 0 && (
+                  <optgroup key={provider} label={`${LOCAL_TTS_LABELS[provider]} (this machine)`}>
+                    {localVoices[provider].map(v => (
+                      <option key={v.id} value={v.id}>{localVoiceLabel(v)}</option>
+                    ))}
+                  </optgroup>
+                ))}
                 {otherElevenVoices.length > 0 && (
                   <optgroup label="ElevenLabs - other tagged languages">
                     {otherElevenVoices.map(v => (
@@ -704,6 +824,8 @@ export default function VoicesPage() {
   const [sampleUrls,      setSampleUrls]       = useState<Record<string, string>>({})
   const [samplingVoiceId, setSamplingVoiceId]  = useState<string | null>(null)
   const [elevenVoiceTags, setElevenVoiceTags]  = useState<VoiceLanguageTags>({})
+  const [localVoices,     setLocalVoices]      = useState<LocalVoicesByProvider>(EMPTY_LOCAL_VOICES)
+  const [syncingLocal,    setSyncingLocal]     = useState(false)
   const [bulkPortraitBusy, setBulkPortraitBusy] = useState(false)
   const [bulkPortraitError, setBulkPortraitError] = useState<string | null>(null)
   const [bulkPortraitProgress, setBulkPortraitProgress] = useState<{ done: number; total: number } | null>(null)
@@ -872,6 +994,75 @@ export default function VoicesPage() {
     }
   }, [])
 
+  /** Load voices from the local engines. `quiet` = silent background attempt on page load. */
+  const syncLocalVoices = useCallback(async (quiet = false) => {
+    if (!quiet) setVoiceSyncError(null)
+    setSyncingLocal(true)
+    const errors: string[] = []
+    const next: LocalVoicesByProvider = { ...EMPTY_LOCAL_VOICES }
+    await Promise.all(LOCAL_TTS_PROVIDERS.map(async provider => {
+      try {
+        const res = await fetch('/api/tts/voices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error ?? `Could not reach ${LOCAL_TTS_LABELS[provider]}.`)
+        next[provider] = Array.isArray(body.voices) ? body.voices : []
+      } catch (e: any) {
+        errors.push(e.message ?? `Could not reach ${LOCAL_TTS_LABELS[provider]}.`)
+      }
+    }))
+    setLocalVoices(next)
+    setSyncingLocal(false)
+    if (!quiet && errors.length > 0) setVoiceSyncError(errors.join(' '))
+  }, [])
+
+  useEffect(() => { syncLocalVoices(true) }, [syncLocalVoices])
+
+  const generateLocalSample = useCallback(async (voice: LocalVoice) => {
+    setVoiceSyncError(null)
+    const key = sampleKey(voice.id, storyLanguage)
+    setSamplingVoiceId(key)
+    try {
+      const res = await fetch('/api/tts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: voice.provider,
+          voiceId: voice.id,
+          voiceLabel: localVoiceLabel(voice),
+          text: getSampleTextForLanguage(storyLanguage),
+          language: storyLanguage,
+          speed: 0.95,
+          blockType: 'dialogue',
+          characterName: 'Cast member',
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `Could not generate ${LOCAL_TTS_LABELS[voice.provider]} sample.`)
+      }
+      const blob = await res.blob()
+      if (!blob.type.startsWith('audio/')) {
+        const text = await blob.text().catch(() => '')
+        throw new Error(text || `${LOCAL_TTS_LABELS[voice.provider]} sample did not return audio.`)
+      }
+      const sampleUrl = await cacheSample(key, blob)
+      setSampleUrls(prev => {
+        const old = prev[key]
+        if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
+        return { ...prev, [key]: sampleUrl }
+      })
+      playAudioUrl(sampleUrl, setVoiceSyncError)
+    } catch (e: any) {
+      setVoiceSyncError(e.message ?? 'Could not generate local sample.')
+    } finally {
+      setSamplingVoiceId(null)
+    }
+  }, [storyLanguage])
+
   const generateElevenLabsSample = useCallback(async (voice: ProviderVoice, language = storyLanguage) => {
     const { keys, geminiModel } = getTtsSettings()
     setVoiceSyncError(null)
@@ -1000,8 +1191,19 @@ export default function VoicesPage() {
       return
     }
 
+    const localVoice = localVoiceFromId(voiceId, localVoices)
+    if (localVoice) {
+      const sampleUrl = sampleUrls[sampleKey(localVoice.id, storyLanguage)]
+      if (sampleUrl) {
+        playAudioUrl(sampleUrl, setVoiceSyncError)
+      } else {
+        generateLocalSample(localVoice)
+      }
+      return
+    }
+
     previewVoice(voiceId)
-  }, [elevenVoices, sampleUrls, generateElevenLabsSample, generateGeminiSample, elevenVoiceTags, storyLanguage])
+  }, [elevenVoices, sampleUrls, generateElevenLabsSample, generateGeminiSample, generateLocalSample, localVoices, elevenVoiceTags, storyLanguage])
 
   const handleDelete = useCallback(async (charId: string) => {
     storeDelete(selectedStoryId, charId)
@@ -1254,6 +1456,31 @@ export default function VoicesPage() {
                             </button>
                           ))}
                         </div>
+                        {LOCAL_TTS_PROVIDERS.map(provider => localVoices[provider].length > 0 && (
+                          <div key={provider} className="pt-2 mt-2 border-t border-bg-border">
+                            <p className="px-2 pb-1 text-[9px] uppercase tracking-wide text-success font-medium">{LOCAL_TTS_LABELS[provider]}</p>
+                            {localVoices[provider].map(v => (
+                              <button key={v.id}
+                                className={clsx(
+                                  'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs transition-colors',
+                                  char.voiceId === v.id
+                                    ? 'bg-success/20 text-success font-medium'
+                                    : 'hover:bg-bg-elevated text-text-secondary'
+                                )}
+                                onClick={e => { e.stopPropagation(); handleVoiceChange(char.id, v.id, localVoiceLabel(v)) }}
+                              >
+                                {savingVoice === char.id && char.voiceId === v.id
+                                  ? <Loader2 size={10} className="animate-spin shrink-0" />
+                                  : char.voiceId === v.id
+                                    ? <Check size={10} className="shrink-0 text-success" />
+                                    : <span className="w-2.5 shrink-0" />
+                                }
+                                <span className="truncate flex-1">{v.label}</span>
+                                <span className="text-[9px] opacity-70">{v.kind === 'clone' ? 'clone' : 'built-in'}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1348,7 +1575,16 @@ export default function VoicesPage() {
 
         {/* ── Voice library browser ── */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 sm:p-5">
-          <div className="flex justify-start sm:justify-end">
+          <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+            <button
+              className="btn-secondary text-xs"
+              onClick={() => syncLocalVoices(false)}
+              disabled={syncingLocal}
+              title="Load voices from Qwen Voice Studio and Chatterbox TTS Server running on this machine"
+            >
+              {syncingLocal ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              Sync Local Voices
+            </button>
             <button
               className="btn-secondary text-xs"
               onClick={syncElevenLabsVoices}
@@ -1503,6 +1739,47 @@ export default function VoicesPage() {
               </div>
             </div>
           )}
+
+          {categoryFilter === 'all' && LOCAL_TTS_PROVIDERS.map(provider => localVoices[provider].length > 0 && (
+            <div key={provider} className="space-y-3 pt-3 border-t border-bg-border">
+              <div>
+                <h3 className="text-text-primary font-semibold text-sm">{LOCAL_TTS_LABELS[provider]} Voices</h3>
+                <p className="text-text-muted text-xs mt-0.5">
+                  {provider === 'local-qwen'
+                    ? 'Free Qwen3-TTS speakers plus your saved Qwen voice-library clones, running on this machine. Clones need a transcript saved in Qwen.'
+                    : 'Free Chatterbox voices running on this machine, including your reference-audio clones. Samples use the story language.'}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {localVoices[provider].map(voice => {
+                  const assignedChar = story?.characters.find(c => c.voiceId === voice.id)
+                  const key = sampleKey(voice.id, storyLanguage)
+                  return (
+                    <div key={voice.id} className="relative">
+                      <LocalVoiceCard
+                        voice={voice}
+                        selected={!!assignedChar}
+                        sampleUrl={sampleUrls[key]}
+                        loading={samplingVoiceId === key}
+                        onSample={() => generateLocalSample(voice)}
+                        onSelect={() => {
+                          if (editingCharId) {
+                            handleVoiceChange(editingCharId, voice.id, localVoiceLabel(voice))
+                          }
+                        }}
+                      />
+                      {assignedChar && (
+                        <div className="absolute top-1.5 right-8 px-1.5 py-0.5 rounded-full text-[9px] font-medium"
+                          style={{ backgroundColor: assignedChar.color + '30', color: assignedChar.color }}>
+                          {assignedChar.displayName}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1518,6 +1795,8 @@ export default function VoicesPage() {
           onSyncElevenLabsVoices={syncElevenLabsVoices}
           onGenerateElevenLabsSample={generateElevenLabsSample}
           onGenerateGeminiSample={generateGeminiSample}
+          localVoices={localVoices}
+          onGenerateLocalSample={generateLocalSample}
           onAdd={handleAddChar}
           onClose={() => setShowAddModal(false)}
         />

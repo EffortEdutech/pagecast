@@ -49,6 +49,7 @@ export interface ParsedCastMember {
    *  generation prompt builders (lib/imagePrompts.ts) have a concrete description to
    *  draw from instead of inventing one. */
   appearance?: string
+  language?: string | 'multi'
 }
 
 export interface ParsedBookMeta {
@@ -57,6 +58,12 @@ export interface ParsedBookMeta {
   language?: string
   genre?: string
   defaultNarrator?: string
+  contentType?: 'cast' | 'language_pack'
+  schemaVersion?: string
+  sourceLanguage?: string
+  targetLanguage?: string
+  level?: string
+  practiceMode?: 'pause_and_speak'
 }
 
 export interface ParsedImport {
@@ -73,6 +80,36 @@ export interface ParsedImport {
     dialogues:  number
     narrations: number
   }
+}
+
+export function validateParsedImport(parsed: ParsedImport): string[] {
+  if (parsed.meta?.contentType !== 'language_pack') return []
+  const errors: string[] = []
+  const source = parsed.meta.sourceLanguage
+  const target = parsed.meta.targetLanguage
+  if (!source) errors.push('Language Pack is missing SourceLanguage.')
+  if (!target) errors.push('Language Pack is missing TargetLanguage.')
+  if (!parsed.meta.level) errors.push('Language Pack is missing Level.')
+  if (!parsed.meta.practiceMode) errors.push('Language Pack is missing PracticeMode.')
+
+  const castBySlug = new Map((parsed.cast ?? []).map(member => [member.slug.toLowerCase(), member]))
+  for (const chapter of parsed.chapters) {
+    for (const scene of chapter.scenes) {
+      for (const block of scene.blocks) {
+        if (block.type === 'pause' || block.type === 'sfx') continue
+        if (!block.language) errors.push(`${chapter.title}/${scene.title}: spoken ${block.type} block is missing language.`)
+        const characterId = 'characterId' in block ? block.characterId : undefined
+        if (characterId) {
+          const member = castBySlug.get(characterId.toLowerCase())
+          if (!member) errors.push(`${chapter.title}/${scene.title}: block target "${characterId}" is not declared in CAST.`)
+          else if (member.language && block.language && member.language !== 'multi' && member.language !== block.language) {
+            errors.push(`${chapter.title}/${scene.title}: block language "${block.language}" does not match cast language "${member.language}" for "${characterId}".`)
+          }
+        }
+      }
+    }
+  }
+  return errors
 }
 
 // ── Format detection ──────────────────────────────────────────────────────────
@@ -307,6 +344,7 @@ function parseCastLine(line: string): ParsedCastMember | null {
     voiceDescriptor: optionValue(options, 'voice'),
     colorWord: optionValue(options, 'color'),
     appearance: optionValue(options, 'appearance'),
+    language: optionValue(options, 'language') ?? optionValue(options, 'lang'),
   }
 }
 
@@ -322,7 +360,12 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
   const name = tag.toUpperCase()
 
   if (name === 'NARRATION') {
-    if (text) pushBlock(chapters, narration(text))
+    if (text) {
+      const block = narration(text)
+      if (target) block.characterId = target.trim()
+      applyLanguagePackOptions(block, options)
+      pushBlock(chapters, block)
+    }
     return
   }
 
@@ -332,6 +375,7 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
       // Store character name as a hint so handleImport can resolve it to a real ID.
       // e.g. [DIALOGUE: pip | emotion=curious] → characterId = 'pip' (resolved later)
       if (target) block.characterId = target.trim()
+      applyLanguagePackOptions(block, options)
       pushBlock(chapters, block)
     }
     return
@@ -342,6 +386,7 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
       const block = thought(stripThoughtMarkers(stripQuotes(text)))
       // Same name hint for thoughts
       if (target) block.characterId = target.trim()
+      applyLanguagePackOptions(block, options)
       pushBlock(chapters, block)
     }
     return
@@ -361,6 +406,25 @@ function pushPageCastBlock(chapters: ParsedChapter[], tag: string, target: strin
 
   if (name === 'TRANSITION') {
     pushBlock(chapters, pause(1))
+  }
+}
+
+function applyLanguagePackOptions(block: StoryBlock, options: string | undefined): void {
+  const language = optionValue(options, 'language')
+  const learningRole = optionValue(options, 'learningrole')
+  const pairedBlockId = optionValue(options, 'pair') ?? optionValue(options, 'pairedblockid')
+  const practice = optionValue(options, 'practice')
+  const register = optionValue(options, 'register')
+  const phraseId = optionValue(options, 'phraseid')
+  if (language) block.language = language
+  if (learningRole || pairedBlockId || practice || register || phraseId) {
+    block.learning = {
+      ...(learningRole ? { role: learningRole as NonNullable<typeof block.learning>['role'] } : {}),
+      ...(pairedBlockId ? { pairedBlockId } : {}),
+      ...(practice ? { practice: practice as NonNullable<typeof block.learning>['practice'] } : {}),
+      ...(register ? { register: register as NonNullable<typeof block.learning>['register'] } : {}),
+      ...(phraseId ? { phraseId } : {}),
+    }
   }
 }
 
@@ -405,6 +469,12 @@ function parsePageCast(text: string): { chapters: ParsedChapter[]; cast: ParsedC
           else if (kv.key === 'language'     && !meta.language)        meta.language = kv.value
           else if (kv.key === 'genre'        && !meta.genre)           meta.genre = kv.value
           else if (kv.key === 'default narrator' && !meta.defaultNarrator) meta.defaultNarrator = kv.value
+          else if (kv.key === 'contenttype'    && !meta.contentType) meta.contentType = kv.value as ParsedBookMeta['contentType']
+          else if (kv.key === 'schemaversion'  && !meta.schemaVersion) meta.schemaVersion = kv.value
+          else if (kv.key === 'sourcelanguage' && !meta.sourceLanguage) meta.sourceLanguage = kv.value
+          else if (kv.key === 'targetlanguage' && !meta.targetLanguage) meta.targetLanguage = kv.value
+          else if (kv.key === 'level'          && !meta.level) meta.level = kv.value
+          else if (kv.key === 'practicemode'   && !meta.practiceMode) meta.practiceMode = kv.value as ParsedBookMeta['practiceMode']
         }
       } else {
         const member = parseCastLine(line)
@@ -709,17 +779,41 @@ export function parseText(text: string, format: ParseFormat = 'auto'): ParsedImp
 }
 
 export function formatParsedImportAsPageCastText(result: ParsedImport): string {
-  const out: string[] = [
+  const meta = result.meta ?? {}
+  const isLanguagePack = meta.contentType === 'language_pack'
+  const language = meta.language ?? meta.targetLanguage ?? 'en'
+  const header = [
     '::PAGECAST_BOOK',
-    'Title:',
-    'Author:',
-    'Language: en',
-    'Version: 1.0',
-    'Default Narrator: narrator',
-    '::',
-    '',
+    `Title: ${meta.title ?? ''}`,
+    `Author: ${meta.author ?? ''}`,
+    `Language: ${language}`,
+    `Version: ${meta.schemaVersion ?? '1.0'}`,
+    `Default Narrator: ${meta.defaultNarrator ?? 'narrator'}`,
+  ]
+  if (isLanguagePack) {
+    header.push(
+      'ContentType: language_pack',
+      `SourceLanguage: ${meta.sourceLanguage ?? ''}`,
+      `TargetLanguage: ${meta.targetLanguage ?? ''}`,
+      `Level: ${meta.level ?? ''}`,
+      `PracticeMode: ${meta.practiceMode ?? 'pause_and_speak'}`,
+    )
+  }
+  header.push('::', '')
+
+  const out: string[] = [
+    ...header,
     '::CAST',
-    'Narrator: narrator | role=narrator | voice=calm_female',
+    ...(result.cast?.length
+      ? result.cast.map(member => [
+          `${member.name}: ${member.slug}`,
+          `role=${member.role || 'narrator'}`,
+          member.voiceDescriptor ? `voice=${member.voiceDescriptor}` : '',
+          member.colorWord ? `color=${member.colorWord}` : '',
+          member.appearance ? `appearance=${member.appearance}` : '',
+          member.language ? `language=${member.language}` : '',
+        ].filter(Boolean).join(' | '))
+      : ['Narrator: narrator | role=narrator | voice=calm_female']),
     '::',
     '',
   ]
@@ -731,15 +825,24 @@ export function formatParsedImportAsPageCastText(result: ParsedImport): string {
       out.push(`## ${scene.title}`, '')
 
       for (const block of scene.blocks) {
+        const options = [
+          block.language ? `language=${block.language}` : '',
+          block.learning?.role ? `learningRole=${block.learning.role}` : '',
+          block.learning?.pairedBlockId ? `pairedBlockId=${block.learning.pairedBlockId}` : '',
+          block.learning?.practice ? `practice=${block.learning.practice}` : '',
+          block.learning?.register ? `register=${block.learning.register}` : '',
+          block.learning?.phraseId ? `phraseId=${block.learning.phraseId}` : '',
+        ].filter(Boolean).join(' | ')
+        const tag = (name: string) => options ? `[${name} | ${options}]` : `[${name}]`
         if (block.type === 'narration') {
-          out.push('[NARRATION]', block.text.trim(), '')
+          out.push(tag('NARRATION'), block.text.trim(), '')
         } else if (block.type === 'dialogue') {
           const emotion = block.emotion && block.emotion !== 'neutral' ? ` | emotion=${block.emotion}` : ''
-          out.push(`[DIALOGUE${emotion}]`, `"${block.text.trim()}"`, '')
+          out.push(`[DIALOGUE${emotion}${options ? ` | ${options}` : ''}]`, `"${block.text.trim()}"`, '')
         } else if (block.type === 'thought') {
-          out.push('[THOUGHT]', block.text.trim(), '')
+          out.push(tag('THOUGHT'), block.text.trim(), '')
         } else if (block.type === 'quote') {
-          out.push('[NARRATION]', block.attribution ? `${block.text.trim()}\n- ${block.attribution}` : block.text.trim(), '')
+          out.push(tag('NARRATION'), block.attribution ? `${block.text.trim()}\n- ${block.attribution}` : block.text.trim(), '')
         } else if (block.type === 'pause') {
           out.push(`[PAUSE: ${block.duration}s]`, '')
         } else if (block.type === 'sfx') {

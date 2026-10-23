@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { Story, Chapter } from '@/types'
-import { concatenatePageCastFiles, isPageCastFile, parseText } from '@/lib/textParser'
+import { concatenatePageCastFiles, isPageCastFile, parseText, validateParsedImport } from '@/lib/textParser'
 import { autoCreateMissingCast, buildCharacterNameMap, resolveBlockCharacter, newId } from '@/lib/importPipeline'
 import { replaceBookContent } from '@/lib/supabase/blocks'
 
@@ -444,6 +444,11 @@ export default function DashboardPage() {
 
       const { combinedText } = concatenatePageCastFiles(qualifying)
       const parsed = parseText(combinedText, 'pagecast')
+      const contractErrors = validateParsedImport(parsed)
+      if (contractErrors.length > 0) {
+        setFolderError(`Language Pack validation failed: ${contractErrors.join(' ')}`)
+        return
+      }
       console.log(`[Dashboard] parsed ${parsed.chapters.length} chapter(s), ${parsed.cast?.length ?? 0} cast member(s)`)
 
       setFolderStep(`Creating the book "${parsed.meta?.title?.trim() || qualifying[0].name}"…`)
@@ -459,11 +464,21 @@ export default function DashboardPage() {
       if (!book) { setFolderError('Failed to create the new book (check that you are signed in — try reloading the page).'); return }
       console.log(`[Dashboard] created book ${book.id} — "${book.title}"`)
 
-      if (parsed.meta?.genre || parsed.meta?.language) {
+      if (parsed.meta?.genre || parsed.meta?.language || parsed.meta?.contentType || parsed.meta?.schemaVersion || parsed.meta?.sourceLanguage || parsed.meta?.targetLanguage || parsed.meta?.level || parsed.meta?.practiceMode) {
         setFolderStep('Setting genre/language…')
         await withTimeout(updateBook(book.id, {
           ...(parsed.meta.genre    ? { genre: parsed.meta.genre } : {}),
           ...(parsed.meta.language ? { language: parsed.meta.language } : {}),
+          ...(parsed.meta.contentType ? { contentType: parsed.meta.contentType } : {}),
+          ...(parsed.meta.schemaVersion ? { schemaVersion: parsed.meta.schemaVersion } : {}),
+          ...(parsed.meta.sourceLanguage || parsed.meta.targetLanguage ? {
+            languages: {
+              ...(parsed.meta.sourceLanguage ? { source: { code: parsed.meta.sourceLanguage } } : {}),
+              ...(parsed.meta.targetLanguage ? { target: { code: parsed.meta.targetLanguage } } : {}),
+            },
+          } : {}),
+          ...(parsed.meta.level ? { level: parsed.meta.level } : {}),
+          ...(parsed.meta.practiceMode ? { practiceMode: parsed.meta.practiceMode } : {}),
         }), 15000, 'Updating book metadata')
       }
 

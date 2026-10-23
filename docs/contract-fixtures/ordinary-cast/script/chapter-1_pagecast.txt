@@ -1,0 +1,30 @@
+::PAGECAST_BOOK
+Title: The Quiet Lantern
+ContentType: cast
+SchemaVersion: 1.0
+Language: en
+Default Narrator: narrator
+::
+
+::CAST
+Narrator: narrator | role=narrator | language=en | voice=ai_female_warm
+Mira: mira | role=character | language=en | voice=ai_child_female
+::
+
+# CHAPTER 1: The Lantern
+
+## SCENE 1: The Path
+Ambience: forest_night
+Music: soft_mystery
+Location: A forest path
+Time: Night
+
+[NARRATION: narrator | language=en]
+Mira carried the quiet lantern along the dark path.
+
+[DIALOGUE: mira | language=en | emotion=curious]
+"Do you think it is still lit?"
+
+[PAUSE: 1s]
+
+[SFX: branch_snap]

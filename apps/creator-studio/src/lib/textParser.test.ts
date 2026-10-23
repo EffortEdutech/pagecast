@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   formatParsedImportAsPageCastText, normalizeImportedText, parseText,
-  concatenatePageCastFiles, isPageCastFile, guessVoiceId, hexForColorWord,
+  concatenatePageCastFiles, isPageCastFile, guessVoiceId, hexForColorWord, validateParsedImport,
 } from './textParser'
 
 describe('normalizeImportedText', () => {
@@ -115,6 +117,67 @@ describe('parsePageCast cast/meta capture', () => {
   it('leaves appearance undefined when the CAST line has no appearance= field', () => {
     const result = parseText(oneFile, 'pagecast')
     expect(result.cast?.[0].appearance).toBeUndefined()
+  })
+})
+
+describe('Content Contract v1 fixtures', () => {
+  const fixture = (name: string, file: string) => fs.readFileSync(
+    path.resolve(process.cwd(), '../../docs/contract-fixtures', name, file),
+    'utf8',
+  )
+
+  it('keeps the ordinary Cast fixture import-compatible', () => {
+    const result = parseText(fixture('ordinary-cast', 'script/chapter-1_pagecast.txt'), 'pagecast')
+    expect(result.format).toBe('pagecast')
+    expect(result.meta).toMatchObject({ title: 'The Quiet Lantern', language: 'en' })
+    expect(result.cast?.map(member => member.slug)).toEqual(['narrator', 'mira'])
+    expect(result.chapters[0].scenes[0].blocks.map(block => block.type)).toEqual([
+      'narration', 'dialogue', 'pause', 'sfx',
+    ])
+  })
+
+  it('keeps the Language Pack fixture structurally importable', () => {
+    const result = parseText(fixture('id-en-language-pack', 'script/01_welcome_pagecast.txt'), 'pagecast')
+    expect(result.format).toBe('pagecast')
+    expect(result.meta).toMatchObject({
+      title: 'First English Greetings', language: 'id-en', contentType: 'language_pack',
+      schemaVersion: '1.0', sourceLanguage: 'id', targetLanguage: 'en', level: 'A1',
+      practiceMode: 'pause_and_speak',
+    })
+    expect(result.cast?.map(member => member.slug)).toEqual(['narrator_id', 'narrator_en'])
+    expect(result.cast?.map(member => member.language)).toEqual(['id', 'en'])
+    expect(result.chapters[0].scenes[0].blocks.map(block => block.type)).toEqual([
+      'narration', 'narration', 'narration', 'pause',
+    ])
+    expect(result.chapters[0].scenes[0].blocks[0]).toMatchObject({
+      characterId: 'narrator_id', language: 'id',
+      learning: { role: 'instruction', phraseId: 'welcome' },
+    })
+    expect(validateParsedImport(result)).toEqual([])
+  })
+
+  it('round-trips Language Pack metadata and per-block language annotations', () => {
+    const result = parseText(fixture('id-en-language-pack', 'script/01_welcome_pagecast.txt'), 'pagecast')
+    const formatted = formatParsedImportAsPageCastText(result)
+    expect(formatted).toContain('ContentType: language_pack')
+    expect(formatted).toContain('SourceLanguage: id')
+    expect(formatted).toContain('TargetLanguage: en')
+    expect(formatted).toContain('[NARRATION | language=id | learningRole=instruction | phraseId=welcome]')
+    expect(formatted).toContain('[NARRATION | language=en | learningRole=instruction | phraseId=welcome]')
+    expect(validateParsedImport(parseText(formatted, 'pagecast'))).toEqual([])
+  })
+
+  it('rejects missing language and mismatched language cast assignments', () => {
+    const result = parseText([
+      '::PAGECAST_BOOK', 'Title: Invalid Pack', 'ContentType: language_pack',
+      'SourceLanguage: id', 'TargetLanguage: en', 'Level: A1', 'PracticeMode: pause_and_speak', '::',
+      '::CAST', 'Narrator English: narrator_en | role=narrator | language=en', '::',
+      '# CHAPTER 1: Test', '## SCENE 1: Test',
+      '[NARRATION: narrator_en | language=id]', 'Wrong language assignment.',
+    ].join('\n'), 'pagecast')
+    expect(validateParsedImport(result)).toEqual([
+      'Chapter 1: Test/Test: block language "id" does not match cast language "en" for "narrator_en".',
+    ])
   })
 })
 

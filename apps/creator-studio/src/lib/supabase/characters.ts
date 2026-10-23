@@ -15,6 +15,7 @@ interface DbCharacter {
   color:            string | null
   voice_id:         string | null
   voice_label:      string | null
+  language?:         string | null
   sort_order:       number
   created_at:       string
   portrait_url?:    string | null
@@ -32,6 +33,7 @@ function dbToCharacter(row: DbCharacter): Character {
     voiceSource:   'ai' as const,
     voiceId:       row.voice_id ?? 'ai_female_soft',
     voiceLabel:    row.voice_label ?? '',
+    language:      row.language ?? undefined,
     defaultVolume: 1,
     portraitUrl:    row.portrait_url ?? undefined,
     portraitStatus: (row.portrait_status ?? 'none') as Character['portraitStatus'],
@@ -67,6 +69,7 @@ export async function createCharacter(
       color:       char.color,
       voice_id:    char.voiceId,
       voice_label: char.voiceLabel,
+      language:    char.language ?? null,
       sort_order:  sortOrder,
       // Was previously dropped on insert — only updateCharacter() persisted it, so a
       // portraitPrompt set at creation time (e.g. from a ::CAST appearance= import)
@@ -91,6 +94,7 @@ export async function updateCharacter(
   if (updates.color      !== undefined) patch.color       = updates.color
   if (updates.voiceId    !== undefined) patch.voice_id    = updates.voiceId
   if (updates.voiceLabel !== undefined) patch.voice_label = updates.voiceLabel
+  if (updates.language !== undefined) patch.language = updates.language
   if (updates.portraitUrl    !== undefined) patch.portrait_url    = updates.portraitUrl
   if (updates.portraitStatus !== undefined) patch.portrait_status = updates.portraitStatus
   if (updates.portraitPrompt !== undefined) patch.portrait_prompt = updates.portraitPrompt

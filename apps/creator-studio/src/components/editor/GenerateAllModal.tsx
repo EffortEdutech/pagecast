@@ -14,7 +14,7 @@ interface GenerateAllModalProps {
   onBlockAudioReady?: (blockId: string, audioUrl: string) => void
 }
 
-const PROVIDER_LABEL: Record<string, string> = { openai: 'OpenAI', elevenlabs: 'ElevenLabs', gemini: 'Gemini' }
+const PROVIDER_LABEL: Record<string, string> = { openai: 'OpenAI', elevenlabs: 'ElevenLabs', gemini: 'Gemini', 'local-qwen': 'Local Qwen', 'local-chatterbox': 'Local Chatterbox' }
 
 export function GenerateAllModal({ story, bookId, onClose, onBlockAudioReady }: GenerateAllModalProps) {
   const [loading, setLoading] = useState(true)

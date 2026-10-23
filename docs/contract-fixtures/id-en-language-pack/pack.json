@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "contentType": "language_pack",
+  "slug": "id-en-greetings-a1-fixture",
+  "title": "First English Greetings",
+  "languages": {
+    "source": { "code": "id", "label": "Indonesian" },
+    "target": { "code": "en", "label": "English" }
+  },
+  "level": "A1",
+  "practiceMode": "pause_and_speak",
+  "chapters": [
+    { "id": "welcome", "file": "script/01_welcome_pagecast.txt" }
+  ]
+}

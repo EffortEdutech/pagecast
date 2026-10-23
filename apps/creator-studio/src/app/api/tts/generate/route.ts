@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { requireApiUser } from '@/lib/supabase/apiAuth'
 import { getGeminiVoice, getOpenAiVoiceForVoiceId, getPageCastVoice, getVoiceCastingInstruction } from '@/lib/voiceLibrary'
 import { normalizeGeminiTtsModel, type GeminiTtsModel } from '@/lib/tts'
+import {
+  LOCAL_TTS_DEFAULT_URLS,
+  isLocalTtsProvider,
+  resolveChatterboxVoice,
+  toChatterboxLanguage,
+  toQwenLanguage,
+} from '@/lib/localTts'
 
 export const runtime = 'nodejs'
 
@@ -309,20 +317,11 @@ function pcmToWav(pcm: Buffer, sampleRate = 24000, channels = 1, bitsPerSample =
 
 
 function getLocalQwenBaseUrl(): string {
-  return (process.env.LOCAL_QWEN_TTS_URL ?? 'http://127.0.0.1:7860').replace(/\/$/, '')
+  return (process.env.LOCAL_QWEN_TTS_URL ?? LOCAL_TTS_DEFAULT_URLS['local-qwen']).replace(/\/$/, '')
 }
 
-function resolvePageCastLanguageForQwen(language?: string | null): string {
-  const value = (language ?? '').toLowerCase()
-  if (value.startsWith('zh') || value.includes('chinese')) return 'Chinese'
-  if (value.startsWith('ja') || value.includes('japanese')) return 'Japanese'
-  if (value.startsWith('ko') || value.includes('korean')) return 'Korean'
-  if (value.startsWith('fr') || value.includes('french')) return 'French'
-  if (value.startsWith('de') || value.includes('german')) return 'German'
-  if (value.startsWith('es') || value.includes('spanish')) return 'Spanish'
-  if (value.startsWith('pt') || value.includes('portuguese')) return 'Portuguese'
-  if (value.startsWith('ru') || value.includes('russian')) return 'Russian'
-  return 'English'
+function getLocalChatterboxBaseUrl(): string {
+  return (process.env.LOCAL_CHATTERBOX_TTS_URL ?? LOCAL_TTS_DEFAULT_URLS['local-chatterbox']).replace(/\/$/, '')
 }
 
 function buildLocalQwenDescription(opts: {
@@ -348,6 +347,7 @@ async function fetchLocalQwenTts(opts: {
   voiceLabel?: string
   performanceTag?: string
   characterName?: string
+  language?: string
 }): Promise<Response> {
   const baseUrl = getLocalQwenBaseUrl()
   const modelSize = process.env.LOCAL_QWEN_MODEL_SIZE === '1.7B' ? '1.7B' : '0.6B'
@@ -357,7 +357,7 @@ async function fetchLocalQwenTts(opts: {
     body: JSON.stringify({
       text: opts.text.trim(),
       voiceId: opts.voiceId,
-      language: resolvePageCastLanguageForQwen(process.env.PAGECAST_DEFAULT_LANGUAGE),
+      language: toQwenLanguage(opts.language ?? process.env.PAGECAST_DEFAULT_LANGUAGE),
       modelSize,
       voiceDescription: buildLocalQwenDescription(opts),
       temperature: 0.8,
@@ -367,17 +367,66 @@ async function fetchLocalQwenTts(opts: {
     }),
   })
 
-  if (!res.ok) {
-    const raw = await res.text().catch(() => '')
-    let detail = raw || `Local Qwen error ${res.status}`
-    try {
-      const parsed = JSON.parse(raw)
-      detail = parsed?.detail ?? parsed?.error ?? detail
-    } catch {}
-    throw new Error(detail)
-  }
+  if (!res.ok) throw new Error(await readLocalError(res, 'Local Qwen'))
 
   return res
+}
+
+/** Connection failures (engine not started) get an actionable message. */
+function localFailureMessage(engine: string, baseUrl: string, e: any): string {
+  const message = String(e?.message ?? 'request failed')
+  if (message === 'fetch failed' || /ECONNREFUSED/i.test(String(e?.cause?.code ?? e?.cause ?? ''))) {
+    return `${engine} is not reachable at ${baseUrl}. Start it on this machine and try again.`
+  }
+  return `${engine} request failed: ${message}`
+}
+
+async function readLocalError(res: Response, engine: string): Promise<string> {
+  const raw = await res.text().catch(() => '')
+  let detail = raw || `${engine} error ${res.status}`
+  try {
+    const parsed = JSON.parse(raw)
+    detail = parsed?.detail ?? parsed?.error ?? detail
+  } catch {}
+  return typeof detail === 'string' ? detail : JSON.stringify(detail)
+}
+
+async function fetchLocalChatterboxTts(opts: {
+  text: string
+  voiceId: string
+  language?: string
+}): Promise<{ res: Response; voiceName: string }> {
+  const voice = resolveChatterboxVoice(opts.voiceId)
+  const language = toChatterboxLanguage(opts.language ?? process.env.PAGECAST_DEFAULT_LANGUAGE)
+  // Temperature, exaggeration, CFG and seed are not sent, so the defaults the
+  // creator tuned in the Chatterbox UI (config.yaml generation_defaults) apply.
+  // Speed is intentionally not sent: speed_factor is a post-process time-stretch
+  // that degrades quality, so Chatterbox renders at its natural pace.
+  const res = await fetch(`${getLocalChatterboxBaseUrl()}/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: opts.text.trim(),
+      ...voice,
+      output_format: 'wav',
+      split_text: true,
+      chunk_size: 240,
+      ...(language ? { language } : {}),
+    }),
+  })
+
+  if (!res.ok) throw new Error(await readLocalError(res, 'Local Chatterbox'))
+
+  const file = voice.predefined_voice_id ?? voice.reference_audio_filename ?? ''
+  const voiceName = `Chatterbox ${voice.voice_mode === 'clone' ? 'Clone' : 'Voice'} - ${file.replace(/\.[^.]+$/, '')}`
+  return { res, voiceName }
+}
+
+/** Internal usage counter (profiles.tts_chars_used). Never blocks generation. */
+async function recordTtsUsage(supabase: SupabaseClient, userId: string, chars: number): Promise<void> {
+  try {
+    await supabase.rpc('increment_tts_chars', { p_user_id: userId, p_chars: chars })
+  } catch { /* non-blocking */ }
 }
 
 function getServerProviderApiKey(provider: string): string {
@@ -395,6 +444,10 @@ function getServerProviderApiKey(provider: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Signed-in creators only: this route spends server-side provider keys and credits.
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+
   let body: {
     text: string
     voiceId?: string
@@ -408,6 +461,7 @@ export async function POST(req: NextRequest) {
     performanceTag?: string
     characterName?: string
     geminiModel?: GeminiTtsModel
+    language?: string
   }
 
   try {
@@ -429,36 +483,28 @@ export async function POST(req: NextRequest) {
     performanceTag,
     characterName,
     geminiModel,
+    language,
   } = body
 
   if (!text?.trim()) {
     return NextResponse.json({ error: 'No text provided' }, { status: 400 })
   }
   const providerApiKey = apiKey?.trim() || getServerProviderApiKey(provider)
-  if (provider !== 'local-qwen' && !providerApiKey) {
+  if (!isLocalTtsProvider(provider) && !providerApiKey) {
     return NextResponse.json({ error: 'No API key provided — add your key in Settings.' }, { status: 400 })
   }
 
   if (provider === 'local-qwen') {
     let qwenRes: Response
     try {
-      qwenRes = await fetchLocalQwenTts({ text, voiceId, speed, blockType, emotion, style, voiceLabel, performanceTag, characterName })
+      qwenRes = await fetchLocalQwenTts({ text, voiceId, speed, blockType, emotion, style, voiceLabel, performanceTag, characterName, language })
     } catch (e: any) {
-      return NextResponse.json({ error: `Local Qwen request failed: ${e.message}` }, { status: 502 })
+      return NextResponse.json({ error: localFailureMessage('Local Qwen Voice Studio', getLocalQwenBaseUrl(), e) }, { status: 502 })
     }
 
     const audioBuffer = await qwenRes.arrayBuffer()
 
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.rpc('increment_tts_chars', {
-          p_user_id: user.id,
-          p_chars:   text.trim().length,
-        })
-      }
-    } catch { /* non-blocking */ }
+    await recordTtsUsage(auth.supabase, auth.user.id, text.trim().length)
 
     return new NextResponse(audioBuffer, {
       headers: {
@@ -468,6 +514,30 @@ export async function POST(req: NextRequest) {
         'X-Chars-Used':   String(text.trim().length),
         'X-TTS-Provider': 'Local Qwen',
         'X-TTS-Voice':    qwenRes.headers.get('X-TTS-Voice') ?? voiceLabel ?? voiceId,
+      },
+    })
+  }
+
+  if (provider === 'local-chatterbox') {
+    let chatterbox: { res: Response; voiceName: string }
+    try {
+      chatterbox = await fetchLocalChatterboxTts({ text, voiceId, language })
+    } catch (e: any) {
+      return NextResponse.json({ error: localFailureMessage('Local Chatterbox TTS Server', getLocalChatterboxBaseUrl(), e) }, { status: 502 })
+    }
+
+    const audioBuffer = await chatterbox.res.arrayBuffer()
+
+    await recordTtsUsage(auth.supabase, auth.user.id, text.trim().length)
+
+    return new NextResponse(audioBuffer, {
+      headers: {
+        'Content-Type':   chatterbox.res.headers.get('Content-Type') ?? 'audio/wav',
+        'Content-Length': String(audioBuffer.byteLength),
+        'Cache-Control':  'no-store',
+        'X-Chars-Used':   String(text.trim().length),
+        'X-TTS-Provider': 'Local Chatterbox',
+        'X-TTS-Voice':    chatterbox.voiceName,
       },
     })
   }
@@ -508,16 +578,7 @@ export async function POST(req: NextRequest) {
     const audioBuffer = await res.arrayBuffer()
 
     // Track TTS credit usage (fire-and-forget)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.rpc('increment_tts_chars', {
-          p_user_id: user.id,
-          p_chars:   text.trim().length,
-        })
-      }
-    } catch { /* non-blocking */ }
+    await recordTtsUsage(auth.supabase, auth.user.id, text.trim().length)
 
     return new NextResponse(audioBuffer, {
       headers: {
@@ -574,16 +635,7 @@ export async function POST(req: NextRequest) {
     const audioBuffer = await res.arrayBuffer()
 
     // Track TTS credit usage (fire-and-forget)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.rpc('increment_tts_chars', {
-          p_user_id: user.id,
-          p_chars:   text.trim().length,
-        })
-      }
-    } catch { /* non-blocking */ }
+    await recordTtsUsage(auth.supabase, auth.user.id, text.trim().length)
 
     return new NextResponse(audioBuffer, {
       headers: {
@@ -656,16 +708,7 @@ export async function POST(req: NextRequest) {
 
     const audioBuffer = pcmToWav(Buffer.from(base64Audio, 'base64'))
 
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.rpc('increment_tts_chars', {
-          p_user_id: user.id,
-          p_chars:   text.trim().length,
-        })
-      }
-    } catch { /* non-blocking */ }
+    await recordTtsUsage(auth.supabase, auth.user.id, text.trim().length)
 
     return new NextResponse(new Uint8Array(audioBuffer), {
       headers: {

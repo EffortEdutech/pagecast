@@ -1,4 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireApiUser } from '@/lib/supabase/apiAuth'
+import {
+  LOCAL_TTS_DEFAULT_URLS,
+  LOCAL_TTS_LABELS,
+  chatterboxVoicesFromServer,
+  qwenCloneVoicesFromLibrary,
+  qwenVoicesFromHealth,
+  type LocalTtsProvider,
+} from '@/lib/localTts'
+
+export const runtime = 'nodejs'
+
+const LOCAL_TIMEOUT_MS = 5000
+
+function localBaseUrl(provider: LocalTtsProvider): string {
+  const configured = provider === 'local-qwen'
+    ? process.env.LOCAL_QWEN_TTS_URL
+    : process.env.LOCAL_CHATTERBOX_TTS_URL
+  return (configured ?? LOCAL_TTS_DEFAULT_URLS[provider]).replace(/\/$/, '')
+}
+
+async function getLocalJson(url: string): Promise<unknown> {
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
+  return res.json()
+}
+
+async function listLocalVoices(provider: LocalTtsProvider) {
+  const baseUrl = localBaseUrl(provider)
+  try {
+    const voices = provider === 'local-qwen'
+      ? [
+          ...qwenVoicesFromHealth(await getLocalJson(`${baseUrl}/pagecast/health`)),
+          // Voice-library clones; older Qwen apps without this endpoint just list built-ins.
+          ...qwenCloneVoicesFromLibrary(await getLocalJson(`${baseUrl}/pagecast/voices`).catch(() => null)),
+        ]
+      : chatterboxVoicesFromServer(
+          await getLocalJson(`${baseUrl}/get_predefined_voices`),
+          await getLocalJson(`${baseUrl}/get_reference_files`).catch(() => []),
+        )
+    return NextResponse.json({ voices, baseUrl })
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: `${LOCAL_TTS_LABELS[provider]} is not reachable at ${baseUrl} — start it, then sync again. (${e?.message ?? 'request failed'})` },
+      { status: 502 },
+    )
+  }
+}
 
 interface ElevenLabsVoice {
   voice_id: string
@@ -10,6 +58,9 @@ interface ElevenLabsVoice {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireApiUser()
+  if (!auth.ok) return auth.response
+
   let body: { provider?: string; apiKey?: string }
 
   try {
@@ -20,6 +71,10 @@ export async function POST(req: NextRequest) {
 
   const provider = body.provider ?? 'elevenlabs'
   const apiKey = body.apiKey ?? ''
+
+  if (provider === 'local-qwen' || provider === 'local-chatterbox') {
+    return listLocalVoices(provider)
+  }
 
   if (provider !== 'elevenlabs') {
     return NextResponse.json({ error: `Voice sync is not available for provider: ${provider}` }, { status: 400 })

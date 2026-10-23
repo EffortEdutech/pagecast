@@ -192,6 +192,7 @@ def parse_scenes(text: str) -> list:
             char    = parts[0].strip().lower().replace(' ', '_') if parts else ''
             emotion = ''
             style   = ''
+            language = ''
             for part in parts[1:]:
                 if '=' in part:
                     k, v = part.split('=', 1)
@@ -200,12 +201,15 @@ def parse_scenes(text: str) -> list:
                         emotion = v.strip()
                     elif k == 'style':
                         style = v.strip()
+                    elif k == 'language':
+                        language = v.strip()
 
             blocks.append({
                 'type':    btype.lower(),
                 'char':    char or 'narrator',
                 'emotion': emotion,
                 'style':   style,
+                'language': language,
                 'text':    body,
             })
 
@@ -229,9 +233,11 @@ def resolve_voice(char_slug: str, config: dict) -> dict:
     if isinstance(char_cfg, str):
         voice_id = char_cfg
         label    = char_slug
+        language = None
     else:
         voice_id = char_cfg.get('voice_id', 'ai_narrator_warm')
         label    = char_cfg.get('label', char_slug)
+        language = char_cfg.get('language')
 
     top_provider = config.get('provider', 'elevenlabs')
 
@@ -242,6 +248,7 @@ def resolve_voice(char_slug: str, config: dict) -> dict:
             'gemini_voice': voice_id[len('gemini:'):],
             'el_voice_id':  None,
             'label':        label,
+            'language':     language,
         }
     elif voice_id.startswith('elevenlabs:'):
         return {
@@ -250,6 +257,7 @@ def resolve_voice(char_slug: str, config: dict) -> dict:
             'el_voice_id':  voice_id[len('elevenlabs:'):],
             'gemini_voice': None,
             'label':        label,
+            'language':     language,
         }
     else:
         # ai_* voice — route to whichever provider is configured
@@ -261,6 +269,7 @@ def resolve_voice(char_slug: str, config: dict) -> dict:
             'el_voice_id':  el_id,
             'gemini_voice': gem_voice,
             'label':        label,
+            'language':     language,
         }
 
 
@@ -452,6 +461,7 @@ def create_voice_config_template(folder: Path, pagecast_files: list) -> Path:
         chars_cfg[slug] = {
             'label':    label,
             'voice_id': default_voices.get(slug, 'ai_female_soft'),
+            'language': None,
         }
 
     config = {
@@ -570,10 +580,15 @@ def main():
 
                 voice_cfg = resolve_voice(char_slug, config)
                 used_provider = voice_cfg['provider']
+                block_language = block.get('language') or voice_cfg.get('language') or parse_header(text).get('language')
+                configured_language = voice_cfg.get('language')
+                if configured_language and block.get('language') and configured_language != block['language']:
+                    print(f'      ⚠  language mismatch: block={block["language"]}, voice={configured_language}; using block language metadata')
 
                 # File extension depends on provider
                 ext      = 'wav' if used_provider == 'gemini' else 'mp3'
-                filename = f'Ch{ch}_Sc{sc}_{idx+1:03d}_{block_type}_{char_slug}.{ext}'
+                language_suffix = f'_{block_language}' if block_language else ''
+                filename = f'Ch{ch}_Sc{sc}_{idx+1:03d}_{block_type}_{char_slug}{language_suffix}.{ext}'
                 dest     = voice_dir / filename
 
                 if dest.exists():
@@ -604,6 +619,7 @@ def main():
                         'emotion':    emotion,
                         'provider':   used_provider,
                         'voice_id':   voice_cfg['voice_id'],
+                        'language':   block_language,
                     }
                 else:
                     print(f'         ❌  failed')

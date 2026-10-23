@@ -4,7 +4,8 @@ import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
 import { Check, Key, User, BookOpen, Sparkles, AlertCircle, Loader2, Zap, Rocket, Plus, X } from 'lucide-react'
-import { GEMINI_TTS_MODELS, TTS_GEMINI_MODEL_LS, getTtsApiKey, getTtsSettings, saveTtsSettings, normalizeGeminiTtsModel } from '@/lib/tts'
+import { GEMINI_TTS_MODELS, TTS_GEMINI_MODEL_LS, getTtsApiKey, getTtsSettings, saveTtsSettings, normalizeGeminiTtsModel, type TtsProvider } from '@/lib/tts'
+import { LOCAL_TTS_DEFAULT_URLS, isLocalTtsProvider } from '@/lib/localTts'
 
 const PREF_LANGUAGE_KEY = 'pagecast_default_language'
 const PREF_PRICE_KEY    = 'pagecast_default_price'
@@ -26,7 +27,7 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('en')
   const [price,    setPrice]    = useState('4.99')
   const [ttsKey,   setTtsKey]   = useState('')
-  const [provider, setProvider] = useState<'openai' | 'elevenlabs' | 'gemini' | 'local-qwen'>('openai')
+  const [provider, setProvider] = useState<TtsProvider>('openai')
   const [geminiModel, setGeminiModel] = useState(GEMINI_TTS_MODELS[0].id)
   const [saving,   setSaving]   = useState(false)
   const [saved,    setSaved]    = useState(false)
@@ -250,18 +251,19 @@ export default function SettingsPage() {
             <h2 className="text-text-primary font-semibold">AI Voice (TTS) Provider</h2>
           </div>
           <p className="text-text-secondary text-sm">
-            Connect your own TTS API key. PageCast supports OpenAI, ElevenLabs, Gemini, and your free Local Qwen Voice Studio. Cloud keys are stored locally in your browser only.
+            Connect your own TTS API key. PageCast supports OpenAI, ElevenLabs, Gemini, and two free local engines on this machine: Qwen Voice Studio and Chatterbox TTS Server. Cloud keys are stored locally in your browser only.
           </p>
           <div>
             <label className="label">Provider</label>
-            <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value as 'openai' | 'elevenlabs' | 'gemini' | 'local-qwen')}>
+            <select className="input max-w-xs" value={provider} onChange={e => setProvider(e.target.value as TtsProvider)}>
               <option value="openai">OpenAI TTS</option>
               <option value="elevenlabs">ElevenLabs v3</option>
               <option value="gemini">Google / Gemini TTS</option>
               <option value="local-qwen">Local Qwen Voice Studio</option>
+              <option value="local-chatterbox">Local Chatterbox TTS Server</option>
             </select>
           </div>
-          {provider !== 'local-qwen' && (
+          {!isLocalTtsProvider(provider) && (
           <div>
             <label className="label">API Key</label>
             <input
@@ -281,8 +283,18 @@ export default function SettingsPage() {
           )}
           {provider === 'local-qwen' && (
             <div className="rounded-lg border border-gold/30 bg-gold/10 p-3 text-xs text-text-secondary">
-              Local Qwen uses http://127.0.0.1:7860 by default and does not need a cloud API key. Start Qwen Voice Studio before generating audio.
+              Local Qwen uses {LOCAL_TTS_DEFAULT_URLS['local-qwen']} by default (override with LOCAL_QWEN_TTS_URL) and does not need a cloud API key. Start Qwen Voice Studio before generating audio.
             </div>
+          )}
+          {provider === 'local-chatterbox' && (
+            <div className="rounded-lg border border-gold/30 bg-gold/10 p-3 text-xs text-text-secondary">
+              Local Chatterbox uses {LOCAL_TTS_DEFAULT_URLS['local-chatterbox']} by default (override with LOCAL_CHATTERBOX_TTS_URL) and does not need a cloud API key. Start Chatterbox TTS Server before generating audio. Temperature, CFG and seed follow the defaults saved in the Chatterbox UI.
+            </div>
+          )}
+          {isLocalTtsProvider(provider) && (
+            <p className="text-[11px] text-text-muted">
+              Local engines are reached by the Creator Studio server, so they work only when Creator Studio runs on this machine (npm run creator-studio), not on the hosted Vercel site.
+            </p>
           )}
           {provider === 'gemini' && (
             <div>
@@ -304,7 +316,7 @@ export default function SettingsPage() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <Sparkles size={14} className="text-accent shrink-0 mt-0.5" />
             <p className="text-text-secondary text-xs leading-relaxed">
-              Cloud API keys are sent through a server-side proxy route and are never stored in the database. Local Qwen stays on this machine.
+              Cloud API keys are sent through a server-side proxy route and are never stored in the database. Local Qwen and Chatterbox audio stays on this machine until uploaded to your book.
             </p>
           </div>
 

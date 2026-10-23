@@ -13,6 +13,7 @@
 import type { Story, StoryBlock, Character } from '@/types'
 import { generateBlockTts, getTtsApiKey, getTtsSettings, type TtsProvider } from './tts'
 import { getPageCastVoice } from './voiceLibrary'
+import { LOCAL_TTS_DEFAULT_URLS, LOCAL_TTS_LABELS, isLocalTtsProvider, providerFromVoiceId } from './localTts'
 import { updateBlock as dbUpdateBlock } from './supabase/blocks'
 import { createClient } from './supabase/client'
 import {
@@ -47,10 +48,7 @@ export function resolveEffectiveCharacter(block: StoryBlock, characters: Charact
 }
 
 function resolveProvider(voiceId: string): TtsProvider {
-  if (voiceId.startsWith('elevenlabs:')) return 'elevenlabs'
-  if (voiceId.startsWith('gemini:')) return 'gemini'
-  if (voiceId.startsWith('qwen:')) return 'local-qwen'
-  return getTtsSettings().provider
+  return providerFromVoiceId(voiceId) ?? getTtsSettings().provider
 }
 
 function resolveSpeed(block: StoryBlock, voiceId: string): number {
@@ -71,6 +69,8 @@ export interface PlannedJob {
   voiceLabel?: string
   provider: TtsProvider
   charCount: number
+  /** Story language code, passed to local engines. */
+  language?: string
 }
 
 /** All blocks in the book missing audio, with their resolved voice/provider. */
@@ -95,6 +95,7 @@ export function planMissingAudioJobs(story: Story): PlannedJob[] {
           voiceLabel: character?.voiceLabel,
           provider: resolveProvider(voiceId),
           charCount: text.length,
+          language: block.language ?? character?.language ?? story.language,
         })
       }
     }
@@ -154,8 +155,8 @@ export async function runTtsPreflight(story: Story): Promise<PreflightResult> {
     const key = getTtsApiKey(provider)
     const count = jobs.filter(j => j.provider === provider).length
     if (!key) {
-      if (provider === 'local-qwen') {
-        warnings.push(`Local Qwen selected for ${count} block${count === 1 ? '' : 's'} — make sure Qwen Voice Studio is running at http://127.0.0.1:7860.`)
+      if (isLocalTtsProvider(provider)) {
+        warnings.push(`${LOCAL_TTS_LABELS[provider]} selected for ${count} block${count === 1 ? '' : 's'} — make sure it is running at ${LOCAL_TTS_DEFAULT_URLS[provider]} (or your configured URL) and Creator Studio runs locally.`)
       } else if (provider === 'gemini') {
         warnings.push(`No Gemini API key saved in Settings — ${count} block${count === 1 ? '' : 's'} will only work if a server-side Gemini key is configured.`)
       } else {
@@ -370,6 +371,7 @@ export class TtsQueueRunner {
           emotion: 'emotion' in job.block ? (job.block as { emotion?: string }).emotion : undefined,
           voiceLabel: job.voiceLabel,
           characterName: job.characterName,
+          language: job.language,
         })
 
         if (result.url) {

@@ -29,8 +29,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublic =
     pathname === '/login' ||
-    pathname.startsWith('/auth/') ||
-    pathname.startsWith('/api/tts/')
+    pathname.startsWith('/auth/')
+
+  // API routes answer 401 JSON instead of an HTML login redirect, so fetch()
+  // callers get a clear error. Route handlers also check auth themselves.
+  if (!user && pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  }
 
   if (!isPublic && !user) {
     const loginUrl = request.nextUrl.clone()
